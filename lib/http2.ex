@@ -4,7 +4,7 @@ defmodule Kadabra.Http2 do
   """
   require Logger
 
-  alias Kadabra.{Hpack}
+  alias Kadabra.{Hpack, Huffman}
 
   def connect(uri, mode, cert, key) do
     options = [cert,
@@ -220,28 +220,43 @@ defmodule Kadabra.Http2 do
     Logger.info("Indexed, #{inspect(header)}")
     [header] ++ decode_headers(rest)
   end
+  def decode_headers(<<0::1, 1::1, 0::6, h::1, name_size::7, rest::bitstring>>) do # Literal header, incremental indexing, new name
+    name_size = name_size*8
+    <<name::size(name_size), rest::bitstring>> = rest
+    <<h_2::1, value_size::7, rest::bitstring>> = rest
+    value_size = value_size*8
+    <<value::size(value_size), rest::bitstring>> = rest
+    Logger.info("Literal, Inc Indexing New Name, H: #{h}, H2: #{h_2}, Name: #{name}, Value: #{value}")
+    [{name, value}] ++ decode_headers(rest)
+  end
   def decode_headers(<<0::1, 1::1, index::6, h::1, value_size::7, rest::bitstring>>) do # Literal header, incremental indexing
-    value_size = value_size*4
-    <<value::size(value_size), rest:: bitstring>> = rest
-    Logger.info("Literal, Inc Indexing, H: #{h}, #{inspect(value)}")
-    [{index, value}] ++ decode_headers(rest)
+    value_size = value_size*8
+    <<value::size(value_size), rest::bitstring>> = rest
+    value_string = 
+      case h do
+        0 -> value
+        1 -> Huffman.decode(<<value::size(value_size)>>)
+      end
+    header_string = Hpack.static_header(index)
+    Logger.info("Literal, Inc Indexing, H: #{h}, Header: #{header_string}, Value: #{value_string}")
+    [{header_string, value_string}] ++ decode_headers(rest)
   end
   def decode_headers(<<0::4, index::4, h::1, value_size::7, rest::bitstring>>) do # Literal header without indexing -- Indexed Name
-    value_size = value_size*4
+    value_size = value_size*8
     <<value::size(value_size), rest:: bitstring>> = rest
-    Logger.info("Literal without Indexing, Indexed Name, H: #{h}, #{inspect(value)}")
+    Logger.info("Literal without Indexing, Indexed Name, H: #{h}, #{inspect(<<value::size(value_size)>>)}")
     [{index, value}] ++ decode_headers(rest)
   end
   def decode_headers(<<0::1, 0::1, 0::1, 1::1, index::4, h::1, value_size::7, rest::bitstring>>) do # Literal header, never indexed
-    value_size = value_size*4
-    <<value::size(value_size), rest:: bitstring>> = rest
+    value_size = value_size*8
+    <<value::size(value_size), rest::bitstring>> = rest
     Logger.info("Literal, Never Indexed, H: #{h}, #{inspect(value)}")
     [{index, value}] ++ decode_headers(rest)
   end
   def decode_headers(<<0::1, 0::1, 0::1, 1::1, 0::4, h::1, size::7, rest::bitstring>> = bin) do # Literal header no indexing
-    header_size = size*4
+    header_size = size*8
     <<header::size(header_size), 0::1, size::7, rest::bitstring>> = rest
-    value_size = size*4
+    value_size = size*8
     <<value::size(value_size), rest::bitstring>> = rest
     Logger.info("Literal, No Indexing, H: #{h}, #{inspect(value)}")
     [{header, value}] ++ decode_headers(rest)

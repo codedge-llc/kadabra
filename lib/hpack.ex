@@ -10,6 +10,8 @@ defmodule Kadabra.Hpack do
       7 -> {":scheme", "https"}
       8 -> {":status", "200"}
       26 -> "content-encoding"
+      28 -> "content-length"
+      33 -> "date"
       36 -> "expires"
       37 -> "from"
       46 -> "location"

@@ -63,10 +63,6 @@ defmodule Kadabra.Connection do
   end
 
   def handle_cast({:recv, :headers, frame}, %{socket: socket} = state) do
-    IO.puts "---------------"
-    IO.inspect "Headers payload"
-    IO.inspect frame[:payload]
-    IO.puts "---------------"
     headers = Http2.decode_headers(frame[:payload])
     Logger.debug """
       Got HEADERS, Stream: #{frame[:stream_id]}
