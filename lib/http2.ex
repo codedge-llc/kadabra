@@ -1,8 +1,10 @@
-defmodule Dos.Http2 do
+defmodule Kadabra.Http2 do
   @moduledoc """
     Handles all HTTP2 connection, request and response functions.
   """
   require Logger
+
+  alias Kadabra.{Hpack}
 
   def connect(uri, mode, cert, key) do
     options = [cert,
@@ -197,6 +199,56 @@ defmodule Dos.Http2 do
     <> header
     <> <<0::1, byte_size(value)::7>>
     <> value
+  end
+
+  #def decode_headers(bin) do
+  #  {header, rest} =
+  #    case bin do
+  #    <<1::, index::7, rest::bitstring>> ->
+  #      {indexed_header(index), rest}
+  #  end
+  #  [header] ++ decode_headers(rest)
+  #end
+
+  #def indexed_header(index)
+  #  Dos.Hpack.static_header(index)
+  #end
+
+  def decode_headers(<<>>), do: []
+  def decode_headers(<<1::1, index::7, rest::bitstring>>) do # Indexed Header
+    header = Hpack.static_header(index)
+    Logger.info("Indexed, #{inspect(header)}")
+    [header] ++ decode_headers(rest)
+  end
+  def decode_headers(<<0::1, 1::1, index::6, h::1, value_size::7, rest::bitstring>>) do # Literal header, incremental indexing
+    value_size = value_size*4
+    <<value::size(value_size), rest:: bitstring>> = rest
+    Logger.info("Literal, Inc Indexing, H: #{h}, #{inspect(value)}")
+    [{index, value}] ++ decode_headers(rest)
+  end
+  def decode_headers(<<0::4, index::4, h::1, value_size::7, rest::bitstring>>) do # Literal header without indexing -- Indexed Name
+    value_size = value_size*4
+    <<value::size(value_size), rest:: bitstring>> = rest
+    Logger.info("Literal without Indexing, Indexed Name, H: #{h}, #{inspect(value)}")
+    [{index, value}] ++ decode_headers(rest)
+  end
+  def decode_headers(<<0::1, 0::1, 0::1, 1::1, index::4, h::1, value_size::7, rest::bitstring>>) do # Literal header, never indexed
+    value_size = value_size*4
+    <<value::size(value_size), rest:: bitstring>> = rest
+    Logger.info("Literal, Never Indexed, H: #{h}, #{inspect(value)}")
+    [{index, value}] ++ decode_headers(rest)
+  end
+  def decode_headers(<<0::1, 0::1, 0::1, 1::1, 0::4, h::1, size::7, rest::bitstring>> = bin) do # Literal header no indexing
+    header_size = size*4
+    <<header::size(header_size), 0::1, size::7, rest::bitstring>> = rest
+    value_size = size*4
+    <<value::size(value_size), rest::bitstring>> = rest
+    Logger.info("Literal, No Indexing, H: #{h}, #{inspect(value)}")
+    [{header, value}] ++ decode_headers(rest)
+  end
+  def decode_headers(<<0::1, 0::1, 1::1, max_size::5, rest::bitstring>>) do # Dynamic table size update
+    Logger.info("Dynamic table size update, max: #{max_size}")
+    [] ++ decode_headers(rest)
   end
 
   def push_data_frame(stream, payload) do

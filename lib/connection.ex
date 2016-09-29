@@ -1,9 +1,12 @@
-defmodule Dos.Connection do
+defmodule Kadabra.Connection do
   use GenServer
   require Logger
 
-  alias Dos.Http2
+  alias Kadabra.Http2
 
+  @data 0x0
+  @headers 0x1
+  @rst_stream 0x3
   @settings 0x4
   @ping 0x6
   @goaway 0x7
@@ -24,17 +27,11 @@ defmodule Dos.Connection do
     end
   end
 
-  defp initial_state(socket), do: %{socket: socket, stream_id: 1}
+  defp initial_state(socket), do: %{socket: socket, stream_id: 3}
 
   def do_connect(uri) do
-    options = [
-               {:packet, 0},
-               {:reuseaddr, false},
-               {:active, true},
-               {:alpn_advertised_protocols, [<<"h2">>]},
-               :binary]
     :ssl.start
-    case :ssl.connect(uri, 443, options) do
+    case :ssl.connect(uri, 443, ssl_options) do
       {:ok, ssl} -> 
         Logger.debug "Establishing connection..."
         :ssl.send(ssl, Http2.connection_preface)
@@ -44,11 +41,64 @@ defmodule Dos.Connection do
     end
   end
 
+  defp ssl_options do
+    [
+      {:packet, 0},
+      {:reuseaddr, false},
+      {:active, true},
+      {:alpn_advertised_protocols, [<<"h2">>]},
+      :binary
+    ]
+  end
+
+  def handle_cast({:recv, :data, frame}, %{socket: socket} = state) do
+    Logger.debug """
+      Got DATA, Stream: #{frame[:stream_id]}
+      --
+      #{inspect(frame)}
+      --
+      #{frame[:payload]}
+    """
+    {:noreply, state}
+  end
+
+  def handle_cast({:recv, :headers, frame}, %{socket: socket} = state) do
+    IO.puts "---------------"
+    IO.inspect "Headers payload"
+    IO.inspect frame[:payload]
+    IO.puts "---------------"
+    headers = Http2.decode_headers(frame[:payload])
+    Logger.debug """
+      Got HEADERS, Stream: #{frame[:stream_id]}
+      --
+      #{inspect(frame)}
+      --
+      #{inspect(headers)}
+    """
+    {:noreply, state}
+  end
+
+  def handle_cast({:send, :headers, headers}, %{socket: socket, stream_id: stream_id} = state) do
+    encoded = for {key, value} <- headers, do: Http2.encode_header(key, value)
+    IO.inspect encoded
+    payload = Enum.reduce(encoded, <<>>, fn(x, acc) -> acc <> x end)
+    h = Http2.build_frame(@headers, 0x4, stream_id, payload)
+    :ssl.send(socket, h)
+    {:noreply, %{state | stream_id: stream_id + 2}}
+  end
+
   def handle_cast({:recv, :settings, frame}, %{socket: socket} = state) do
     settings_ack = Http2.build_frame(0x4, 0x1, 0x0, <<>>)
     settings = parse_settings(frame[:payload])
     Logger.debug(inspect(settings))
     :ssl.send(socket, settings_ack)
+    {:noreply, state}
+  end
+
+  def handle_cast({:recv, :rst_stream, frame}, %{socket: socket} = state) do
+    <<code::32>> = frame[:payload]
+    error = error_code(code)
+    Logger.error "Got RST_STREAM, #{error}"
     {:noreply, state}
   end
 
@@ -62,47 +112,29 @@ defmodule Dos.Connection do
     {:noreply, state}
   end
 
-  def establish_connection(uri, socket) do
-  end
-
-  def send_connection_preface(uri, socket) do
-    req = 
-      """
-      HEAD / HTTP/1.1
-      Host: #{uri}
-
-      """
-    #Logger.debug req
-    #:gen_tcp.send(socket, req)
-    :gen_tcp.send(socket, connection_preface)
-  end
-
-  def connection_preface, do: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
-
-  def parse_frame(<<payload_size::24, frame_type::8, flags::8, 0::1, stream_id::31, payload::binary>>) do
-    %{
-      payload_size: payload_size,
-      frame_type: frame_type,
-      flags: flags,
-      stream_id: stream_id,
-      payload: payload
-    }
-  end
-
   def handle_info({:tcp, _socket, bin}, state) do
     Logger.debug("Recv TCP: #{inspect(bin) <> <<0>>}")
     {:noreply, state}
   end
 
   def handle_info({:ssl, socket, bin}, state) do
-    Logger.debug("Recv SSL: #{inspect(bin)}")
-    frame = parse_frame(bin)
+    Logger.info("Recv SSL: #{inspect(bin)}")
+    frame = Http2.parse_frame(bin)
     handle_response(socket, frame)
     {:noreply, state}
   end
 
+  def handle_response(socket, frame) when is_binary(frame) do
+    Logger.info inspect(frame)
+  end
   def handle_response(socket, frame) do
     case frame[:frame_type] do
+      @data -> 
+        GenServer.cast(self, {:recv, :data, frame})
+      @headers -> 
+        GenServer.cast(self, {:recv, :headers, frame})
+      @rst_stream -> 
+        GenServer.cast(self, {:recv, :rst_stream, frame})
       @settings ->
         Logger.debug "Got SETTINGS"
         GenServer.cast(self, {:recv, :settings, frame})
