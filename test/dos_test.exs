@@ -2,7 +2,10 @@ defmodule DosTest do
   use ExUnit.Case
   doctest Dos
 
-  test "the truth" do
-    assert 1 + 1 == 2
+  alias Dos.{Connection, Http2}
+
+  test "GET https://http2.golang.org/" do
+    uri = 'http2.golang.org'
+    {:ok, pid} = Connection.start_link(uri)
   end
 end
