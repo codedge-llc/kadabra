@@ -11,9 +11,16 @@ defmodule Kadabra.Hpack do
       8 -> {":status", "200"}
       26 -> "content-encoding"
       28 -> "content-length"
+      31 -> "content-type"
+      32 -> "cookie"
       33 -> "date"
+      34 -> "etag"
+      35 -> "expect"
       36 -> "expires"
       37 -> "from"
+      38 -> "host"
+      39 -> "if-match"
+      40 -> "if-modified-since"
       46 -> "location"
       _ -> index
     end
