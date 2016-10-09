@@ -12,19 +12,25 @@ defmodule Kadabra.Http2 do
   def ack_frame, do: build_frame(0x01, 0, 0, <<>>)
   def ping_frame, do: build_frame(0x6, 0x0, 0, <<1::64>>)
 
+  def goaway_frame(last_stream_id, error_code) do
+    payload = <<0::1, last_stream_id::31, error_code::32>>
+    build_frame(0x7, 0x0, 0, payload)
+    |> IO.inspect
+  end
+
   def build_frame(frame_type, flags, stream_id, payload) do
     header = <<byte_size(payload)::24, frame_type::8, flags::8, 0::1, stream_id::31>>
     <<header::bitstring, payload::bitstring>>
   end
 
-	def parse_frame(<<payload_size::24,
-										frame_type::8,
-										flags::8,
-										0::1,
-										stream_id::31,
-										payload::bitstring>>) do
+  def parse_frame(<<payload_size::24,
+                    frame_type::8,
+                    flags::8,
+                    0::1,
+                    stream_id::31,
+                    payload::bitstring>>) do
 
-    size = payload_size*8
+    size = payload_size * 8
     <<frame_payload::size(size), rest::bitstring>> = payload
     {:ok, %{
       payload_size: payload_size,
@@ -60,21 +66,21 @@ defmodule Kadabra.Http2 do
   end
 
   defp decode_value(0, _size, value), do: value
-  defp decode_value(1, size, value), do: Huffman.decode(<<value::size(size)>>) |> inspect
+  defp decode_value(1, size, value), do: <<value::size(size)>> |> Huffman.decode |> inspect
 
   def indexed_header(<<1::1, index::7, rest::bitstring>>), do: {Hpack.static_header(index), rest}
 
   def literal_header_inc_indexing(<<0::1, 1::1, 0::6, h::1, name_size::7, rest::bitstring>>) do # New name
-    name_size = name_size*8
+    name_size = name_size * 8
     <<name::size(name_size), rest::bitstring>> = rest
     name_string = decode_value(h, name_size, name)
 
-    <<h_2::1, value_size::7, rest::bitstring>> = rest
-    value_size = value_size*8
+    <<_h_2::1, value_size::7, rest::bitstring>> = rest
+    value_size = value_size * 8
     <<value::size(value_size), rest::bitstring>> = rest
     value_string = decode_value(h, value_size, value)
 
-    #Logger.info("Literal, Inc Indexing New Name, H: #{h}, H2: #{h_2}, Name: #{name_string}, Value: #{value_string}")
+    # Logger.info("Literal, Inc Indexing New Name, H: #{h}, H2: #{h_2}, Name: #{name_string}, Value: #{value_string}")
     {{name_string, value_string}, rest}
   end
   def literal_header_inc_indexing(<<0::1, 1::1, index::6, h::1, value_size::7, rest::bitstring>>) do
@@ -83,54 +89,54 @@ defmodule Kadabra.Http2 do
     <<value::size(value_size), rest::bitstring>> = rest
     value_string = decode_value(h, value_size, value)
     header_string = Hpack.static_header(index)
-    #Logger.info("Literal, Inc Indexing, H: #{h}, Header: #{header_string}, Value: #{value_string}")
+    # Logger.info("Literal, Inc Indexing, H: #{h}, Header: #{header_string}, Value: #{value_string}")
     {{header_string, value_string}, rest}
   end
 
-  def literal_header_no_indexing(<<0::4, 0::4, h::1, name_size::7, rest::bitstring>>) do # New name
-    name_size = name_size*8
+  def literal_header_no_indexing(<<0::4, 0::4, _h::1, name_size::7, rest::bitstring>>) do # New name
+    name_size = name_size * 8
     <<name::size(name_size), rest::bitstring>> = rest
-    <<h_2::1, value_size::7, rest::bitstring>> = rest
-    value_size = value_size*8
+    <<_h_2::1, value_size::7, rest::bitstring>> = rest
+    value_size = value_size * 8
     <<value::size(value_size), rest::bitstring>> = rest
-    #Logger.info("Literal No Indexing, New Name, H: #{h}, #{inspect(<<value::size(value_size)>>)}")
+    # Logger.info("Literal No Indexing, New Name, H: #{h}, #{inspect(<<value::size(value_size)>>)}")
     {{name, value}, rest}
   end
-  def literal_header_no_indexing(<<0::4, index::4, h::1, value_size::7, rest::bitstring>>) do
+  def literal_header_no_indexing(<<0::4, index::4, _h::1, value_size::7, rest::bitstring>>) do
     value_size = value_size*8
     <<value::size(value_size), rest:: bitstring>> = rest
-    #Logger.info("Literal No Indexing, Indexed Name, H: #{h}, #{inspect(<<value::size(value_size)>>)}")
+    # Logger.info("Literal No Indexing, Indexed Name, H: #{h}, #{inspect(<<value::size(value_size)>>)}")
     {{index, value}, rest}
   end
 
   def literal_header_never_indexed(<<0::1, 0::1, 0::1, 1::1,
                                     0::4,
-                                    h::1,
+                                    _h::1,
                                     size::7,
-                                    rest::bitstring>> = bin) do # New name
+                                    rest::bitstring>>) do # New name
 
-    header_size = size*8
+    header_size = size * 8
     <<header::size(header_size), 0::1, size::7, rest::bitstring>> = rest
-    value_size = size*8
+    value_size = size * 8
     <<value::size(value_size), rest::bitstring>> = rest
-    #Logger.info("Literal, Never Indexed, H: #{h}, #{inspect(value)}")
+    # Logger.info("Literal, Never Indexed, H: #{h}, #{inspect(value)}")
     {{header, value}, rest}
   end
   def literal_header_never_indexed(<<0::3, 1::1,
                                     index::4,
-                                    h::1,
+                                    _h::1,
                                     value_size::7,
                                     rest::bitstring>>) do
 
-    value_size = value_size*8
+    value_size = value_size * 8
     <<value::size(value_size), rest::bitstring>> = rest
-    #Logger.info("Literal, Never Indexed, H: #{h}, #{inspect(value)}")
+    # Logger.info("Literal, Never Indexed, H: #{h}, #{inspect(value)}")
     {{index, value}, rest}
   end
 
   def dynamic_table_size_update(<<0::1, 0::1, 1::1, max_size::5, rest::bitstring>>) do
-    #Logger.info("Dynamic table size update, max: #{max_size}")
-    [] ++ decode_headers(rest)
+    # Logger.info("Dynamic table size update, max: #{max_size}")
+    decode_headers(rest)
     {{:table_size_update, max_size}, rest}
   end
 end

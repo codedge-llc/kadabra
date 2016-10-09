@@ -20,18 +20,19 @@ defmodule Kadabra.Connection do
     Logger.debug "Initializing..."
     case do_connect(uri, opts) do
       {:ok, socket} ->
-        {:ok, initial_state(socket, uri, pid)}
+        {:ok, initial_state(socket, uri, pid, opts)}
       {:error, error} ->
         Logger.error(inspect(error))
         {:error, error}
     end
   end
 
-  defp initial_state(socket, uri, pid) do
+  defp initial_state(socket, uri, pid, opts) do
    %{
       buffer: "",
       client: pid,
       uri: uri,
+      scheme: opts[:scheme] || :https,
       socket: socket,
       stream_id: 1,
       streams: %{}
@@ -67,7 +68,66 @@ defmodule Kadabra.Connection do
     ]
   end
 
-  def handle_cast({:recv, :data, %{stream_id: stream_id} = frame}, %{socket: socket} = state) do
+  def handle_cast({:recv, :data, frame}, state) do
+    state = do_recv_data(frame, state)
+    {:noreply, state}
+  end
+
+  def handle_cast({:recv, :headers, frame}, state) do
+    state = do_recv_headers(frame, state)
+    {:noreply, state}
+  end
+
+  def handle_cast({:send, :headers, headers}, state) do
+    do_send_headers(headers, nil, state)
+    {:noreply, inc_stream_id(state)}
+  end
+
+  def handle_cast({:send, :headers, headers, payload}, state) do
+    do_send_headers(headers, payload, state)
+    {:noreply, inc_stream_id(state)}
+  end
+
+  def handle_cast({:send, :goaway}, state) do
+    do_send_goaway(state)
+    {:noreply, inc_stream_id(state)}
+  end
+
+  def handle_cast({:recv, :goaway, frame}, state) do
+    do_recv_goaway(frame, state)
+    {:noreply, state}
+  end
+
+  def handle_cast({:recv, :settings, frame}, state) do
+    do_recv_settings(frame, state)
+    {:noreply, state}
+  end
+
+  def handle_cast({:send, :ping}, %{socket: socket} = state) do
+    :ssl.send(socket, Http2.build_frame(0x6, 0x0, 0x0, <<0, 0, 0, 0, 0, 0, 0, 0>>))
+    {:noreply, state}
+  end
+
+  def handle_cast({:recv, :ping, _frame}, state) do
+    Logger.debug "Got PING"
+    {:noreply, state}
+  end
+
+  def handle_cast({:recv, :rst_stream, frame}, state) do
+    do_recv_rst_stream(frame, state)
+    {:noreply, state}
+  end
+
+  def handle_cast({:recv, :window_update, frame}, state) do
+    #window_size_inc = :binary.decode_unsigned(frame[:payload])
+    <<_r::1, window_size_inc::31>> = frame[:payload]
+    Logger.warn "Got WINDOW_UPDATE, Stream: #{frame[:stream_id]}, Inc: #{window_size_inc}"
+    {:noreply, state}
+  end
+
+  defp inc_stream_id(%{stream_id: stream_id} = state), do: %{state | stream_id: stream_id + 2}
+
+  defp do_recv_data(%{stream_id: stream_id} = frame, state) do
     Logger.debug """
       Got DATA, Stream: #{frame[:stream_id]}, Flags: #{frame[:flags]}
       --
@@ -75,44 +135,66 @@ defmodule Kadabra.Connection do
     """
     stream = get_stream(stream_id, state)
     stream = %Stream{ stream | body: frame[:payload] }
-    state = put_stream(stream_id, state, stream)
-    {:noreply, state}
+    put_stream(stream_id, state, stream)
   end
 
-  def handle_cast({:recv, :headers, %{stream_id: stream_id} = frame}, %{socket: socket, client: pid} = state) do
+  defp do_recv_headers(%{stream_id: stream_id} = frame, state) do
     stream = get_stream(stream_id, state)
     headers = Http2.decode_headers(frame[:payload])
     stream = %Stream{ stream | headers: headers }
-    state = put_stream(stream_id, state, stream)
-    {:noreply, state}
+    put_stream(stream_id, state, stream)
   end
 
-  def handle_cast({:send, :headers, headers}, %{socket: socket, stream_id: stream_id, uri: uri} = state) do
-    headers = headers ++ [{"host", List.to_string(uri)}]
+  defp do_send_headers(headers, payload,
+    %{socket: socket, stream_id: stream_id, uri: uri} = state) do
+
+    headers = add_headers(headers, uri, state)
     encoded = for {key, value} <- headers, do: Http2.encode_header(key, value)
-    payload = Enum.reduce(encoded, <<>>, fn(x, acc) -> acc <> x end)
-    h = Http2.build_frame(@headers, 0x4, stream_id, payload)
-    
-    :ssl.send(socket, h)
+    headers_payload = Enum.reduce(encoded, <<>>, fn(x, acc) -> acc <> x end)
+    h = Http2.build_frame(@headers, 0x4, stream_id, headers_payload)
 
-    {:noreply, %{state | stream_id: stream_id + 2}}
+    :ssl.send(socket, h)
+    
+    if payload do
+      h_p = Http2.build_frame(@data, 0x1, stream_id, payload)
+      :ssl.send(socket, h_p)
+    end
   end
 
-  def handle_cast({:recv, :settings, frame}, %{socket: socket, client: pid} = state) do
+  defp add_headers(headers, uri, state) do
+    headers ++ [
+      {":scheme", Atom.to_string(state[:scheme])},
+      {"host", List.to_string(uri)}
+    ]
+  end
+
+  defp do_send_goaway(%{socket: socket, stream_id: stream_id}) do
+    Logger.debug "Sending goaway with last stream #{stream_id} with error #{Error.code("NO_ERROR")}"
+    h = Http2.goaway_frame(stream_id, Error.code("NO_ERROR"))
+    :ssl.send(socket, h)
+  end
+
+  defp do_recv_goaway(frame, %{client: pid}) do
+    <<_r::1, last_stream_id::31, code::32>> = frame[:payload]
+    Logger.error "Got GOAWAY, #{Error.string(code)}, Last Stream: #{last_stream_id}"
+
+    send pid, {:closed, self}
+  end
+
+  defp do_recv_settings(frame, %{socket: socket, client: pid}) do
+    Logger.debug "Got SETTINGS"
     settings_ack = Http2.build_frame(0x4, 0x1, 0x0, <<>>)
     settings = parse_settings(frame[:payload])
     Logger.debug(inspect(settings))
     :ssl.send(socket, settings_ack)
     send pid, {:ok, self}
-    {:noreply, state}
   end
 
-  def handle_cast({:recv, :rst_stream, frame}, %{socket: socket, client: pid} = state) do
+  defp do_recv_rst_stream(frame, %{client: pid} = state) do
     code = :binary.decode_unsigned(frame[:payload])
-    error = Error.to_string(code)
+    error = Error.string(code)
     Logger.error "Got RST_STREAM, #{error}"
     send pid, {:rst_stream, get_stream(frame[:stream_id], state)}
-    {:noreply, state}
   end
 
   defp put_stream(id, state, stream) do
@@ -125,33 +207,31 @@ defmodule Kadabra.Connection do
     state[:streams][id_string] || %Kadabra.Stream{id: id}
   end
 
-  def handle_cast({:send, :ping}, %{socket: socket} = state) do
-    :ssl.send(socket, Http2.build_frame(0x6, 0x0, 0x0, <<0, 0, 0, 0, 0, 0, 0, 0>>))
-    {:noreply, state}
-  end
-
-  def handle_cast({:recv, :ping, frame}, state) do
-    Logger.debug "Got PING"
-    {:noreply, state}
-  end
-
   def handle_info({:tcp, _socket, bin}, state) do
     Logger.debug("Recv TCP: #{inspect(bin) <> <<0>>}")
     {:noreply, state}
   end
 
+  def handle_info({:tcp_closed, _socket}, state) do
+    Logger.debug("Recv TCP close...")
+    {:noreply, state}
+  end
+
   def handle_info({:ssl, socket, bin}, state) do
-    buffer = state[:buffer] || ""
-    to_parse = <<buffer::bitstring, bin::bitstring>>
     Logger.info("Recv SSL: #{inspect(bin)}")
     parse_ssl(socket, bin, state)
+    {:noreply, state}
+  end
+
+  def handle_info({:ssl_closed, _socket}, state) do
+    Logger.debug("Recv SSL close...")
     {:noreply, state}
   end
 
   def parse_ssl(socket, bin, state) do
     case Http2.parse_frame(bin) do
       {:ok, frame, rest} ->
-        handle_response(socket, frame)
+        handle_response(frame)
         parse_ssl(socket, rest, state)
         {:noreply, state}
       {:error, bin} ->
@@ -160,27 +240,25 @@ defmodule Kadabra.Connection do
     end
   end
 
-  def handle_response(socket, frame) when is_binary(frame) do
+  def handle_response(frame) when is_binary(frame) do
     Logger.info inspect(frame)
   end
-  def handle_response(socket, frame) do
+  def handle_response(frame) do
     case frame[:frame_type] do
       @data -> 
         GenServer.cast(self, {:recv, :data, frame})
-      @headers -> 
+      @headers ->
         GenServer.cast(self, {:recv, :headers, frame})
       @rst_stream -> 
         GenServer.cast(self, {:recv, :rst_stream, frame})
       @settings ->
-        Logger.debug "Got SETTINGS"
         GenServer.cast(self, {:recv, :settings, frame})
       @ping ->
         GenServer.cast(self, {:recv, :ping, frame})
       @goaway ->
-        <<r::1, last_stream_id::31, code::32>> = frame[:payload]
-        Logger.error "Got GOAWAY, #{Error.to_string(code)}, Last Stream: #{last_stream_id}"
+        GenServer.cast(self, {:recv, :goaway, frame})
       @window_update ->
-        Logger.debug "Got WINDOW_UPDATE" 
+        GenServer.cast(self, {:recv, :window_update, frame})
       _ ->
         Logger.debug("Unknown frame: #{inspect(frame)}")
     end
@@ -202,15 +280,5 @@ defmodule Kadabra.Connection do
   def parse_settings(bin) do
     <<identifier::16, value::32, rest::bitstring>> = bin
     [{settings_param(identifier), value}] ++ parse_settings(rest)
-  end
-
-  def handle_info({:tcp_closed, _socket}, state) do
-    Logger.debug("Recv TCP close...")
-    {:noreply, state}
-  end
-
-  def handle_info({:ssl_closed, _socket}, state) do
-    Logger.debug("Recv SSL close...")
-    {:noreply, state}
   end
 end
