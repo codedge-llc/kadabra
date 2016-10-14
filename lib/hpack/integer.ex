@@ -3,14 +3,16 @@ defmodule Kadabra.Hpack.Integer do
   alias Kadabra.Huffman
 
   def decode(<<15::4, bin::bitstring>>, bits) do
+    IO.puts("Prefix 1111")
     prefix_add(15, decode(bin, 0, 0))
   end
   def decode(<<63::6, bin::bitstring>>, bits) do
+    IO.puts("Prefix 1111111")
     prefix_add(63, decode(bin, 0, 0))
   end
   def decode(bin, bits) do
     <<value::size(bits), rest::bitstring>> = bin
-    Logger.error("Got this... #{inspect(<<value::size(bits)>>)}")
+    IO.puts("Prefix #{inspect(<<value::size(bits)>>)}")
     {value, rest}
   end
 

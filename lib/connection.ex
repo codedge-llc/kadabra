@@ -150,14 +150,18 @@ defmodule Kadabra.Connection do
   end
 
   defp do_recv_headers(%{stream_id: stream_id} = frame, %{client: pid, dynamic_table: table} = state) do
-    Logger.debug """
-      Got HEADERS, Stream: #{frame[:stream_id]}, Flags: #{frame[:flags]}
-    """
-    
     case frame[:flags] do
       0x5 ->
         stream = get_stream(stream_id, state)
         {headers, table} = Hpack.decode_headers(frame[:payload], table)
+        Logger.debug """
+          Got HEADERS, Stream: #{frame[:stream_id]}, Flags: #{frame[:flags]}
+          --
+          #{inspect(headers)}
+          --
+          #{inspect(table)}
+        """
+    
         stream = %Stream{ stream | headers: headers }
         state = %{state | dynamic_table: table }
         send pid, {:rst_stream, stream}
@@ -165,6 +169,14 @@ defmodule Kadabra.Connection do
       _ -> 
         stream = get_stream(stream_id, state)
         {headers, table} = Hpack.decode_headers(frame[:payload], table)
+        Logger.debug """
+          Got HEADERS, Stream: #{frame[:stream_id]}, Flags: #{frame[:flags]}
+          --
+          #{inspect(headers)}
+          --
+          #{inspect(table)}
+        """
+
         stream = %Stream{ stream | headers: headers }
         state = %{state | dynamic_table: table }
         put_stream(stream_id, state, stream)

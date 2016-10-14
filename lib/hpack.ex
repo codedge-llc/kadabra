@@ -14,9 +14,28 @@ defmodule Kadabra.Hpack do
       6 -> {":scheme", "http"}
       7 -> {":scheme", "https"}
       8 -> {":status", "200"}
+      9 -> {":status", "204"}
+      10 -> {":status", "206"}
+      11 -> {":status", "304"}
       12 -> {":status", "400"}
+      13 -> {":status", "404"}
+      14 -> {":status", "500"}
+      15 -> {"accept-charset", ""}
+      16 -> {"accept-encoding", "gzip, deflate"}
+      17 -> {"accept-language", ""}
+      18 -> {"accept-ranges", ""}
+      19 -> {"accept", ""}
+      20 -> {"access-control-allow-origin", ""}
+      21 -> {"age", ""}
+      22 -> {"allow", ""}
+      23 -> {"authorization", ""}
+      24 -> {"cache-control", ""}
+      25 -> {"content-disposition", ""}
       26 -> {"content-encoding", ""}
+      27 -> {"content-language", ""}
       28 -> {"content-length", ""}
+      29 -> {"content-location", ""}
+      30 -> {"content-range", ""}
       31 -> {"content-type", ""}
       32 -> {"cookie", ""}
       33 -> {"date", ""}
@@ -27,13 +46,38 @@ defmodule Kadabra.Hpack do
       38 -> {"host", ""}
       39 -> {"if-match", ""}
       40 -> {"if-modified-since", ""}
+      41 -> {"if-none-match", ""}
+      42 -> {"if-range", ""}
+      43 -> {"if-unmodified-since", ""}
+      44 -> {"last-modified", ""}
+      45 -> {"link", ""}
       46 -> {"location", ""}
-      _ -> index
+      47 -> {"max-forwards", ""}
+      48 -> {"proxy-authenticate", ""}
+      49 -> {"proxy-authorization", ""}
+      50 -> {"range", ""}
+      51 -> {"referer", ""}
+      52 -> {"refresh", ""}
+      53 -> {"retry-after", ""}
+      54 -> {"server", ""}
+      55 -> {"set-cookie", ""}
+      56 -> {"strict-transport-security", ""}
+      57 -> {"transfer-encoding", ""}
+      58 -> {"user-agent", ""}
+      59 -> {"vary", ""}
+      60 -> {"via", ""}
+      61 -> {"www-authenticate", ""}
+      _ -> {"ERROR", index}
     end
   end
 
   def header(index, table) when index < 62, do: static_header(index)
-  def header(index, %Hpack{dynamic_table: table}), do: Enum.at(table, index - 62) 
+  def header(index, %Hpack{dynamic_table: table}) do
+    #IO.puts("Fetching index #{index - 62 - 2}")
+    IO.inspect table
+    Enum.at(table, index - 62 - 2, index)
+    #|> IO.inspect
+  end
 
   def decode_headers(bin, table), do: do_decode_headers(bin, [], table)
 
@@ -63,34 +107,47 @@ defmodule Kadabra.Hpack do
     <<h_2::1, value_size::7, rest::bitstring>> = rest
     value_size = value_size * 8
     <<value::size(value_size), rest::bitstring>> = rest
-    value_string = decode_value(h, value_size, value)
+    value_string = decode_value(h_2, value_size, value)
 
     t = [{name_string, value_string}] ++ table.dynamic_table
     table = %{table | dynamic_table: t}
 
-    Logger.info("Literal, Inc Indexing New Name, H: #{h}, H2: #{h_2}, Name: #{name_string}, Value: #{value_string}")
+    IO.puts("Literal, Inc Indexing New Name, H: #{h}, H2: #{h_2}, Name: #{name_string}, Value: #{value_string}")
     {{name_string, value_string}, rest, table}
   end
   def literal_header_inc_indexing(<<0::1, 1::1, index::6, rest::bitstring>> = full_bin, table) do
-    Logger.info("Literal, Inc Indexing, #{inspect(index)}")
     case Hpack.Integer.decode(<<index::6, rest::bitstring>>, 6) do
-      {value, rest} ->
-        result = {header(value, table), rest, table}
-        IO.inspect result
-        result
-      #bin ->
-      #  {{"INCOMPLETE", full_bin}, "", table}
+      {index, rest} ->
+        IO.puts("Literal, Inc Indexing, #{inspect(index)}")
+
+        {header, _} = header(index, table)
+
+        <<h::1, value_size::7, rest::bitstring>> = rest
+        value_size = value_size*8
+        <<value::size(value_size), rest::bitstring>> = rest
+        value_string = decode_value(h, value_size, value)
+
+        t = [{header, value_string}] ++ table.dynamic_table
+        table = %{table | dynamic_table: t}
+
+        IO.puts("Literal, Inc Indexing, H: #{h}, Name: #{header}, Value: #{value_string}")
+        {{header, value_string}, <<rest::bitstring>>, table}
+      bin -> Logger.error(inspect(bin))
     end
   end
 
-  def literal_header_no_indexing(<<0::4, 0::4, _h::1, name_size::7, rest::bitstring>>, table) do # New name
+  def literal_header_no_indexing(<<0::4, 0::4, h::1, name_size::7, rest::bitstring>>, table) do # New name
     name_size = name_size * 8
     <<name::size(name_size), rest::bitstring>> = rest
-    <<_h_2::1, value_size::7, rest::bitstring>> = rest
+    name_string = decode_value(h, name_size, name)
+
+    <<h_2::1, value_size::7, rest::bitstring>> = rest
     value_size = value_size * 8
     <<value::size(value_size), rest::bitstring>> = rest
-    # Logger.info("Literal No Indexing, New Name, H: #{h}, #{inspect(<<value::size(value_size)>>)}")
-    {{name, value}, rest, table}
+    value_string = decode_value(h_2, value_size, value)
+
+    Logger.info("Literal No Indexing, New Name, Header: #{name_string}, Value: #{value_string}")
+    {{name_string, value_string}, rest, table}
   end
   def literal_header_no_indexing(<<0::4, index::4, rest::bitstring>> = full_bin, table) do
     Logger.info """
@@ -103,15 +160,14 @@ defmodule Kadabra.Hpack do
     case Hpack.Integer.decode(<<index::4, rest::bitstring>>, 4) do
       {index, rest} ->
         Logger.info "Index: #{index}, Rest: #{inspect(rest)}"
-        <<h::1, value_size::7, rest::bitstring>> = rest
         {header, _} = header(index, table)
+
+        <<h::1, value_size::7, rest::bitstring>> = rest
         value_size = value_size*8
         <<value::size(value_size), rest::bitstring>> = rest
         value_string = decode_value(h, value_size, value)
 
         {{header, value_string}, rest, table}
-      #bin ->
-      #  {{"INCOMPLETE", full_bin}, "", table}
     end
   end
 
@@ -122,11 +178,15 @@ defmodule Kadabra.Hpack do
                                     rest::bitstring>>, table) do # New name
 
     header_size = size * 8
-    <<header::size(header_size), 0::1, size::7, rest::bitstring>> = rest
+    <<header::size(header_size), h_2::1, size::7, rest::bitstring>> = rest
+    header_string = decode_value(h, header_size, header)
+
     value_size = size * 8
     <<value::size(value_size), rest::bitstring>> = rest
+    value_string = decode_value(h_2, value_size, value)
+
     Logger.info("Literal, Never Indexed, H: #{h}, #{inspect(value)}")
-    {{header, value}, rest, table}
+    {{header_string, value_string}, rest, table}
   end
   def literal_header_never_indexed(<<0::3, 1::1, index::4, rest::bitstring>> = full_bin, table) do
     Logger.info """
@@ -138,18 +198,14 @@ defmodule Kadabra.Hpack do
     case Hpack.Integer.decode(<<index::4, rest::bitstring>>, 4) do
       {index, rest} ->
         Logger.info "Index: #{index}, Rest: #{inspect(rest)}"
-        <<h::1, value_size::7, rest::bitstring>> = rest
         {header, _} = header(index, table)
+
+        <<h::1, value_size::7, rest::bitstring>> = rest
         value_size = value_size*8
         <<value::size(value_size), rest::bitstring>> = rest
         value_string = decode_value(h, value_size, value)
 
         {{header, value_string}, rest, table}
-    #case Hpack.Integer.decode(<<index::4, rest::bitstring>>, 4) do
-    #  {value, rest} ->
-    #    {header(value, table), rest, table}
-    #  bin ->
-    #    {{"INCOMPLETE", full_bin}, "", table}
     end
   end
 
