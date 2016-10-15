@@ -34,7 +34,7 @@ defmodule Kadabra.Connection do
       uri: uri,
       scheme: opts[:scheme] || :https,
       socket: socket,
-      dynamic_table: %Kadabra.Hpack{},
+      dynamic_table: %Kadabra.Hpack.Table{},
       stream_id: 1,
       streams: %{}
     }
@@ -101,7 +101,7 @@ defmodule Kadabra.Connection do
   end
 
   def handle_cast({:recv, :settings, frame}, state) do
-    do_recv_settings(frame, state)
+    state = do_recv_settings(frame, state)
     {:noreply, state}
   end
 
@@ -220,18 +220,30 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  defp do_recv_settings(frame, %{socket: socket, client: pid}) do
+  defp do_recv_settings(frame, %{socket: socket, client: pid, dynamic_table: table} = state) do
     case frame[:flags] do
       0x1 -> 
         Logger.debug "Got SETTINGS ACK"
         send pid, {:ok, self}
+        state
       _ ->
         Logger.debug "Got SETTINGS"
         settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
         settings = parse_settings(frame[:payload])
+        table_size = fetch_setting(settings, "SETTINGS_MAX_HEADER_LIST_SIZE")
+        table = Hpack.Table.change_table_size(table, table_size)
+        table = %Hpack.Table{table | size: table_size}
         Logger.debug(inspect(settings))
         :ssl.send(socket, settings_ack)
         send pid, {:ok, self}
+        %{state | dynamic_table: table}
+    end
+  end
+
+  def fetch_setting(settings, settings_key) do
+    case Enum.find(settings, fn({key, _val}) -> key == settings_key end) do
+      {^settings_key, value} -> value
+      nil -> nil
     end
   end
 

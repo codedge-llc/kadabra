@@ -6,6 +6,10 @@ defmodule Kadabra.Hpack.Integer do
     IO.puts("Prefix 1111")
     prefix_add(15, decode(bin, 0, 0))
   end
+  def decode(<<31::5, bin::bitstring>>, bits) do
+    IO.puts("Prefix 11111")
+    prefix_add(31, decode(bin, 0, 0))
+  end
   def decode(<<63::6, bin::bitstring>>, bits) do
     IO.puts("Prefix 1111111")
     prefix_add(63, decode(bin, 0, 0))

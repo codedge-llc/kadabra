@@ -4,81 +4,6 @@ defmodule Kadabra.Hpack do
 
   alias Kadabra.{Hpack, Huffman}
 
-  def static_header(index) do
-    case index do
-      1 -> {":authority", ""}
-      2 -> {":method", "GET"}
-      3 -> {":method", "POST"}
-      4 -> {":path", "/"}
-      5 -> {":path", "/index.html"}
-      6 -> {":scheme", "http"}
-      7 -> {":scheme", "https"}
-      8 -> {":status", "200"}
-      9 -> {":status", "204"}
-      10 -> {":status", "206"}
-      11 -> {":status", "304"}
-      12 -> {":status", "400"}
-      13 -> {":status", "404"}
-      14 -> {":status", "500"}
-      15 -> {"accept-charset", ""}
-      16 -> {"accept-encoding", "gzip, deflate"}
-      17 -> {"accept-language", ""}
-      18 -> {"accept-ranges", ""}
-      19 -> {"accept", ""}
-      20 -> {"access-control-allow-origin", ""}
-      21 -> {"age", ""}
-      22 -> {"allow", ""}
-      23 -> {"authorization", ""}
-      24 -> {"cache-control", ""}
-      25 -> {"content-disposition", ""}
-      26 -> {"content-encoding", ""}
-      27 -> {"content-language", ""}
-      28 -> {"content-length", ""}
-      29 -> {"content-location", ""}
-      30 -> {"content-range", ""}
-      31 -> {"content-type", ""}
-      32 -> {"cookie", ""}
-      33 -> {"date", ""}
-      34 -> {"etag", ""}
-      35 -> {"expect", ""}
-      36 -> {"expires", ""}
-      37 -> {"from", ""}
-      38 -> {"host", ""}
-      39 -> {"if-match", ""}
-      40 -> {"if-modified-since", ""}
-      41 -> {"if-none-match", ""}
-      42 -> {"if-range", ""}
-      43 -> {"if-unmodified-since", ""}
-      44 -> {"last-modified", ""}
-      45 -> {"link", ""}
-      46 -> {"location", ""}
-      47 -> {"max-forwards", ""}
-      48 -> {"proxy-authenticate", ""}
-      49 -> {"proxy-authorization", ""}
-      50 -> {"range", ""}
-      51 -> {"referer", ""}
-      52 -> {"refresh", ""}
-      53 -> {"retry-after", ""}
-      54 -> {"server", ""}
-      55 -> {"set-cookie", ""}
-      56 -> {"strict-transport-security", ""}
-      57 -> {"transfer-encoding", ""}
-      58 -> {"user-agent", ""}
-      59 -> {"vary", ""}
-      60 -> {"via", ""}
-      61 -> {"www-authenticate", ""}
-      _ -> {"ERROR", index}
-    end
-  end
-
-  def header(index, table) when index < 62, do: static_header(index)
-  def header(index, %Hpack{dynamic_table: table}) do
-    #IO.puts("Fetching index #{index - 62 - 2}")
-    IO.inspect table
-    Enum.at(table, index - 62 - 2, index)
-    #|> IO.inspect
-  end
-
   def decode_headers(bin, table), do: do_decode_headers(bin, [], table)
 
   def do_decode_headers(<<>>, headers, table), do: {headers, table}
@@ -97,7 +22,7 @@ defmodule Kadabra.Hpack do
   defp decode_value(0, _size, value), do: value
   defp decode_value(1, size, value), do: <<value::size(size)>> |> Huffman.decode |> List.to_string
 
-  def indexed_header(<<1::1, index::7, rest::bitstring>>, table), do: {header(index, table), <<rest::bitstring>>, table}
+  def indexed_header(<<1::1, index::7, rest::bitstring>>, table), do: {Hpack.Table.header(table, index), <<rest::bitstring>>, table}
 
   def literal_header_inc_indexing(<<0::1, 1::1, 0::6, h::1, name_size::7, rest::bitstring>>, table) do # New name
     name_size = name_size * 8
@@ -109,8 +34,7 @@ defmodule Kadabra.Hpack do
     <<value::size(value_size), rest::bitstring>> = rest
     value_string = decode_value(h_2, value_size, value)
 
-    t = [{name_string, value_string}] ++ table.dynamic_table
-    table = %{table | dynamic_table: t}
+    table = Hpack.Table.add_header(table, {name_string, value_string})
 
     IO.puts("Literal, Inc Indexing New Name, H: #{h}, H2: #{h_2}, Name: #{name_string}, Value: #{value_string}")
     {{name_string, value_string}, rest, table}
@@ -120,15 +44,14 @@ defmodule Kadabra.Hpack do
       {index, rest} ->
         IO.puts("Literal, Inc Indexing, #{inspect(index)}")
 
-        {header, _} = header(index, table)
+        {header, _} = Hpack.Table.header(table, index)
 
         <<h::1, value_size::7, rest::bitstring>> = rest
         value_size = value_size*8
         <<value::size(value_size), rest::bitstring>> = rest
         value_string = decode_value(h, value_size, value)
 
-        t = [{header, value_string}] ++ table.dynamic_table
-        table = %{table | dynamic_table: t}
+        table = Hpack.Table.add_header(table, {header, value_string})
 
         IO.puts("Literal, Inc Indexing, H: #{h}, Name: #{header}, Value: #{value_string}")
         {{header, value_string}, <<rest::bitstring>>, table}
@@ -160,7 +83,7 @@ defmodule Kadabra.Hpack do
     case Hpack.Integer.decode(<<index::4, rest::bitstring>>, 4) do
       {index, rest} ->
         Logger.info "Index: #{index}, Rest: #{inspect(rest)}"
-        {header, _} = header(index, table)
+        {header, _} = Hpack.Table.header(table, index)
 
         <<h::1, value_size::7, rest::bitstring>> = rest
         value_size = value_size*8
@@ -198,7 +121,7 @@ defmodule Kadabra.Hpack do
     case Hpack.Integer.decode(<<index::4, rest::bitstring>>, 4) do
       {index, rest} ->
         Logger.info "Index: #{index}, Rest: #{inspect(rest)}"
-        {header, _} = header(index, table)
+        {header, _} = Hpack.Table.header(table, index)
 
         <<h::1, value_size::7, rest::bitstring>> = rest
         value_size = value_size*8
@@ -209,9 +132,13 @@ defmodule Kadabra.Hpack do
     end
   end
 
-  def dynamic_table_size_update(<<0::1, 0::1, 1::1, max_size::5, rest::bitstring>>, table) do
-    Logger.info("Dynamic table size update, max: #{max_size}")
-    #decode_headers(rest)
-    {{:table_size_update, max_size}, rest, table}
+  def dynamic_table_size_update(<<0::1, 0::1, 1::1, prefix::5, rest::bitstring>>, table) do
+    case Hpack.Integer.decode(<<prefix::5, rest::bitstring>>, 5) do
+      {value, rest} ->
+        Logger.info "Size: #{value}, Rest: #{inspect(rest)}"
+        table = Hpack.Table.change_table_size(table, value)
+        table = %Hpack.Table{table | size: value}
+        {[], rest, table}
+    end
   end
 end
