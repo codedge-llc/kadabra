@@ -3,7 +3,6 @@ defmodule Kadabra.Hpack.Table do
     Defines static table and manages dynamic table entries.
   """
   defstruct headers: [], size: 4096
-  require Logger
 
   alias Kadabra.{Hpack}
 
@@ -76,7 +75,6 @@ defmodule Kadabra.Hpack.Table do
 
   def header(_table, index) when index < 62, do: static_header(index)
   def header(%Hpack.Table{headers: headers} = table, index) do
-    IO.inspect table
     Enum.at(headers, index - 62, index)
   end
 

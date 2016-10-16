@@ -49,13 +49,6 @@ defmodule Kadabra.Hpack do
 
     table = Hpack.Table.add_header(table, {name_string, value_string})
 
-    IO.puts """
-      Literal, Inc Indexing New Name
-      H: #{h}
-      H2: #{h_2}
-      Name: #{name_string}
-      Value: #{value_string}
-    """
     {{name_string, value_string}, rest, table}
   end
   def literal_header_inc_indexing(<<0::1, 1::1,
@@ -63,7 +56,6 @@ defmodule Kadabra.Hpack do
                                     rest::bitstring>>, table) do
 
     {index, rest} = Hpack.Integer.decode(<<index::6, rest::bitstring>>, 6)
-    IO.puts("Literal, Inc Indexing, #{inspect(index)}")
 
     {header, _} = Hpack.Table.header(table, index)
 
@@ -74,7 +66,6 @@ defmodule Kadabra.Hpack do
 
     table = Hpack.Table.add_header(table, {header, value_string})
 
-    IO.puts("Literal, Inc Indexing, H: #{h}, Name: #{header}, Value: #{value_string}")
     {{header, value_string}, <<rest::bitstring>>, table}
   end
 
