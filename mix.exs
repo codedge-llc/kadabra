@@ -11,6 +11,7 @@ defmodule Kadabra.Mixfile do
       deps: deps,
       package: package,
       name: "Kadabra",
+      description: description,
       source_url: "https://github.com/codedge-llc/kadabra",
       docs: [main: "README",
              extras: ["README.md"]]
@@ -19,6 +20,12 @@ defmodule Kadabra.Mixfile do
 
   def application do
     [applications: [:logger]]
+  end
+
+  defp description do
+    """
+      HTTP/2 client for Elixir 
+    """
   end
 
   defp deps do
