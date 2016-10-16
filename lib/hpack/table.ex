@@ -1,8 +1,11 @@
 defmodule Kadabra.Hpack.Table do
+  @moduledoc """
+    Defines static table and manages dynamic table entries.
+  """
   defstruct headers: [], size: 4096
   require Logger
 
-  alias Kadabra.{Hpack, Huffman}
+  alias Kadabra.{Hpack}
 
   def static_header(index) do
     case index do
@@ -71,13 +74,13 @@ defmodule Kadabra.Hpack.Table do
     end
   end
 
-  def header(table, index) when index < 62, do: static_header(index)
+  def header(_table, index) when index < 62, do: static_header(index)
   def header(%Hpack.Table{headers: headers} = table, index) do
     IO.inspect table
     Enum.at(headers, index - 62, index)
   end
 
-  def add_header(%Hpack.Table{headers: headers, size: size} = table, header) do
+  def add_header(%Hpack.Table{size: size} = table, header) do
     clip_size = size - entry_size(header)
     table = change_table_size(table, clip_size)
     if clip_size >= 0 do
@@ -89,15 +92,15 @@ defmodule Kadabra.Hpack.Table do
   end
 
   def change_table_size(table, new_size) when new_size < 0 do
-    %{table | headers: []}  
+    %{table | headers: []}
   end
   def change_table_size(table, size) do
-    headers = do_reduce_table_size(table.headers, size, 0) 
+    headers = do_reduce_table_size(table.headers, size, 0)
     %{table | headers: headers}
   end
 
-  defp do_reduce_table_size([], size, acc), do: []
-  defp do_reduce_table_size(headers, size, acc) when acc > size, do: []
+  defp do_reduce_table_size([], _size, _acc), do: []
+  defp do_reduce_table_size(_headers, size, acc) when acc > size, do: []
   defp do_reduce_table_size(headers, size, acc) do
     [h | rest] = headers
     [h] ++ do_reduce_table_size(rest, size, acc + entry_size(h))

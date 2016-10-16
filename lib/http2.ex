@@ -4,8 +4,6 @@ defmodule Kadabra.Http2 do
   """
   require Logger
 
-  alias Kadabra.{Hpack, Huffman}
-
   def connection_preface, do: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
   def settings_ack_frame, do: build_frame(0x04, 0x01, 0, <<>>)
   def ack_frame, do: build_frame(0x01, 0, 0, <<>>)
@@ -14,15 +12,14 @@ defmodule Kadabra.Http2 do
   def goaway_frame(last_stream_id, error_code) do
     payload = <<0::1, last_stream_id::31, error_code::32>>
     build_frame(0x7, 0x0, 0, payload)
-    |> IO.inspect
   end
 
   def settings_frame do
     headers = [
-      #{"SETTINGS_HEADER_TABLE_SIZE", Integer.to_string(4096)},
-      #{"SETTINGS_MAX_CONCURRENT_STREAMS", Integer.to_string(500)},
-      #{"SETTINGS_MAX_FRAME_SIZE", Integer.to_string(16384)},
-      #{"SETTINGS_MAX_HEADER_LIST_SIZE", Integer.to_string(8000)}
+      # {"SETTINGS_HEADER_TABLE_SIZE", Integer.to_string(4096)},
+      # {"SETTINGS_MAX_CONCURRENT_STREAMS", Integer.to_string(500)},
+      # {"SETTINGS_MAX_FRAME_SIZE", Integer.to_string(16384)},
+      # {"SETTINGS_MAX_HEADER_LIST_SIZE", Integer.to_string(8000)}
     ]
     encoded = for {key, value} <- headers, do: encode_header(key, value)
     headers_payload = Enum.reduce(encoded, <<>>, fn(x, acc) -> acc <> x end)
@@ -45,17 +42,14 @@ defmodule Kadabra.Http2 do
 
     case parse_payload(size, payload) do
       {:ok, frame_payload, rest} ->
-        # Logger.debug "Good parse..."
         {:ok, %{
           payload_size: payload_size,
           frame_type: frame_type,
           flags: flags,
           stream_id: stream_id,
           payload: frame_payload
-          #payload: <<frame_payload::size(size)>>
         }, rest}
       {:error, _bin} ->
-        # Logger.error "Bad parse..."
         {:error, full_bin}
     end
   end

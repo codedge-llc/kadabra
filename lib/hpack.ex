@@ -1,4 +1,7 @@
 defmodule Kadabra.Hpack do
+  @moduledoc """
+    Decodes headers as specified in RFC 7451.
+  """
   defstruct dynamic_table: []
   require Logger
 
@@ -20,11 +23,21 @@ defmodule Kadabra.Hpack do
   end
 
   defp decode_value(0, _size, value), do: value
-  defp decode_value(1, size, value), do: <<value::size(size)>> |> Huffman.decode |> List.to_string
+  defp decode_value(1, size, value) do
+    <<value::size(size)>>
+    |> Huffman.decode
+    |> List.to_string
+  end
 
-  def indexed_header(<<1::1, index::7, rest::bitstring>>, table), do: {Hpack.Table.header(table, index), <<rest::bitstring>>, table}
+  def indexed_header(<<1::1, index::7, rest::bitstring>>, table), do:
+    {Hpack.Table.header(table, index), <<rest::bitstring>>, table}
 
-  def literal_header_inc_indexing(<<0::1, 1::1, 0::6, h::1, name_size::7, rest::bitstring>>, table) do # New name
+  def literal_header_inc_indexing(<<0::1, 1::1,
+                                    0::6,
+                                    h::1,
+                                    name_size::7,
+                                    rest::bitstring>>, table) do # New name
+
     name_size = name_size * 8
     <<name::size(name_size), rest::bitstring>> = rest
     name_string = decode_value(h, name_size, name)
@@ -36,30 +49,41 @@ defmodule Kadabra.Hpack do
 
     table = Hpack.Table.add_header(table, {name_string, value_string})
 
-    IO.puts("Literal, Inc Indexing New Name, H: #{h}, H2: #{h_2}, Name: #{name_string}, Value: #{value_string}")
+    IO.puts """
+      Literal, Inc Indexing New Name
+      H: #{h}
+      H2: #{h_2}
+      Name: #{name_string}
+      Value: #{value_string}
+    """
     {{name_string, value_string}, rest, table}
   end
-  def literal_header_inc_indexing(<<0::1, 1::1, index::6, rest::bitstring>> = full_bin, table) do
-    case Hpack.Integer.decode(<<index::6, rest::bitstring>>, 6) do
-      {index, rest} ->
-        IO.puts("Literal, Inc Indexing, #{inspect(index)}")
+  def literal_header_inc_indexing(<<0::1, 1::1,
+                                    index::6,
+                                    rest::bitstring>>, table) do
 
-        {header, _} = Hpack.Table.header(table, index)
+    {index, rest} = Hpack.Integer.decode(<<index::6, rest::bitstring>>, 6)
+    IO.puts("Literal, Inc Indexing, #{inspect(index)}")
 
-        <<h::1, value_size::7, rest::bitstring>> = rest
-        value_size = value_size*8
-        <<value::size(value_size), rest::bitstring>> = rest
-        value_string = decode_value(h, value_size, value)
+    {header, _} = Hpack.Table.header(table, index)
 
-        table = Hpack.Table.add_header(table, {header, value_string})
+    <<h::1, value_size::7, rest::bitstring>> = rest
+    value_size = value_size * 8
+    <<value::size(value_size), rest::bitstring>> = rest
+    value_string = decode_value(h, value_size, value)
 
-        IO.puts("Literal, Inc Indexing, H: #{h}, Name: #{header}, Value: #{value_string}")
-        {{header, value_string}, <<rest::bitstring>>, table}
-      bin -> Logger.error(inspect(bin))
-    end
+    table = Hpack.Table.add_header(table, {header, value_string})
+
+    IO.puts("Literal, Inc Indexing, H: #{h}, Name: #{header}, Value: #{value_string}")
+    {{header, value_string}, <<rest::bitstring>>, table}
   end
 
-  def literal_header_no_indexing(<<0::4, 0::4, h::1, name_size::7, rest::bitstring>>, table) do # New name
+  def literal_header_no_indexing(<<0::4,
+                                   0::4,
+                                   h::1,
+                                   name_size::7,
+                                   rest::bitstring>>, table) do # New name
+
     name_size = name_size * 8
     <<name::size(name_size), rest::bitstring>> = rest
     name_string = decode_value(h, name_size, name)
@@ -72,7 +96,10 @@ defmodule Kadabra.Hpack do
     Logger.info("Literal No Indexing, New Name, Header: #{name_string}, Value: #{value_string}")
     {{name_string, value_string}, rest, table}
   end
-  def literal_header_no_indexing(<<0::4, index::4, rest::bitstring>> = full_bin, table) do
+  def literal_header_no_indexing(<<0::4,
+                                   index::4,
+                                   rest::bitstring>>, table) do
+
     Logger.info """
 
       Literal No Indexing
@@ -80,18 +107,16 @@ defmodule Kadabra.Hpack do
       #{inspect(rest)}
       """
 
-    case Hpack.Integer.decode(<<index::4, rest::bitstring>>, 4) do
-      {index, rest} ->
-        Logger.info "Index: #{index}, Rest: #{inspect(rest)}"
-        {header, _} = Hpack.Table.header(table, index)
+    {index, rest} = Hpack.Integer.decode(<<index::4, rest::bitstring>>, 4)
+    Logger.info "Index: #{index}, Rest: #{inspect(rest)}"
+    {header, _} = Hpack.Table.header(table, index)
 
-        <<h::1, value_size::7, rest::bitstring>> = rest
-        value_size = value_size*8
-        <<value::size(value_size), rest::bitstring>> = rest
-        value_string = decode_value(h, value_size, value)
+    <<h::1, value_size::7, rest::bitstring>> = rest
+    value_size = value_size * 8
+    <<value::size(value_size), rest::bitstring>> = rest
+    value_string = decode_value(h, value_size, value)
 
-        {{header, value_string}, rest, table}
-    end
+    {{header, value_string}, rest, table}
   end
 
   def literal_header_never_indexed(<<0::3, 1::1,
@@ -111,34 +136,33 @@ defmodule Kadabra.Hpack do
     Logger.info("Literal, Never Indexed, H: #{h}, #{inspect(value)}")
     {{header_string, value_string}, rest, table}
   end
-  def literal_header_never_indexed(<<0::3, 1::1, index::4, rest::bitstring>> = full_bin, table) do
+  def literal_header_never_indexed(<<0::3, 1::1,
+                                     index::4,
+                                     rest::bitstring>>, table) do
+
     Logger.info """
 
       Literal Never Indexed
       #{inspect(<<index::4>>)}
       #{inspect(rest)}
       """
-    case Hpack.Integer.decode(<<index::4, rest::bitstring>>, 4) do
-      {index, rest} ->
-        Logger.info "Index: #{index}, Rest: #{inspect(rest)}"
-        {header, _} = Hpack.Table.header(table, index)
+    {index, rest} = Hpack.Integer.decode(<<index::4, rest::bitstring>>, 4)
+    Logger.info "Index: #{index}, Rest: #{inspect(rest)}"
+    {header, _} = Hpack.Table.header(table, index)
 
-        <<h::1, value_size::7, rest::bitstring>> = rest
-        value_size = value_size*8
-        <<value::size(value_size), rest::bitstring>> = rest
-        value_string = decode_value(h, value_size, value)
+    <<h::1, value_size::7, rest::bitstring>> = rest
+    value_size = value_size * 8
+    <<value::size(value_size), rest::bitstring>> = rest
+    value_string = decode_value(h, value_size, value)
 
-        {{header, value_string}, rest, table}
-    end
+    {{header, value_string}, rest, table}
   end
 
   def dynamic_table_size_update(<<0::1, 0::1, 1::1, prefix::5, rest::bitstring>>, table) do
-    case Hpack.Integer.decode(<<prefix::5, rest::bitstring>>, 5) do
-      {value, rest} ->
-        Logger.info "Size: #{value}, Rest: #{inspect(rest)}"
-        table = Hpack.Table.change_table_size(table, value)
-        table = %Hpack.Table{table | size: value}
-        {[], rest, table}
-    end
+    {value, rest} = Hpack.Integer.decode(<<prefix::5, rest::bitstring>>, 5)
+    Logger.info "Size: #{value}, Rest: #{inspect(rest)}"
+    table = Hpack.Table.change_table_size(table, value)
+    table = %Hpack.Table{table | size: value}
+    {[], rest, table}
   end
 end

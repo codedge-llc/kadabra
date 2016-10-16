@@ -1,4 +1,7 @@
 defmodule Kadabra.Error do
+  @moduledoc """
+    Handles error code conversions.
+  """
   def string(code) do
     case code do
       0x0 -> "NO_ERROR"
@@ -21,7 +24,7 @@ defmodule Kadabra.Error do
 
   def code(string) do
     case string do
-      "NO_ERROR"           -> 0x0 
+      "NO_ERROR"           -> 0x0
       "PROTOCOL_ERROR"     -> 0x1
       "INTERNAL_ERROR"     -> 0x2
       "FLOW_CONTROL_ERROR" -> 0x3

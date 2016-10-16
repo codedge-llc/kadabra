@@ -1,4 +1,7 @@
 defmodule Kadabra.Connection do
+  @moduledoc """
+    Worker for maintaining an open HTTP/2 connection.
+  """
   use GenServer
   require Logger
 
@@ -43,11 +46,11 @@ defmodule Kadabra.Connection do
   def do_connect(uri, opts) do
     case opts[:scheme] do
       :http -> {:error, :not_implemented}
-      :https -> 
+      :https ->
         :ssl.start
         port = opts[:port] || 443
         case :ssl.connect(uri, port, ssl_options(opts[:ssl])) do
-          {:ok, ssl} -> 
+          {:ok, ssl} ->
             Logger.debug "Establishing connection..."
             :ssl.send(ssl, Http2.connection_preface)
             :ssl.send(ssl, Http2.settings_frame)
@@ -121,10 +124,9 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  def handle_cast({:recv, :window_update, frame}, state) do
-    #window_size_inc = :binary.decode_unsigned(frame[:payload])
-    <<_r::1, window_size_inc::31>> = frame[:payload]
-    Logger.warn "Got WINDOW_UPDATE, Stream: #{frame[:stream_id]}, Inc: #{window_size_inc}"
+  def handle_cast({:recv, :window_update, %{stream_id: stream_id, payload: payload}}, state) do
+    <<_r::1, window_size_inc::31>> = payload
+    Logger.warn "Got WINDOW_UPDATE, Stream: #{stream_id}, Inc: #{window_size_inc}"
     {:noreply, state}
   end
 
@@ -136,51 +138,36 @@ defmodule Kadabra.Connection do
       --
       #{frame[:payload]}
     """
-    case frame[:flags] do
-      0x1 ->
-        stream = get_stream(stream_id, state)
-        stream = %Stream{ stream | body: frame[:payload] }
-        send pid, {:rst_stream, stream}
-        put_stream(stream_id, state, stream)
-      _ -> 
-        stream = get_stream(stream_id, state)
-        stream = %Stream{ stream | body: frame[:payload] }
-        put_stream(stream_id, state, stream)
-    end
+    stream = get_stream(stream_id, state)
+    body = stream.body || ""
+    stream = %Stream{ stream | body: body <> frame[:payload] }
+
+    if frame[:flags] == 0x1, do: send pid, {:rst_stream, stream}
+
+    put_stream(stream_id, state, stream)
   end
 
-  defp do_recv_headers(%{stream_id: stream_id} = frame, %{client: pid, dynamic_table: table} = state) do
-    case frame[:flags] do
-      0x5 ->
-        stream = get_stream(stream_id, state)
-        {headers, table} = Hpack.decode_headers(frame[:payload], table)
-        Logger.debug """
-          Got HEADERS, Stream: #{frame[:stream_id]}, Flags: #{frame[:flags]}
-          --
-          #{inspect(headers)}
-          --
-          #{inspect(table)}
-        """
-    
-        stream = %Stream{ stream | headers: headers }
-        state = %{state | dynamic_table: table }
-        send pid, {:rst_stream, stream}
-        put_stream(stream_id, state, stream)
-      _ -> 
-        stream = get_stream(stream_id, state)
-        {headers, table} = Hpack.decode_headers(frame[:payload], table)
-        Logger.debug """
-          Got HEADERS, Stream: #{frame[:stream_id]}, Flags: #{frame[:flags]}
-          --
-          #{inspect(headers)}
-          --
-          #{inspect(table)}
-        """
+  defp do_recv_headers(%{stream_id: stream_id,
+                         flags: flags,
+                         payload: payload}, %{client: pid, dynamic_table: table} = state) do
 
-        stream = %Stream{ stream | headers: headers }
-        state = %{state | dynamic_table: table }
-        put_stream(stream_id, state, stream)
-    end
+    stream = get_stream(stream_id, state)
+    {headers, table} = Hpack.decode_headers(payload, table)
+
+    Logger.debug """
+      Got HEADERS, Stream: #{stream_id}, Flags: #{flags}
+      --
+      #{inspect(headers)}
+      --
+      #{inspect(table)}
+    """
+
+    stream = %Stream{ stream | headers: headers }
+    state = %{state | dynamic_table: table }
+
+    if flags == 0x5, do: send pid, {:rst_stream, stream}
+
+    put_stream(stream_id, state, stream)
   end
 
   defp do_send_headers(headers, payload,
@@ -192,7 +179,7 @@ defmodule Kadabra.Connection do
     h = Http2.build_frame(@headers, 0x4, stream_id, headers_payload)
 
     :ssl.send(socket, h)
-    
+
     if payload do
       h_p = Http2.build_frame(@data, 0x1, stream_id, payload)
       :ssl.send(socket, h_p)
@@ -222,7 +209,7 @@ defmodule Kadabra.Connection do
 
   defp do_recv_settings(frame, %{socket: socket, client: pid, dynamic_table: table} = state) do
     case frame[:flags] do
-      0x1 -> 
+      0x1 ->
         Logger.debug "Got SETTINGS ACK"
         send pid, {:ok, self}
         state
@@ -264,8 +251,7 @@ defmodule Kadabra.Connection do
     state[:streams][id_string] || %Kadabra.Stream{id: id}
   end
 
-  def handle_info({:tcp, _socket, bin}, state) do
-    Logger.debug("Recv TCP: #{inspect(bin) <> <<0>>}")
+  def handle_info({:tcp, _socket, _bin}, state) do
     {:noreply, state}
   end
 
@@ -274,8 +260,7 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  def handle_info({:ssl, socket, bin}, state) do
-    Logger.info("Recv SSL: #{inspect(bin)}")
+  def handle_info({:ssl, _socket, bin}, state) do
     do_recv_ssl(bin, state)
   end
 
@@ -285,24 +270,18 @@ defmodule Kadabra.Connection do
   end
 
   defp do_recv_ssl(bin, %{socket: socket} = state) do
-    #Logger.warn("Buffer is #{inspect(state[:buffer])}")
     bin = state[:buffer] <> bin
-    #Logger.warn("Now its is #{inspect(bin)}")
     case parse_ssl(socket, bin, state) do
-      :ok -> 
-        # Logger.debug "Got ok"
+      :ok ->
         {:noreply, %{state | buffer: ""}}
       {:error, bin} ->
-        # Logger.debug "Got error, #{inspect(bin)}"
         {:noreply, %{state | buffer: bin}}
     end
   end
 
   def parse_ssl(socket, bin, state) do
-    Logger.debug "Parsing: #{inspect(bin)}"
     case Http2.parse_frame(bin) do
       {:ok, frame, rest} ->
-        Logger.debug inspect(frame)
         handle_response(frame)
         parse_ssl(socket, rest, state)
         :ok
@@ -317,11 +296,11 @@ defmodule Kadabra.Connection do
   end
   def handle_response(frame) do
     case frame[:frame_type] do
-      @data -> 
+      @data ->
         GenServer.cast(self, {:recv, :data, frame})
       @headers ->
         GenServer.cast(self, {:recv, :headers, frame})
-      @rst_stream -> 
+      @rst_stream ->
         GenServer.cast(self, {:recv, :rst_stream, frame})
       @settings ->
         GenServer.cast(self, {:recv, :settings, frame})

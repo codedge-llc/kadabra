@@ -1,4 +1,7 @@
 defmodule Kadabra.Huffman do
+  @moduledoc """
+    Huffman decoder.
+  """
   def decode(bin), do: decode(bin, [])
   def decode(bin, acc) do
     case bin do
