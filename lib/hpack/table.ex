@@ -74,7 +74,7 @@ defmodule Kadabra.Hpack.Table do
   end
 
   def header(_table, index) when index < 62, do: static_header(index)
-  def header(%Hpack.Table{headers: headers} = table, index) do
+  def header(%Hpack.Table{headers: headers}, index) do
     Enum.at(headers, index - 62, index)
   end
 

@@ -121,8 +121,8 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  def handle_cast({:recv, :window_update, %{stream_id: stream_id, payload: payload}}, state) do
-    <<_r::1, window_size_inc::31>> = payload
+  def handle_cast({:recv, :window_update, %{stream_id: _stream_id, payload: payload}}, state) do
+    <<_r::1, _window_size_inc::31>> = payload
     {:noreply, state}
   end
 
@@ -217,7 +217,7 @@ defmodule Kadabra.Connection do
 
   defp do_recv_rst_stream(frame, %{client: pid} = state) do
     code = :binary.decode_unsigned(frame[:payload])
-    error = Error.string(code)
+    _error = Error.string(code)
     send pid, {:end_stream, get_stream(frame[:stream_id], state)}
   end
 
