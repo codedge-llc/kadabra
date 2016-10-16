@@ -27,6 +27,7 @@ end
 {:ok, pid} = Kadabra.open('http2.golang.org', :https)
 
 path = "/ECHO" # Route echoes PUT body in uppercase
+body = "sample echo request"
 headers = [
   {":method", "PUT"},
   {":path", path},

@@ -13,7 +13,7 @@ defmodule Kadabra.Mixfile do
       name: "Kadabra",
       description: description,
       source_url: "https://github.com/codedge-llc/kadabra",
-      docs: [main: "README",
+      docs: [main: "readme",
              extras: ["README.md"]]
     ]
   end
