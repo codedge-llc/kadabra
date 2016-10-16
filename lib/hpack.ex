@@ -93,22 +93,13 @@ defmodule Kadabra.Hpack do
     <<value::size(value_size), rest::bitstring>> = rest
     value_string = decode_value(h_2, value_size, value)
 
-    Logger.info("Literal No Indexing, New Name, Header: #{name_string}, Value: #{value_string}")
     {{name_string, value_string}, rest, table}
   end
   def literal_header_no_indexing(<<0::4,
                                    index::4,
                                    rest::bitstring>>, table) do
 
-    Logger.info """
-
-      Literal No Indexing
-      #{inspect(<<index::4>>)}
-      #{inspect(rest)}
-      """
-
     {index, rest} = Hpack.Integer.decode(<<index::4, rest::bitstring>>, 4)
-    Logger.info "Index: #{index}, Rest: #{inspect(rest)}"
     {header, _} = Hpack.Table.header(table, index)
 
     <<h::1, value_size::7, rest::bitstring>> = rest
@@ -133,21 +124,13 @@ defmodule Kadabra.Hpack do
     <<value::size(value_size), rest::bitstring>> = rest
     value_string = decode_value(h_2, value_size, value)
 
-    Logger.info("Literal, Never Indexed, H: #{h}, #{inspect(value)}")
     {{header_string, value_string}, rest, table}
   end
   def literal_header_never_indexed(<<0::3, 1::1,
                                      index::4,
                                      rest::bitstring>>, table) do
 
-    Logger.info """
-
-      Literal Never Indexed
-      #{inspect(<<index::4>>)}
-      #{inspect(rest)}
-      """
     {index, rest} = Hpack.Integer.decode(<<index::4, rest::bitstring>>, 4)
-    Logger.info "Index: #{index}, Rest: #{inspect(rest)}"
     {header, _} = Hpack.Table.header(table, index)
 
     <<h::1, value_size::7, rest::bitstring>> = rest
@@ -160,7 +143,6 @@ defmodule Kadabra.Hpack do
 
   def dynamic_table_size_update(<<0::1, 0::1, 1::1, prefix::5, rest::bitstring>>, table) do
     {value, rest} = Hpack.Integer.decode(<<prefix::5, rest::bitstring>>, 5)
-    Logger.info "Size: #{value}, Rest: #{inspect(rest)}"
     table = Hpack.Table.change_table_size(table, value)
     table = %Hpack.Table{table | size: value}
     {[], rest, table}

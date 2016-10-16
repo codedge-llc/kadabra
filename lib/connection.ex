@@ -20,7 +20,6 @@ defmodule Kadabra.Connection do
   end
 
   def init({:ok, uri, pid, opts}) do
-    Logger.debug "Initializing..."
     case do_connect(uri, opts) do
       {:ok, socket} ->
         {:ok, initial_state(socket, uri, pid, opts)}
@@ -51,7 +50,6 @@ defmodule Kadabra.Connection do
         port = opts[:port] || 443
         case :ssl.connect(uri, port, ssl_options(opts[:ssl])) do
           {:ok, ssl} ->
-            Logger.debug "Establishing connection..."
             :ssl.send(ssl, Http2.connection_preface)
             :ssl.send(ssl, Http2.settings_frame)
             {:ok, ssl}
@@ -114,7 +112,6 @@ defmodule Kadabra.Connection do
   end
 
   def handle_cast({:recv, :ping, _frame}, %{client: pid} = state) do
-    Logger.debug "Got PING"
     send pid, {:ping, self}
     {:noreply, state}
   end
@@ -126,23 +123,17 @@ defmodule Kadabra.Connection do
 
   def handle_cast({:recv, :window_update, %{stream_id: stream_id, payload: payload}}, state) do
     <<_r::1, window_size_inc::31>> = payload
-    Logger.warn "Got WINDOW_UPDATE, Stream: #{stream_id}, Inc: #{window_size_inc}"
     {:noreply, state}
   end
 
   defp inc_stream_id(%{stream_id: stream_id} = state), do: %{state | stream_id: stream_id + 2}
 
   defp do_recv_data(%{stream_id: stream_id} = frame, %{client: pid} = state) do
-    Logger.debug """
-      Got DATA, Stream: #{frame[:stream_id]}, Flags: #{frame[:flags]}
-      --
-      #{frame[:payload]}
-    """
     stream = get_stream(stream_id, state)
     body = stream.body || ""
     stream = %Stream{ stream | body: body <> frame[:payload] }
 
-    if frame[:flags] == 0x1, do: send pid, {:rst_stream, stream}
+    if frame[:flags] == 0x1, do: send pid, {:end_stream, stream}
 
     put_stream(stream_id, state, stream)
   end
@@ -154,24 +145,17 @@ defmodule Kadabra.Connection do
     stream = get_stream(stream_id, state)
     {headers, table} = Hpack.decode_headers(payload, table)
 
-    Logger.debug """
-      Got HEADERS, Stream: #{stream_id}, Flags: #{flags}
-      --
-      #{inspect(headers)}
-      --
-      #{inspect(table)}
-    """
-
     stream = %Stream{ stream | headers: headers }
     state = %{state | dynamic_table: table }
 
-    if flags == 0x5, do: send pid, {:rst_stream, stream}
+    if flags == 0x5, do: send pid, {:end_stream, stream}
 
     put_stream(stream_id, state, stream)
   end
 
-  defp do_send_headers(headers, payload,
-    %{socket: socket, stream_id: stream_id, uri: uri} = state) do
+  defp do_send_headers(headers, payload, %{socket: socket,
+                                           stream_id: stream_id,
+                                           uri: uri} = state) do
 
     headers = add_headers(headers, uri, state)
     encoded = for {key, value} <- headers, do: Http2.encode_header(key, value)
@@ -194,7 +178,6 @@ defmodule Kadabra.Connection do
   end
 
   defp do_send_goaway(%{socket: socket, stream_id: stream_id}) do
-    Logger.debug "Sending goaway with last stream #{stream_id} with error #{Error.code("NO_ERROR")}"
     h = Http2.goaway_frame(stream_id, Error.code("NO_ERROR"))
     :ssl.send(socket, h)
   end
@@ -209,18 +192,16 @@ defmodule Kadabra.Connection do
 
   defp do_recv_settings(frame, %{socket: socket, client: pid, dynamic_table: table} = state) do
     case frame[:flags] do
-      0x1 ->
-        Logger.debug "Got SETTINGS ACK"
+      0x1 -> # SETTINGS ACK
         send pid, {:ok, self}
         state
       _ ->
-        Logger.debug "Got SETTINGS"
         settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
         settings = parse_settings(frame[:payload])
         table_size = fetch_setting(settings, "SETTINGS_MAX_HEADER_LIST_SIZE")
         table = Hpack.Table.change_table_size(table, table_size)
         table = %Hpack.Table{table | size: table_size}
-        Logger.debug(inspect(settings))
+
         :ssl.send(socket, settings_ack)
         send pid, {:ok, self}
         %{state | dynamic_table: table}
@@ -237,8 +218,7 @@ defmodule Kadabra.Connection do
   defp do_recv_rst_stream(frame, %{client: pid} = state) do
     code = :binary.decode_unsigned(frame[:payload])
     error = Error.string(code)
-    Logger.error "Got RST_STREAM, #{error}"
-    send pid, {:rst_stream, get_stream(frame[:stream_id], state)}
+    send pid, {:end_stream, get_stream(frame[:stream_id], state)}
   end
 
   defp put_stream(id, state, stream) do
@@ -256,7 +236,6 @@ defmodule Kadabra.Connection do
   end
 
   def handle_info({:tcp_closed, _socket}, state) do
-    Logger.debug("Recv TCP close...")
     {:noreply, state}
   end
 
@@ -265,7 +244,6 @@ defmodule Kadabra.Connection do
   end
 
   def handle_info({:ssl_closed, _socket}, state) do
-    Logger.debug("Recv SSL close...")
     {:noreply, state}
   end
 
@@ -286,7 +264,6 @@ defmodule Kadabra.Connection do
         parse_ssl(socket, rest, state)
         :ok
       {:error, bin} ->
-        Logger.error inspect(bin)
         {:error, bin}
     end
   end
