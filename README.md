@@ -1,3 +1,5 @@
+[![Hex.pm](http://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra) [![Hex.pm](http://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
+
 # Kadabra
 
 HTTP/2 client for Elixir
