@@ -22,7 +22,7 @@ defmodule Kadabra.Hpack do
     do_decode_headers(rest, headers ++ [header], table)
   end
 
-  defp decode_value(0, _size, value), do: value
+  defp decode_value(0, size, value), do: <<value::size(size)>>
   defp decode_value(1, size, value) do
     <<value::size(size)>>
     |> Huffman.decode

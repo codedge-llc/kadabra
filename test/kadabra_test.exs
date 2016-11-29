@@ -8,7 +8,7 @@ defmodule KadabraTest do
     {:ok, pid} = Kadabra.open(uri, :https)
     Kadabra.get(pid, "/reqinfo")
 
-    assert_receive {:rst_stream, %Stream{
+    assert_receive {:end_stream, %Stream{
       id: 1,
       headers: headers,
       body: body
