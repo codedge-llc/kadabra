@@ -47,8 +47,7 @@ defmodule Kadabra.Connection do
       :http -> {:error, :not_implemented}
       :https ->
         :ssl.start
-        port = opts[:port] || 443
-        case :ssl.connect(uri, port, ssl_options(opts[:ssl])) do
+        case :ssl.connect(uri, opts[:port], ssl_options(opts[:ssl])) do
           {:ok, ssl} ->
             :ssl.send(ssl, Http2.connection_preface)
             :ssl.send(ssl, Http2.settings_frame)
