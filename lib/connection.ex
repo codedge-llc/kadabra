@@ -38,7 +38,8 @@ defmodule Kadabra.Connection do
       socket: socket,
       dynamic_table: %Kadabra.Hpack.Table{},
       stream_id: 1,
-      streams: %{}
+      streams: %{},
+      encoder_state: :cow_hpack.init
     }
   end
 
@@ -81,13 +82,13 @@ defmodule Kadabra.Connection do
   end
 
   def handle_cast({:send, :headers, headers}, state) do
-    do_send_headers(headers, nil, state)
-    {:noreply, inc_stream_id(state)}
+    new_state = do_send_headers(headers, nil, state)
+    {:noreply, inc_stream_id(new_state)}
   end
 
   def handle_cast({:send, :headers, headers, payload}, state) do
-    do_send_headers(headers, payload, state)
-    {:noreply, inc_stream_id(state)}
+    new_state = do_send_headers(headers, payload, state)
+    {:noreply, inc_stream_id(new_state)}
   end
 
   def handle_cast({:send, :goaway}, state) do
@@ -154,11 +155,12 @@ defmodule Kadabra.Connection do
 
   defp do_send_headers(headers, payload, %{socket: socket,
                                            stream_id: stream_id,
-                                           uri: uri} = state) do
+                                           uri: uri,
+                                           encoder_state: encoder} = state) do
 
     headers = add_headers(headers, uri, state)
-    encoded = for {key, value} <- headers, do: Http2.encode_header(key, value)
-    headers_payload = Enum.reduce(encoded, <<>>, fn(x, acc) -> acc <> x end)
+    {encoded, new_encoder_state} = :cow_hpack.encode headers, encoder
+    headers_payload = :erlang.iolist_to_binary encoded
     h = Http2.build_frame(@headers, 0x4, stream_id, headers_payload)
 
     :ssl.send(socket, h)
@@ -167,6 +169,7 @@ defmodule Kadabra.Connection do
       h_p = Http2.build_frame(@data, 0x1, stream_id, payload)
       :ssl.send(socket, h_p)
     end
+    %{ state | encoder_state: new_encoder_state}
   end
 
   defp add_headers(headers, uri, state) do
