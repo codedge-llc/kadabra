@@ -5,7 +5,7 @@ defmodule Kadabra.Connection do
   use GenServer
   require Logger
 
-  alias Kadabra.{Error, Hpack, Http2, Stream}
+  alias Kadabra.{Error, Http2, Stream}
 
   @data 0x0
   @headers 0x1
@@ -205,7 +205,7 @@ defmodule Kadabra.Connection do
         HPack.Table.resize(table_size, decoder)
 
         :ssl.send(socket, settings_ack)
-        send pid, {:ok, self}
+        send pid, {:ok, self()}
         state
     end
   end

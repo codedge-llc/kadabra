@@ -4,7 +4,7 @@ defmodule Kadabra.Mixfile do
   def project do
     [
       app: :kadabra,
-      version: "0.1.3",
+      version: "0.1.4",
       elixir: "~> 1.3",
       build_embedded: Mix.env == :prod,
       start_permanent: Mix.env == :prod,
@@ -30,9 +30,9 @@ defmodule Kadabra.Mixfile do
 
   defp deps do
     [
+      {:hpack, "~> 1.0.0"},
       {:ex_doc, "~> 0.14", only: :dev},
-      {:dogma, "~> 0.1", only: :dev},
-      {:hpack, "~> 1.0.0"}
+      {:dogma, "~> 0.1", only: :dev}
     ]
   end
 
