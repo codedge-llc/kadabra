@@ -30,7 +30,8 @@ defmodule Kadabra.Connection do
   end
 
   defp initial_state(socket, uri, pid, opts) do
-   {:ok, ctx} =  HPack.Table.start_link(1000)
+   {:ok, encoder} =  HPack.Table.start_link(1000)
+   {:ok, decoder} =  HPack.Table.start_link(1000)
    %{
       buffer: "",
       client: pid,
@@ -39,7 +40,8 @@ defmodule Kadabra.Connection do
       socket: socket,
       stream_id: 1,
       streams: %{},
-      encoder_state: ctx
+      encoder_state: encoder,
+      decoder_state: decoder
     }
   end
 
@@ -140,10 +142,10 @@ defmodule Kadabra.Connection do
 
   defp do_recv_headers(%{stream_id: stream_id,
                          flags: flags,
-                         payload: payload}, %{client: pid, encoder_state: encoder} = state) do
+                         payload: payload}, %{client: pid, decoder_state: decoder} = state) do
 
     stream = get_stream(stream_id, state)
-    headers = HPack.decode(payload, encoder)
+    headers = HPack.decode(payload, decoder)
 
     stream = %Stream{ stream | headers: headers }
 
@@ -191,7 +193,7 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  defp do_recv_settings(frame, %{socket: socket, client: pid} = state) do
+  defp do_recv_settings(frame, %{socket: socket, client: pid, decoder_state: decoder}  = state) do
     case frame[:flags] do
       0x1 -> # SETTINGS ACK
         send pid, {:ok, self}
@@ -200,12 +202,11 @@ defmodule Kadabra.Connection do
         settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
         settings = parse_settings(frame[:payload])
         table_size = fetch_setting(settings, "SETTINGS_MAX_HEADER_LIST_SIZE")
-        table = Hpack.Table.change_table_size(table, table_size)
-        table = %Hpack.Table{table | size: table_size}
+        HPack.Table.resize(table_size, decoder)
 
         :ssl.send(socket, settings_ack)
         send pid, {:ok, self}
-        %{state | dynamic_table: table}
+        state
     end
   end
 
