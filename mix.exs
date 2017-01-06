@@ -4,14 +4,14 @@ defmodule Kadabra.Mixfile do
   def project do
     [
       app: :kadabra,
-      version: "0.1.2",
+      version: "0.1.3",
       elixir: "~> 1.3",
       build_embedded: Mix.env == :prod,
       start_permanent: Mix.env == :prod,
-      deps: deps,
-      package: package,
+      deps: deps(),
+      package: package(),
       name: "Kadabra",
-      description: description,
+      description: description(),
       source_url: "https://github.com/codedge-llc/kadabra",
       docs: [main: "readme",
              extras: ["README.md"]]
@@ -24,7 +24,7 @@ defmodule Kadabra.Mixfile do
 
   defp description do
     """
-      HTTP/2 client for Elixir 
+    HTTP/2 client for Elixir 
     """
   end
 

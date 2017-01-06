@@ -111,7 +111,7 @@ defmodule Kadabra.Connection do
   end
 
   def handle_cast({:recv, :ping, _frame}, %{client: pid} = state) do
-    send pid, {:ping, self}
+    send pid, {:ping, self()}
     {:noreply, state}
   end
 
@@ -185,14 +185,14 @@ defmodule Kadabra.Connection do
     <<_r::1, last_stream_id::31, code::32, rest::binary>> = frame[:payload]
     Logger.error "Got GOAWAY, #{Error.string(code)}, Last Stream: #{last_stream_id}, Rest: #{rest}"
 
-    send pid, {:closed, self}
+    send pid, {:closed, self()}
     {:noreply, state}
   end
 
   defp do_recv_settings(frame, %{socket: socket, client: pid, dynamic_table: table} = state) do
     case frame[:flags] do
       0x1 -> # SETTINGS ACK
-        send pid, {:ok, self}
+        send pid, {:ok, self()}
         state
       _ ->
         settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
@@ -202,7 +202,7 @@ defmodule Kadabra.Connection do
         table = %Hpack.Table{table | size: table_size}
 
         :ssl.send(socket, settings_ack)
-        send pid, {:ok, self}
+        send pid, {:ok, self()}
         %{state | dynamic_table: table}
     end
   end
@@ -273,19 +273,19 @@ defmodule Kadabra.Connection do
   def handle_response(frame) do
     case frame[:frame_type] do
       @data ->
-        GenServer.cast(self, {:recv, :data, frame})
+        GenServer.cast(self(), {:recv, :data, frame})
       @headers ->
-        GenServer.cast(self, {:recv, :headers, frame})
+        GenServer.cast(self(), {:recv, :headers, frame})
       @rst_stream ->
-        GenServer.cast(self, {:recv, :rst_stream, frame})
+        GenServer.cast(self(), {:recv, :rst_stream, frame})
       @settings ->
-        GenServer.cast(self, {:recv, :settings, frame})
+        GenServer.cast(self(), {:recv, :settings, frame})
       @ping ->
-        GenServer.cast(self, {:recv, :ping, frame})
+        GenServer.cast(self(), {:recv, :ping, frame})
       @goaway ->
-        GenServer.cast(self, {:recv, :goaway, frame})
+        GenServer.cast(self(), {:recv, :goaway, frame})
       @window_update ->
-        GenServer.cast(self, {:recv, :window_update, frame})
+        GenServer.cast(self(), {:recv, :window_update, frame})
       _ ->
         Logger.debug("Unknown frame: #{inspect(frame)}")
     end
