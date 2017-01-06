@@ -7,7 +7,7 @@ defmodule Kadabra do
   def open(uri, scheme, opts \\ []) do
     port = opts[:port] || 443
     nopts = List.keydelete opts, :port, 0
-    case Connection.start_link(uri, self, scheme: scheme, ssl: nopts, port: port) do
+    case Connection.start_link(uri, self(), scheme: scheme, ssl: nopts, port: port) do
       {:ok, pid} -> {:ok, pid}
       {:error, reason} -> {:error, reason}
     end
