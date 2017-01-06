@@ -30,15 +30,18 @@ defmodule Kadabra.Connection do
   end
 
   defp initial_state(socket, uri, pid, opts) do
+   {:ok, encoder} =  HPack.Table.start_link(1000)
+   {:ok, decoder} =  HPack.Table.start_link(1000)
    %{
       buffer: "",
       client: pid,
       uri: uri,
       scheme: opts[:scheme] || :https,
       socket: socket,
-      dynamic_table: %Kadabra.Hpack.Table{},
       stream_id: 1,
-      streams: %{}
+      streams: %{},
+      encoder_state: encoder,
+      decoder_state: decoder
     }
   end
 
@@ -81,13 +84,13 @@ defmodule Kadabra.Connection do
   end
 
   def handle_cast({:send, :headers, headers}, state) do
-    do_send_headers(headers, nil, state)
-    {:noreply, inc_stream_id(state)}
+    new_state = do_send_headers(headers, nil, state)
+    {:noreply, inc_stream_id(new_state)}
   end
 
   def handle_cast({:send, :headers, headers, payload}, state) do
-    do_send_headers(headers, payload, state)
-    {:noreply, inc_stream_id(state)}
+    new_state = do_send_headers(headers, payload, state)
+    {:noreply, inc_stream_id(new_state)}
   end
 
   def handle_cast({:send, :goaway}, state) do
@@ -139,13 +142,12 @@ defmodule Kadabra.Connection do
 
   defp do_recv_headers(%{stream_id: stream_id,
                          flags: flags,
-                         payload: payload}, %{client: pid, dynamic_table: table} = state) do
+                         payload: payload}, %{client: pid, decoder_state: decoder} = state) do
 
     stream = get_stream(stream_id, state)
-    {headers, table} = Hpack.decode_headers(payload, table)
+    headers = HPack.decode(payload, decoder)
 
     stream = %Stream{ stream | headers: headers }
-    state = %{state | dynamic_table: table }
 
     if flags == 0x5, do: send pid, {:end_stream, stream}
 
@@ -154,11 +156,12 @@ defmodule Kadabra.Connection do
 
   defp do_send_headers(headers, payload, %{socket: socket,
                                            stream_id: stream_id,
-                                           uri: uri} = state) do
+                                           uri: uri,
+                                           encoder_state: encoder} = state) do
 
     headers = add_headers(headers, uri, state)
-    encoded = for {key, value} <- headers, do: Http2.encode_header(key, value)
-    headers_payload = Enum.reduce(encoded, <<>>, fn(x, acc) -> acc <> x end)
+    encoded = HPack.encode headers, encoder
+    headers_payload = :erlang.iolist_to_binary encoded
     h = Http2.build_frame(@headers, 0x4, stream_id, headers_payload)
 
     :ssl.send(socket, h)
@@ -167,12 +170,13 @@ defmodule Kadabra.Connection do
       h_p = Http2.build_frame(@data, 0x1, stream_id, payload)
       :ssl.send(socket, h_p)
     end
+    state
   end
 
   defp add_headers(headers, uri, state) do
     headers ++ [
       {":scheme", Atom.to_string(state[:scheme])},
-      {"host", List.to_string(uri)}
+      {":authority", List.to_string(uri)}
     ]
   end
 
@@ -189,7 +193,7 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  defp do_recv_settings(frame, %{socket: socket, client: pid, dynamic_table: table} = state) do
+  defp do_recv_settings(frame, %{socket: socket, client: pid, decoder_state: decoder}  = state) do
     case frame[:flags] do
       0x1 -> # SETTINGS ACK
         send pid, {:ok, self()}
@@ -198,12 +202,11 @@ defmodule Kadabra.Connection do
         settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
         settings = parse_settings(frame[:payload])
         table_size = fetch_setting(settings, "SETTINGS_MAX_HEADER_LIST_SIZE")
-        table = Hpack.Table.change_table_size(table, table_size)
-        table = %Hpack.Table{table | size: table_size}
+        HPack.Table.resize(table_size, decoder)
 
         :ssl.send(socket, settings_ack)
-        send pid, {:ok, self()}
-        %{state | dynamic_table: table}
+        send pid, {:ok, self}
+        state
     end
   end
 
