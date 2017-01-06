@@ -174,7 +174,7 @@ defmodule Kadabra.Connection do
   defp add_headers(headers, uri, state) do
     headers ++ [
       {":scheme", Atom.to_string(state[:scheme])},
-      {"host", List.to_string(uri)}
+      {":authority", List.to_string(uri)}
     ]
   end
 
