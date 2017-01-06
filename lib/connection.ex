@@ -30,16 +30,16 @@ defmodule Kadabra.Connection do
   end
 
   defp initial_state(socket, uri, pid, opts) do
+   {:ok, ctx} =  HPack.Table.start_link(1000)
    %{
       buffer: "",
       client: pid,
       uri: uri,
       scheme: opts[:scheme] || :https,
       socket: socket,
-      dynamic_table: %Kadabra.Hpack.Table{},
       stream_id: 1,
       streams: %{},
-      encoder_state: :cow_hpack.init
+      encoder_state: ctx
     }
   end
 
@@ -140,13 +140,12 @@ defmodule Kadabra.Connection do
 
   defp do_recv_headers(%{stream_id: stream_id,
                          flags: flags,
-                         payload: payload}, %{client: pid, dynamic_table: table} = state) do
+                         payload: payload}, %{client: pid, encoder_state: encoder} = state) do
 
     stream = get_stream(stream_id, state)
-    {headers, table} = Hpack.decode_headers(payload, table)
+    headers = HPack.decode(payload, encoder)
 
     stream = %Stream{ stream | headers: headers }
-    state = %{state | dynamic_table: table }
 
     if flags == 0x5, do: send pid, {:end_stream, stream}
 
@@ -159,7 +158,7 @@ defmodule Kadabra.Connection do
                                            encoder_state: encoder} = state) do
 
     headers = add_headers(headers, uri, state)
-    {encoded, new_encoder_state} = :cow_hpack.encode headers, encoder
+    encoded = HPack.encode headers, encoder
     headers_payload = :erlang.iolist_to_binary encoded
     h = Http2.build_frame(@headers, 0x4, stream_id, headers_payload)
 
@@ -169,7 +168,7 @@ defmodule Kadabra.Connection do
       h_p = Http2.build_frame(@data, 0x1, stream_id, payload)
       :ssl.send(socket, h_p)
     end
-    %{ state | encoder_state: new_encoder_state}
+    state
   end
 
   defp add_headers(headers, uri, state) do
@@ -192,7 +191,7 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  defp do_recv_settings(frame, %{socket: socket, client: pid, dynamic_table: table} = state) do
+  defp do_recv_settings(frame, %{socket: socket, client: pid} = state) do
     case frame[:flags] do
       0x1 -> # SETTINGS ACK
         send pid, {:ok, self}
