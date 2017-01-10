@@ -4,7 +4,7 @@ defmodule Kadabra.Mixfile do
   def project do
     [
       app: :kadabra,
-      version: "0.1.4",
+      version: "0.1.5",
       elixir: "~> 1.3",
       build_embedded: Mix.env == :prod,
       start_permanent: Mix.env == :prod,
@@ -24,7 +24,7 @@ defmodule Kadabra.Mixfile do
 
   defp description do
     """
-    HTTP/2 client for Elixir 
+    HTTP/2 client for Elixir
     """
   end
 
