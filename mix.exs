@@ -19,7 +19,7 @@ defmodule Kadabra.Mixfile do
   end
 
   def application do
-    [applications: [:logger]]
+    [applications: [:logger, :hpack]]
   end
 
   defp description do
