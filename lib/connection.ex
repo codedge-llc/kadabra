@@ -174,10 +174,13 @@ defmodule Kadabra.Connection do
   end
 
   defp add_headers(headers, uri, state) do
-    headers ++ [
+    h = headers ++
+    [
       {":scheme", Atom.to_string(state[:scheme])},
       {":authority", List.to_string(uri)}
     ]
+    # sorting headers to have pseudo headers first.
+    Enum.sort h, fn({a, b}, {c, d})-> a < c end
   end
 
   defp do_send_goaway(%{socket: socket, stream_id: stream_id}) do
