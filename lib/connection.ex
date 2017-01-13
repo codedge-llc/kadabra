@@ -146,8 +146,10 @@ defmodule Kadabra.Connection do
 
     stream = get_stream(stream_id, state)
     headers = HPack.decode(payload, decoder)
-
-    stream = %Stream{ stream | headers: headers }
+    status = headers
+      |> get_status
+      |> String.to_integer
+    stream = %Stream{ stream | headers: headers, status: status }
 
     if flags == 0x5, do: send pid, {:end_stream, stream}
 
@@ -313,5 +315,12 @@ defmodule Kadabra.Connection do
   def parse_settings(bin) do
     <<identifier::16, value::32, rest::bitstring>> = bin
     [{settings_param(identifier), value}] ++ parse_settings(rest)
+  end
+
+  defp get_status(headers) do
+    case Enum.find(headers, fn({key, _val}) -> key == ":status" end) do
+      {":status", status} -> status
+      nil -> nil
+    end
   end
 end
