@@ -1,4 +1,4 @@
-[![Hex.pm](http://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra) [![Hex.pm](http://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
+[![Build Status](https://travis-ci.org/codedge-llc/kadabra.svg?branch=master)](https://travis-ci.org/codedge-llc/kadabra) [![Hex.pm](http://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra) [![Hex.pm](http://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
 
 # Kadabra
 
