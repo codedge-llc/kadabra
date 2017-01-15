@@ -11,7 +11,8 @@ defmodule KadabraTest do
     assert_receive {:end_stream, %Stream{
       id: 1,
       headers: headers,
-      body: body
+      body: body,
+      status: 200
     }}, 5_000
   end
 end
