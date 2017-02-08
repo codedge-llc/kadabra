@@ -269,7 +269,6 @@ defmodule Kadabra.Connection do
       {:ok, frame, rest} ->
         handle_response(frame)
         parse_ssl(socket, rest, state)
-        :ok
       {:error, bin} ->
         {:error, bin}
     end
