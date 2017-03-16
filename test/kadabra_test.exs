@@ -2,7 +2,7 @@ defmodule KadabraTest do
   use ExUnit.Case
   doctest Kadabra
 
-  alias Kadabra.{Stream}
+  alias Kadabra.Stream
 
   describe "GET"  do
     test "https://http2.golang.org/reqinfo" do
@@ -10,7 +10,7 @@ defmodule KadabraTest do
       {:ok, pid} = Kadabra.open(uri, :https)
       Kadabra.get(pid, "/reqinfo")
 
-      assert_receive {:end_stream, %Stream{
+      assert_receive {:end_stream, %Stream.Response{
         id: 1,
         headers: _headers,
         body: _body,
@@ -26,7 +26,7 @@ defmodule KadabraTest do
       expected_body = "<a href=\"/\">Found</a>.\n\n"
       expected_status = 302
 
-      assert_receive {:end_stream, %Stream{
+      assert_receive {:end_stream, %Stream.Response{
         id: 1,
         headers: _headers,
         body: ^expected_body,
@@ -44,7 +44,7 @@ defmodule KadabraTest do
 
       expected_body = String.upcase(payload)
 
-      assert_receive {:end_stream, %Stream{
+      assert_receive {:end_stream, %Stream.Response{
         id: 1,
         headers: _headers,
         body: ^expected_body,
@@ -60,7 +60,7 @@ defmodule KadabraTest do
 
       expected_body = "bytes=4, CRC32=d87f7e0c"
 
-      assert_receive {:end_stream, %Stream{
+      assert_receive {:end_stream, %Stream.Response{
         id: 1,
         headers: _headers,
         body: ^expected_body,
