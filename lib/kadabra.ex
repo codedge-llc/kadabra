@@ -1,6 +1,6 @@
 defmodule Kadabra do
   @moduledoc """
-    HTTP/2 client for Elixir.
+  HTTP/2 client for Elixir.
   """
   alias Kadabra.{Connection}
 
@@ -38,6 +38,22 @@ defmodule Kadabra do
     request(pid, headers, payload)
   end
 
+  @doc ~S"""
+  Makes HTTP/2 PUT request.
+
+  ## Examples
+
+      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> Kadabra.put(pid, "/crc32", "test")
+      :ok
+      iex> stream = receive do
+      ...>   {:end_stream, stream} -> stream
+      ...> end
+      iex> stream.status
+      200
+      iex> stream.body
+      "bytes=4, CRC32=d87f7e0c"
+  """
   def put(pid, path, payload) do
     headers = [
       {":method", "PUT"},

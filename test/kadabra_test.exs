@@ -1,5 +1,6 @@
 defmodule KadabraTest do
   use ExUnit.Case
+  doctest Kadabra
 
   alias Kadabra.{Stream}
 
