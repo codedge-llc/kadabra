@@ -33,6 +33,21 @@ defmodule KadabraTest do
         status: ^expected_status
       }}, 5_000
     end
+
+    test "https://http2.golang.org/file/gopher.png" do
+      uri = 'http2.golang.org'
+      {:ok, pid} = Kadabra.open(uri, :https)
+      Kadabra.get(pid, "/file/gopher.png")
+
+      receive do
+        {:end_stream, response} ->
+          assert response.id == 1
+          assert response.status == 200
+          assert byte_size(response.body) == 17668
+      after 5_000 ->
+        flunk "No stream response received."
+      end
+    end
   end
 
   describe "PUT" do
