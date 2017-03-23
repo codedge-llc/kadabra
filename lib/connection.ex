@@ -73,6 +73,10 @@ defmodule Kadabra.Connection do
     ]
   end
 
+  def handle_call(:get_info, _from, state) do
+    {:reply, {:ok, state}, state}
+  end
+
   def handle_cast({:recv, :data, frame}, state) do
     state = do_recv_data(frame, state)
     {:noreply, state}
@@ -109,7 +113,8 @@ defmodule Kadabra.Connection do
   end
 
   def handle_cast({:send, :ping}, %{socket: socket} = state) do
-    :ssl.send(socket, Http2.build_frame(0x6, 0x0, 0x0, <<0, 0, 0, 0, 0, 0, 0, 0>>))
+    ping = Http2.build_frame(0x6, 0x0, 0x0, <<0, 0, 0, 0, 0, 0, 0, 0>>)
+    :ssl.send(socket, ping)
     {:noreply, state}
   end
 
@@ -123,12 +128,16 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  def handle_cast({:recv, :window_update, %{stream_id: _stream_id, payload: payload}}, state) do
+  def handle_cast({:recv, :window_update, %{stream_id: _stream_id,
+                                            payload: payload}}, state) do
+
     <<_r::1, _window_size_inc::31>> = payload
     {:noreply, state}
   end
 
-  defp inc_stream_id(%{stream_id: stream_id} = state), do: %{state | stream_id: stream_id + 2}
+  defp inc_stream_id(%{stream_id: stream_id} = state) do
+    %{state | stream_id: stream_id + 2}
+  end
 
   defp do_recv_data(%{stream_id: stream_id} = frame, %{client: pid} = state) do
     stream = get_stream(stream_id, state)
@@ -142,10 +151,11 @@ defmodule Kadabra.Connection do
 
   defp do_recv_headers(%{stream_id: stream_id,
                          flags: flags,
-                         payload: payload}, %{client: pid, decoder_state: decoder} = state) do
+                         payload: payload}, %{client: pid,
+                                              decoder_state: dec} = state) do
 
     stream = get_stream(stream_id, state)
-    headers = HPack.decode(payload, decoder)
+    headers = HPack.decode(payload, dec)
     status = headers
       |> get_status
       |> String.to_integer
@@ -192,13 +202,20 @@ defmodule Kadabra.Connection do
 
   defp do_recv_goaway(frame, %{client: pid} = state) do
     <<_r::1, last_stream_id::31, code::32, rest::binary>> = frame[:payload]
-    Logger.error "Got GOAWAY, #{Error.string(code)}, Last Stream: #{last_stream_id}, Rest: #{rest}"
+    log_goaway(code, last_stream_id, rest)
 
     send pid, {:closed, self()}
     {:noreply, state}
   end
 
-  defp do_recv_settings(frame, %{socket: socket, client: pid, decoder_state: decoder}  = state) do
+  def log_goaway(code, id, bin) do
+    error = Error.string(code)
+    Logger.error "Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{bin}"
+  end
+
+  defp do_recv_settings(frame, %{socket: socket,
+                                 client: pid,
+                                 decoder_state: decoder}  = state) do
     case frame[:flags] do
       0x1 -> # SETTINGS ACK
         send pid, {:ok, self()}

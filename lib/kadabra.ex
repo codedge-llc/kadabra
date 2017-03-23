@@ -6,8 +6,10 @@ defmodule Kadabra do
 
   def open(uri, scheme, opts \\ []) do
     port = opts[:port] || 443
-    nopts = List.keydelete opts, :port, 0
-    case Connection.start_link(uri, self(), scheme: scheme, ssl: nopts, port: port) do
+    nopts = List.keydelete(opts, :port, 0)
+    start_opts = [scheme: scheme, ssl: nopts, port: port]
+
+    case Connection.start_link(uri, self(), start_opts) do
       {:ok, pid} -> {:ok, pid}
       {:error, reason} -> {:error, reason}
     end
@@ -17,7 +19,42 @@ defmodule Kadabra do
 
   def ping(pid), do: GenServer.cast(pid, {:send, :ping})
 
-  def request(pid, headers), do: GenServer.cast(pid, {:send, :headers, headers})
+  def info(pid, opts \\ []) do
+    case GenServer.call(pid, :get_info) do
+      {:ok, info} ->
+        width = opts[:width] || 120
+        headers = opts[:data] || [:id, :status, :headers, :body]
+        stream_table_opts = [width: width, data: headers]
+
+        stream_data =
+          info.streams
+          |> Map.values
+          |> Enum.map(& Map.put(&1, :body, String.slice(&1.body, 0..40)))
+          |> Enum.sort_by(& &1.id)
+          |> Scribe.format(stream_table_opts)
+
+        """
+
+        == Connection Information ==
+        Uri: #{info.uri}
+        Scheme: #{info.scheme}
+        Client: #{inspect(info.client)}
+        SSL Socket: #{inspect(info.socket)}
+        Next Available Stream ID: #{info.stream_id}
+        Buffer: #{inspect(info.buffer)}
+
+        == Streams ==
+        #{stream_data}
+        """
+        |> Pane.console
+      _else -> :error
+    end
+  end
+
+  def request(pid, headers) do
+    GenServer.cast(pid, {:send, :headers, headers})
+  end
+
   def request(pid, headers, payload) do
     GenServer.cast(pid, {:send, :headers, headers, payload})
   end
