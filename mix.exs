@@ -33,7 +33,8 @@ defmodule Kadabra.Mixfile do
       {:hpack, "~> 1.0.0"},
       {:scribe, "~> 0.4"},
       {:ex_doc, "~> 0.14", only: :dev},
-      {:dogma, "~> 0.1", only: :dev}
+      {:dogma, "~> 0.1", only: :dev},
+      {:hpack, "~> 1.0.0"}
     ]
   end
 
