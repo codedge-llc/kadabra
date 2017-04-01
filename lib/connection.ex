@@ -31,8 +31,8 @@ defmodule Kadabra.Connection do
   end
 
   defp initial_state(socket, uri, pid, opts, stream_id \\ 1, streams \\ %{}) do
-   {:ok, encoder} =  HPack.Table.start_link(1000)
-   {:ok, decoder} =  HPack.Table.start_link(1000)
+   encoder = :hpack.new_context
+   decoder = :hpack.new_context
    %{
       buffer: "",
       client: pid,
@@ -144,7 +144,7 @@ defmodule Kadabra.Connection do
   defp do_recv_data(%{stream_id: stream_id} = frame, %{client: pid} = state) do
     stream = get_stream(stream_id, state)
     body = stream.body || ""
-    stream = %Stream{ stream | body: body <> frame[:payload] }
+    stream = %Stream{stream | body: body <> frame[:payload]}
 
     if frame[:flags] == 0x1 do
      send pid, {:end_stream, stream}
@@ -160,15 +160,18 @@ defmodule Kadabra.Connection do
                                               decoder_state: dec} = state) do
 
     stream = get_stream(stream_id, state)
-    headers = HPack.decode(payload, dec)
-    status = headers
-      |> get_status
+    {:ok, {headers, new_dec}} = :hpack.decode(payload, dec)
+    status =
+      headers
+      |> get_status()
       |> String.to_integer
-    stream = %Stream{ stream | headers: headers, status: status }
+    stream = %Stream{stream | headers: headers, status: status}
+
+    state = %{state | decoder_state: new_dec}
 
     if flags == 0x5 do 
-     send pid, {:end_stream, stream}
-     remove_stream(state, stream_id)
+      send pid, {:end_stream, stream}
+      remove_stream(state, stream_id)
     else
       put_stream(stream_id, state, stream)
     end
@@ -180,8 +183,8 @@ defmodule Kadabra.Connection do
                                            encoder_state: encoder} = state) do
 
     headers = add_headers(headers, uri, state)
-    encoded = HPack.encode headers, encoder
-    headers_payload = :erlang.iolist_to_binary encoded
+    {:ok, {encoded, new_encoder}} = :hpack.encode(headers, encoder)
+    headers_payload = :erlang.iolist_to_binary(encoded)
     h = Http2.build_frame(@headers, 0x4, stream_id, headers_payload)
 
     :ssl.send(socket, h)
@@ -190,7 +193,7 @@ defmodule Kadabra.Connection do
       h_p = Http2.build_frame(@data, 0x1, stream_id, payload)
       :ssl.send(socket, h_p)
     end
-    state
+    %{state | encoder_state: new_encoder}
   end
 
   defp add_headers(headers, uri, state) do
@@ -232,11 +235,11 @@ defmodule Kadabra.Connection do
         settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
         settings = parse_settings(frame[:payload])
         table_size = fetch_setting(settings, "SETTINGS_MAX_HEADER_LIST_SIZE")
-        HPack.Table.resize(table_size, decoder)
+        new_decoder = :hpack.new_max_table_size(table_size, decoder)
 
         :ssl.send(socket, settings_ack)
         send pid, {:ok, self()}
-        state
+        %{state | decoder_state: new_decoder}
     end
   end
 
@@ -361,9 +364,9 @@ defmodule Kadabra.Connection do
       {:ok, socket} ->
         Logger.debug "Socket closed, reopened automatically"
         state |> inspect |> Logger.info 
-        {:ok, encoder} =  HPack.Table.start_link(1000)
-        {:ok, decoder} =  HPack.Table.start_link(1000)
-        {:noreply,  %{state | encoder_state: encoder, decoder_state: decoder, socket: socket, streams: %{}}}
+        encoder = :hpack.new_context
+        decoder = :hpack.new_context
+        {:noreply, %{state | encoder_state: encoder, decoder_state: decoder, socket: socket, streams: %{}}}
       {:error, error} ->
         Logger.error "Socket closed, reopening failed with #{error}"
         state |> inspect |> Logger.info 
