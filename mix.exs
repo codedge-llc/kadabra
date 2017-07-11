@@ -4,8 +4,8 @@ defmodule Kadabra.Mixfile do
   def project do
     [
       app: :kadabra,
-      version: "0.2.0",
-      elixir: "~> 1.3",
+      version: "0.3.0",
+      elixir: "~> 1.4",
       build_embedded: Mix.env == :prod,
       start_permanent: Mix.env == :prod,
       deps: deps(),
@@ -14,7 +14,8 @@ defmodule Kadabra.Mixfile do
       description: description(),
       source_url: "https://github.com/codedge-llc/kadabra",
       docs: [main: "readme",
-             extras: ["README.md"]]
+             extras: ["README.md"]],
+      dialyzer: [plt_add_deps: true, plt_add_apps: [:ssl]]
     ]
   end
 
@@ -37,6 +38,7 @@ defmodule Kadabra.Mixfile do
       {:scribe, "~> 0.4"},
       {:ex_doc, "~> 0.14", only: :dev},
       {:dogma, "~> 0.1", only: :dev},
+      {:dialyxir, "~> 0.5", only: [:dev], runtime: false}
     ]
   end
 

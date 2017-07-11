@@ -2,40 +2,29 @@ defmodule Kadabra.Stream do
   @moduledoc """
   Struct returned from open connections.
   """
-  defstruct id: nil,
-            headers: nil,
-            body: nil,
-            uri: nil,
-            scheme: :https,
-            connection: nil,
-            decoder: nil,
-            encoder: nil,
-            socket: nil
+  defstruct [:id, :headers, :body, :uri, :connection, :decoder, :encoder,
+             :socket, scheme: :https]
 
   alias Kadabra.{Http2, Stream}
 
   @data 0x0
   @headers 0x1
-  @rst_stream 0x3
-  @settings 0x4
-  @ping 0x6
-  @goaway 0x7
-  @window_update 0x8
+  # @rst_stream 0x3
+  # @settings 0x4
+  # @ping 0x6
+  # @goaway 0x7
+  # @window_update 0x8
 
   @closed :closed
   @half_closed_local :half_closed_local
   @half_closed_remote :half_closed_remote
   @idle :idle
   @open :open
-  @reserved_local :reserved_local
-  @reserved_remote :reserved_remote
+  # @reserved_local :reserved_local
+  # @reserved_remote :reserved_remote
 
   def start_link(stream) do
-    :gen_statem.start_link(__MODULE__, stream, name: name(stream))
-  end
-
-  def name(stream) do
-    {:via, Registry, {Registry.Kadabra, {stream.uri, stream.id}}}
+    :gen_statem.start_link(__MODULE__, stream, [])
   end
 
   def handle_event(:enter, _old, @half_closed_remote, stream) do
@@ -53,7 +42,7 @@ defmodule Kadabra.Stream do
     {:next_state, @closed, stream}
   end
 
-  def handle_event(:cast, {:recv_headers, %{flags: flags, payload: payload}}, state, stream) do
+  def handle_event(:cast, {:recv_headers, %{flags: flags, payload: payload}}, _state, stream) do
     {:ok, {headers, new_dec}} = :hpack.decode(payload, stream.decoder)
     stream = %Stream{stream | headers: headers, decoder: new_dec}
 
@@ -63,7 +52,7 @@ defmodule Kadabra.Stream do
     end
   end
 
-  def handle_event(:cast, {:recv_data, %{flags: flags, payload: payload} = frame}, state, stream) do
+  def handle_event(:cast, {:recv_data, %{flags: flags, payload: payload}}, _state, stream) do
     body = stream.body || ""
     stream = %Stream{stream | body: body <> payload}
     case flags do
@@ -72,12 +61,12 @@ defmodule Kadabra.Stream do
     end
   end
 
-  def handle_event(:cast, {:recv_rst_stream, frame}, state, stream)
+  def handle_event(:cast, {:recv_rst_stream, _frame}, state, stream)
     when state in [@open, @half_closed_local, @half_closed_remote] do
     {:next_state, :closed, stream}
   end
 
-  def handle_event(:cast, {:send_headers, headers, payload}, state, stream) do
+  def handle_event(:cast, {:send_headers, headers, payload}, _state, stream) do
     headers = add_headers(headers, stream)
     {:ok, {encoded, new_encoder}} = :hpack.encode(headers, stream.encoder)
     headers_payload = :erlang.iolist_to_binary(encoded)
@@ -102,7 +91,7 @@ defmodule Kadabra.Stream do
       {":authority", List.to_string(stream.uri)}
     ]
     # sorting headers to have pseudo headers first.
-    Enum.sort(h, fn({a, b}, {c, d}) -> a < c end)
+    Enum.sort(h, fn({a, _b}, {c, _d}) -> a < c end)
   end
 
   def init(stream) do

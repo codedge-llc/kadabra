@@ -46,7 +46,7 @@ defmodule Kadabra do
         == Streams ==
         #{stream_data}
         """
-        |> Pane.console
+        |> IO.puts
       _else -> :error
     end
   end

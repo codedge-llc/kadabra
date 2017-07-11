@@ -2,8 +2,16 @@ defmodule Kadabra.Stream.Response do
   @moduledoc """
   Struct returned from open connections.
   """
-  defstruct id: nil, headers: nil, body: nil, status: nil
+  defstruct [:id, :headers, :body, :status]
 
+  @type t :: %__MODULE__{
+    id: integer,
+    headers: Keyword.t,
+    body: String.t,
+    status: integer
+  }
+
+  @spec new(%Kadabra.Stream{}) :: t
   def new(%Kadabra.Stream{id: id, headers: headers, body: body}) do
     %__MODULE__{
       id: id,

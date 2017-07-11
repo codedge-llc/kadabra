@@ -30,7 +30,7 @@ defmodule Kadabra.Connection do
     end
   end
 
-  defp initial_state(socket, uri, pid, opts, stream_id \\ 1, streams \\ %{}) do
+  defp initial_state(socket, uri, pid, opts) do
    encoder = :hpack.new_context
    decoder = :hpack.new_context
    %{
@@ -40,8 +40,8 @@ defmodule Kadabra.Connection do
       scheme: opts[:scheme] || :https,
       opts: opts,
       socket: socket,
-      stream_id: stream_id,
-      streams: streams,
+      stream_id: 1,
+      streams: %{},
       reconnect: opts[:reconnect] || :true,
       encoder_state: encoder,
       decoder_state: decoder
@@ -51,17 +51,21 @@ defmodule Kadabra.Connection do
   def do_connect(uri, opts) do
     case opts[:scheme] do
       :http -> {:error, :not_implemented}
-      :https ->
-        :ssl.start
-        case :ssl.connect(uri, opts[:port], ssl_options(opts[:ssl])) do
-          {:ok, ssl} ->
-            :ssl.send(ssl, Http2.connection_preface)
-            :ssl.send(ssl, Http2.settings_frame)
-            {:ok, ssl}
-          {:error, reason} ->
-            {:error, reason}
-        end
+      :https -> do_connect_ssl(uri, opts)
       _ -> {:error, :bad_scheme}
+    end
+  end
+
+  def do_connect_ssl(uri, opts) do
+    :ssl.start()
+    ssl_opts = ssl_options(opts[:ssl])
+    case :ssl.connect(uri, opts[:port], ssl_opts) do
+      {:ok, ssl} ->
+        :ssl.send(ssl, Http2.connection_preface)
+        :ssl.send(ssl, Http2.settings_frame)
+        {:ok, ssl}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -173,12 +177,10 @@ defmodule Kadabra.Connection do
   defp do_send_headers(headers, payload, %{socket: socket,
                                            stream_id: stream_id,
                                            uri: uri,
-                                           client: client,
                                            socket: socket,
                                            encoder_state: encoder,
                                            decoder_state: decoder} = state) do
 
-    name = {:via, Registry, {Registry.Kadabra, {uri, stream_id}}}
     {:ok, pid} =
       %Stream{
         id: stream_id,
@@ -195,16 +197,6 @@ defmodule Kadabra.Connection do
     :gen_statem.cast(pid, {:send_headers, headers, payload})
 
     state
-  end
-
-  defp add_headers(headers, uri, state) do
-    h = headers ++
-    [
-      {":scheme", Atom.to_string(state[:scheme])},
-      {":authority", List.to_string(uri)}
-    ]
-    # sorting headers to have pseudo headers first.
-    Enum.sort(h, fn({a, _b}, {c, _d}) -> a < c end)
   end
 
   defp do_send_goaway(%{socket: socket, stream_id: stream_id}) do
@@ -291,9 +283,9 @@ defmodule Kadabra.Connection do
   defp do_recv_ssl(bin, %{socket: socket} = state) do
     bin = state[:buffer] <> bin
     case parse_ssl(socket, bin, state) do
-      :ok ->
-        :ssl.setopts(socket, [{:active, :once}])
-        {:noreply, %{state | buffer: ""}}
+      # :ok ->
+      #   :ssl.setopts(socket, [{:active, :once}])
+      #   {:noreply, %{state | buffer: ""}}
       {:error, bin} ->
         :ssl.setopts(socket, [{:active, :once}])
         {:noreply, %{state | buffer: bin}}
@@ -310,7 +302,7 @@ defmodule Kadabra.Connection do
     end
   end
 
-  def handle_response(frame, state) when is_binary(frame) do
+  def handle_response(frame, _state) when is_binary(frame) do
     Logger.info "Got binary: #{inspect(frame)}"
   end
   def handle_response(frame, state) do
@@ -369,9 +361,7 @@ defmodule Kadabra.Connection do
       {:ok, socket} ->
         Logger.debug "Socket closed, reopened automatically"
         state |> inspect |> Logger.info
-        encoder = :hpack.new_context
-        decoder = :hpack.new_context
-        {:noreply, %{state | encoder_state: encoder, decoder_state: decoder, socket: socket, streams: %{}}}
+        {:noreply, reset_state(state, socket)}
       {:error, error} ->
         Logger.error "Socket closed, reopening failed with #{error}"
         state |> inspect |> Logger.info
@@ -380,10 +370,12 @@ defmodule Kadabra.Connection do
     end
   end
 
-  defp get_status(headers) do
-    case Enum.find(headers, fn({key, _val}) -> key == ":status" end) do
-      {":status", status} -> status
-      nil -> nil
-    end
+  defp reset_state(state, socket) do
+    encoder = :hpack.new_context
+    decoder = :hpack.new_context
+    %{state | encoder_state: encoder,
+              decoder_state: decoder,
+              socket: socket,
+              streams: %{}}
   end
 end
