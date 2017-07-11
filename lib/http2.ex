@@ -27,7 +27,13 @@ defmodule Kadabra.Http2 do
   end
 
   def build_frame(frame_type, flags, stream_id, payload) do
-    header = <<byte_size(payload)::24, frame_type::8, flags::8, 0::1, stream_id::31>>
+    header = <<
+      byte_size(payload)::24,
+      frame_type::8,
+      flags::8,
+      0::1,
+      stream_id::31
+    >>
     <<header::bitstring, payload::bitstring>>
   end
 

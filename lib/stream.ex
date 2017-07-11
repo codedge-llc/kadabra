@@ -54,8 +54,8 @@ defmodule Kadabra.Stream do
   end
 
   def handle_event(:cast, {:recv_headers, %{flags: flags, payload: payload}}, state, stream) do
-    headers = HPack.decode(payload, stream.decoder)
-    stream = %Stream{stream | headers: headers}
+    {:ok, {headers, new_dec}} = :hpack.decode(payload, stream.decoder)
+    stream = %Stream{stream | headers: headers, decoder: new_dec}
 
     case flags do
       0x5 -> {:next_state, @half_closed_remote, stream}
@@ -79,9 +79,11 @@ defmodule Kadabra.Stream do
 
   def handle_event(:cast, {:send_headers, headers, payload}, state, stream) do
     headers = add_headers(headers, stream)
-    encoded = HPack.encode(headers, stream.encoder)
+    {:ok, {encoded, new_encoder}} = :hpack.encode(headers, stream.encoder)
     headers_payload = :erlang.iolist_to_binary(encoded)
     h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
+
+    stream = %{stream | encoder: new_encoder}
 
     :ssl.send(stream.socket, h)
 
