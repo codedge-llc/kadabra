@@ -22,7 +22,12 @@ defmodule Kadabra.Stream.Response do
   end
 
   defp get_status(headers) do
-    case Enum.find(headers, fn({key, _val}) -> key == ":status" end) do
+    result =
+      headers
+      |> Enum.filter(& &1 != :undefined)
+      |> Enum.find(fn({key, _val}) -> key == ":status" end)
+
+    case result do
       {":status", status} -> status |> String.to_integer
       nil -> nil
     end

@@ -42,9 +42,13 @@ defmodule Kadabra.Stream do
     {:next_state, @closed, stream}
   end
 
-  def handle_event(:cast, {:recv_push_promise, _frame}, state, stream)
+  def handle_event(:cast, {:recv_push_promise, %{payload: payload} = frame}, state, stream)
     when state in [@idle] do
-    send(stream.connection, {:push_promise, stream.id})
+
+    {:ok, {headers, new_dec}} = :hpack.decode(payload, stream.decoder)
+    stream = %Stream{stream | headers: headers, decoder: new_dec}
+
+    send(stream.connection, {:push_promise, Stream.Response.new(stream)})
     {:next_state, @reserved, stream}
   end
 

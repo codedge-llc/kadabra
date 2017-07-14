@@ -15,6 +15,7 @@ defmodule Kadabra.Connection do
   @ping 0x6
   @goaway 0x7
   @window_update 0x8
+  @continuation 0x9
 
   def start_link(uri, pid, opts \\ []) do
     GenServer.start_link(__MODULE__, {:ok, uri, pid, opts})
@@ -325,28 +326,35 @@ defmodule Kadabra.Connection do
       @settings ->
         GenServer.cast(self(), {:recv, :settings, frame})
       @push_promise ->
-        {:ok, pid} =
-          %Stream{
-            id: frame.stream_id,
-            uri: state.uri,
-            connection: self(),
-            socket: state.socket,
-            encoder: state.encoder_state,
-            decoder: state.decoder_state
-          }
-          |> Stream.start_link
-
-        Registry.register(Registry.Kadabra, {state.uri, frame.stream_id}, pid)
-        GenServer.cast(pid, {:recv_push_promise, frame})
+        open_promise_stream(frame, state)
       @ping ->
         GenServer.cast(self(), {:recv, :ping, frame})
       @goaway ->
         GenServer.cast(self(), {:recv, :goaway, frame})
       @window_update ->
         GenServer.cast(self(), {:recv, :window_update, frame})
+      @continuation ->
+        Logger.debug("CONTINUATION frame: #{inspect(frame)}")
       _ ->
         Logger.debug("Unknown frame: #{inspect(frame)}")
     end
+  end
+
+  def open_promise_stream(frame, state) do
+    <<_::1, stream_id::31>> <> headers = frame.payload
+    {:ok, pid} =
+      %Stream{
+        id: stream_id,
+        uri: state.uri,
+        connection: self(),
+        socket: state.socket,
+        encoder: state.encoder_state,
+        decoder: state.decoder_state
+      }
+      |> Stream.start_link
+
+    Registry.register(Registry.Kadabra, {state.uri, frame.stream_id}, pid)
+    GenServer.cast(pid, {:recv_push_promise, %{payload: headers}})
   end
 
   def settings_param(identifier) do
