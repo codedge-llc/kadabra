@@ -21,7 +21,7 @@ defmodule Kadabra.Stream do
   @idle :idle
   @open :open
   # @reserved_local :reserved_local
-  # @reserved_remote :reserved_remote
+  @reserved :reserved
 
   def start_link(stream) do
     :gen_statem.start_link(__MODULE__, stream, [])
@@ -40,6 +40,12 @@ defmodule Kadabra.Stream do
 
   def handle_event(:cast, :close, _state, stream) do
     {:next_state, @closed, stream}
+  end
+
+  def handle_event(:cast, {:recv_push_promise, _frame}, state, stream)
+    when state in [@idle] do
+    send(stream.connection, {:push_promise, stream.id})
+    {:next_state, @reserved, stream}
   end
 
   def handle_event(:cast, {:recv_headers, %{flags: flags, payload: payload}}, _state, stream) do

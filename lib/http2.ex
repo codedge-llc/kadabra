@@ -1,6 +1,6 @@
 defmodule Kadabra.Http2 do
   @moduledoc """
-    Handles all HTTP2 connection, request and response functions.
+  Handles all HTTP2 connection, request and response functions.
   """
   require Logger
 

@@ -1,6 +1,6 @@
 defmodule Kadabra.Error do
   @moduledoc """
-    Handles error code conversions.
+  Handles error code conversions.
   """
   def string(code) do
     case code do
