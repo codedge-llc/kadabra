@@ -8,16 +8,12 @@ defmodule Kadabra.Frame.Settings do
     case put_settings(%Connection.Settings{}, s_list) do
       {:ok, settings} ->
         {:ok, %__MODULE__{settings: settings, ack: ack?(flags)}}
-      {:error, code, settings} -> {:error, code}
+      {:error, code, _settings} -> {:error, code}
     end
   end
 
   def ack?(1), do: true
   def ack?(0), do: false
-
-  def parse(payload) do
-    settings = %Connection.Settings{}
-  end
 
   def parse_settings(<<>>), do: []
   def parse_settings(bin) do

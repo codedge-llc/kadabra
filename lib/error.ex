@@ -4,7 +4,7 @@ defmodule Kadabra.Error do
   """
 
   @doc ~S"""
-  32-bit error code of type NO_ERROR
+  32-bit error code of type `NO_ERROR`
 
   The associated condition is not a result of an error. For example,
   a GOAWAY might include this code to indicate graceful shutdown of
@@ -19,7 +19,7 @@ defmodule Kadabra.Error do
   def no_error, do: <<0::32>>
 
   @doc ~S"""
-  32-bit error code of type PROTOCOL_ERROR
+  32-bit error code of type `PROTOCOL_ERROR`
 
   The endpoint detected an unspecific protocol error. This error is for use
   when a more specific error code is not available.
@@ -33,7 +33,7 @@ defmodule Kadabra.Error do
   def protocol_error, do: <<1::32>>
 
   @doc ~S"""
-  32-bit error code of type FLOW_CONTROL_ERROR
+  32-bit error code of type `FLOW_CONTROL_ERROR`
 
   The endpoint detected that its peer violated the flow-control protocol.
 
@@ -46,7 +46,7 @@ defmodule Kadabra.Error do
   def flow_control_error, do: <<3::32>>
 
   @doc ~S"""
-  32-bit error code of type FRAME_SIZE_ERROR
+  32-bit error code of type `FRAME_SIZE_ERROR`
 
   ## Examples
     

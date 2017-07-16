@@ -2,6 +2,7 @@ defmodule Kadabra.Frame.Ping do
   defstruct [:data, ack: false]
 
   alias Kadabra.Http2
+  alias Kadabra.Frame.Flags
 
   def new do
     %__MODULE__{
@@ -13,7 +14,7 @@ defmodule Kadabra.Frame.Ping do
   def new(%{payload: data, flags: flags}) do
     %__MODULE__{
       data: data,
-      ack: (flags == 0x1)
+      ack: Flags.ack?(flags)
     }
   end
 

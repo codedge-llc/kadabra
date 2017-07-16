@@ -5,7 +5,7 @@ defmodule Kadabra.Stream do
   defstruct [:id, :headers, :uri, :connection, :decoder, :encoder,
              :socket, body: "", scheme: :https]
 
-  alias Kadabra.{Frame, Http2, Stream}
+  alias Kadabra.{Connection, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream}
 
   @data 0x0
@@ -22,10 +22,29 @@ defmodule Kadabra.Stream do
   @idle :idle
   @open :open
   # @reserved_local :reserved_local
-  @reserved :reserved
+  @reserved_remote :reserved_remote
+
+  def new(%Connection{} = conn, stream_id) do
+    %__MODULE__{
+      id: stream_id,
+      uri: conn.uri,
+      connection: self(),
+      socket: conn.socket,
+      encoder: conn.encoder_state,
+      decoder: conn.decoder_state,
+    }
+  end
 
   def start_link(stream) do
     :gen_statem.start_link(__MODULE__, stream, [])
+  end
+
+  def cast_recv(pid, frame) do
+    :gen_statem.cast(pid, {:recv, frame})
+  end
+
+  def cast_send(pid, frame) do
+    :gen_statem.cast(pid, {:send, frame})
   end
 
   def handle_event(:enter, _old, @half_closed_remote, stream) do
@@ -56,7 +75,7 @@ defmodule Kadabra.Stream do
     {:ok, {headers, new_dec}} = :hpack.decode(frame.header_block_fragment, stream.decoder)
     stream = %Stream{stream | headers: headers, decoder: new_dec}
 
-    {:next_state, @reserved, stream}
+    {:keep_state, stream}
   end
 
   def handle_event(:cast, {:recv, %PushPromise{} = frame}, state, stream)
@@ -66,17 +85,7 @@ defmodule Kadabra.Stream do
     stream = %Stream{stream | headers: headers, decoder: new_dec}
 
     send(stream.connection, {:push_promise, Stream.Response.new(stream)})
-    {:next_state, @reserved, stream}
-  end
-
-  def handle_event(:cast, {:recv_push_promise, %{payload: payload} = frame}, state, stream)
-    when state in [@idle] do
-
-    {:ok, {headers, new_dec}} = :hpack.decode(payload, stream.decoder)
-    stream = %Stream{stream | headers: headers, decoder: new_dec}
-
-    send(stream.connection, {:push_promise, Stream.Response.new(stream)})
-    {:next_state, @reserved, stream}
+    {:next_state, @reserved_remote, stream}
   end
 
   def handle_event(:cast, {:recv, %Headers{} = frame}, _state, stream) do
@@ -87,16 +96,6 @@ defmodule Kadabra.Stream do
       {:next_state, @half_closed_remote, stream}
     else
       {:keep_state, stream}
-    end
-  end
-
-  def handle_event(:cast, {:recv_headers, %{flags: flags, payload: payload}}, _state, stream) do
-    {:ok, {headers, new_dec}} = :hpack.decode(payload, stream.decoder)
-    stream = %Stream{stream | headers: headers, decoder: new_dec}
-
-    case flags do
-      0x5 -> {:next_state, @half_closed_remote, stream}
-      _ -> {:keep_state, stream}
     end
   end
 
