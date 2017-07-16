@@ -38,7 +38,7 @@ defmodule Kadabra.Mixfile do
       {:scribe, "~> 0.4"},
       {:ex_doc, "~> 0.14", only: :dev},
       {:dogma, "~> 0.1", only: :dev},
-      {:dialyxir, "~> 0.5", only: [:dev], runtime: false}
+      #{:dialyxir, "~> 0.5", only: [:dev], runtime: false}
     ]
   end
 

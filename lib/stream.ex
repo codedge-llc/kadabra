@@ -2,10 +2,11 @@ defmodule Kadabra.Stream do
   @moduledoc """
   Struct returned from open connections.
   """
-  defstruct [:id, :headers, :body, :uri, :connection, :decoder, :encoder,
-             :socket, scheme: :https]
+  defstruct [:id, :headers, :uri, :connection, :decoder, :encoder,
+             :socket, body: "", scheme: :https]
 
-  alias Kadabra.{Http2, Stream}
+  alias Kadabra.{Frame, Http2, Stream}
+  alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream}
 
   @data 0x0
   @headers 0x1
@@ -28,7 +29,9 @@ defmodule Kadabra.Stream do
   end
 
   def handle_event(:enter, _old, @half_closed_remote, stream) do
-    # TODO: send ES here
+    bin = stream.id |> RstStream.new |> RstStream.to_bin
+    :ssl.send(stream.socket, bin)
+
     :gen_statem.cast(self(), :close)
     {:keep_state, stream}
   end
@@ -42,6 +45,30 @@ defmodule Kadabra.Stream do
     {:next_state, @closed, stream}
   end
 
+  def handle_event(:cast, {:recv, %RstStream{}}, state, stream)
+    when state in [@open, @half_closed_local, @half_closed_remote, @closed] do
+    {:next_state, :closed, stream}
+  end
+
+  def handle_event(:cast, {:recv, %Continuation{} = frame}, state, stream)
+    when state in [@idle] do
+
+    {:ok, {headers, new_dec}} = :hpack.decode(frame.header_block_fragment, stream.decoder)
+    stream = %Stream{stream | headers: headers, decoder: new_dec}
+
+    {:next_state, @reserved, stream}
+  end
+
+  def handle_event(:cast, {:recv, %PushPromise{} = frame}, state, stream)
+    when state in [@idle] do
+
+    {:ok, {headers, new_dec}} = :hpack.decode(frame.header_block_fragment, stream.decoder)
+    stream = %Stream{stream | headers: headers, decoder: new_dec}
+
+    send(stream.connection, {:push_promise, Stream.Response.new(stream)})
+    {:next_state, @reserved, stream}
+  end
+
   def handle_event(:cast, {:recv_push_promise, %{payload: payload} = frame}, state, stream)
     when state in [@idle] do
 
@@ -50,6 +77,17 @@ defmodule Kadabra.Stream do
 
     send(stream.connection, {:push_promise, Stream.Response.new(stream)})
     {:next_state, @reserved, stream}
+  end
+
+  def handle_event(:cast, {:recv, %Headers{} = frame}, _state, stream) do
+    {:ok, {headers, new_dec}} = :hpack.decode(frame.header_block_fragment, stream.decoder)
+    stream = %Stream{stream | headers: headers, decoder: new_dec}
+
+    if frame.end_stream do
+      {:next_state, @half_closed_remote, stream}
+    else
+      {:keep_state, stream}
+    end
   end
 
   def handle_event(:cast, {:recv_headers, %{flags: flags, payload: payload}}, _state, stream) do
@@ -62,18 +100,13 @@ defmodule Kadabra.Stream do
     end
   end
 
-  def handle_event(:cast, {:recv_data, %{flags: flags, payload: payload}}, _state, stream) do
-    body = stream.body || ""
-    stream = %Stream{stream | body: body <> payload}
-    case flags do
-      0x1 -> {:next_state, @half_closed_remote, stream}
-      _ -> {:keep_state, stream}
+  def handle_event(:cast, {:recv, %Data{end_stream: end_stream?,
+                                        data: data}}, _state, stream) do
+    stream = %Stream{stream | body: stream.body <> data}
+    cond do
+      end_stream? -> {:next_state, @half_closed_remote, stream}
+      true -> {:keep_state, stream}
     end
-  end
-
-  def handle_event(:cast, {:recv_rst_stream, _frame}, state, stream)
-    when state in [@open, @half_closed_local, @half_closed_remote] do
-    {:next_state, :closed, stream}
   end
 
   def handle_event(:cast, {:send_headers, headers, payload}, _state, stream) do

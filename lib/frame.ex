@@ -15,7 +15,7 @@ defmodule Kadabra.Frame do
         {:ok, %Kadabra.Frame{
           length: payload_size,
           type: frame_type,
-          flags: flags,
+          flags: <<flags::bitstring>>,
           stream_id: stream_id,
           payload: frame_payload
         }, rest}

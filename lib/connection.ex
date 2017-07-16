@@ -6,6 +6,8 @@ defmodule Kadabra.Connection do
   require Logger
 
   alias Kadabra.{Error, Http2, Stream}
+  alias Kadabra.Frame.{Continuation, Data, Goaway, Headers, Ping,
+    PushPromise, RstStream}
 
   @data 0x0
   @headers 0x1
@@ -111,7 +113,7 @@ defmodule Kadabra.Connection do
     {:noreply, inc_stream_id(state)}
   end
 
-  def handle_cast({:recv, :goaway, frame}, state) do
+  def handle_cast({:recv, %Goaway{} = frame}, state) do
     do_recv_goaway(frame, state)
     {:noreply, state}
   end
@@ -122,13 +124,14 @@ defmodule Kadabra.Connection do
   end
 
   def handle_cast({:send, :ping}, %{socket: socket} = state) do
-    ping = Http2.build_frame(0x6, 0x0, 0x0, <<0, 0, 0, 0, 0, 0, 0, 0>>)
-    :ssl.send(socket, ping)
+    bin = Ping.new |> Ping.to_bin
+    :ssl.send(socket, bin)
     {:noreply, state}
   end
 
-  def handle_cast({:recv, :ping, _frame}, %{client: pid} = state) do
-    send(pid, {:ping, self()})
+  def handle_cast({:recv, %Ping{ack: ack}}, %{client: pid} = state) do
+    resp = if ack, do: :pong, else: :ping
+    send(pid, {resp, self()})
     {:noreply, state}
   end
 
@@ -202,14 +205,14 @@ defmodule Kadabra.Connection do
   end
 
   defp do_send_goaway(%{socket: socket, stream_id: stream_id}) do
-    h = Http2.goaway_frame(stream_id, Error.code("NO_ERROR"))
-    :ssl.send(socket, h)
+    bin = stream_id |> Goaway.new |> Goaway.to_bin
+    :ssl.send(socket, bin)
   end
 
-  defp do_recv_goaway(frame, %{client: pid} = state) do
-    <<_r::1, last_stream_id::31, code::32, rest::binary>> = frame[:payload]
-    log_goaway(code, last_stream_id, rest)
-
+  defp do_recv_goaway(%Goaway{last_stream_id: id,
+                              error_code: error,
+                              debug_data: debug}, %{client: pid} = state) do
+    log_goaway(error, id, debug)
     send pid, {:closed, self()}
     {:noreply, %{state | streams: %{}}}
   end
@@ -318,33 +321,37 @@ defmodule Kadabra.Connection do
 
     case frame[:frame_type] do
       @data ->
-        :gen_statem.cast(pid, {:recv_data, frame})
+        :gen_statem.cast(pid, {:recv, Data.new(frame)})
       @headers ->
-        :gen_statem.cast(pid, {:recv_headers, frame})
+        :gen_statem.cast(pid, {:recv, Headers.new(frame)})
       @rst_stream ->
-        :gen_statem.cast(pid, {:recv_rst_stream, frame})
+        :gen_statem.cast(pid, {:recv, RstStream.new(frame)})
       @settings ->
         GenServer.cast(self(), {:recv, :settings, frame})
       @push_promise ->
         open_promise_stream(frame, state)
       @ping ->
-        GenServer.cast(self(), {:recv, :ping, frame})
+        GenServer.cast(self(), {:recv, Ping.new(frame)})
       @goaway ->
-        GenServer.cast(self(), {:recv, :goaway, frame})
+        GenServer.cast(self(), {:recv, Goaway.new(frame)})
       @window_update ->
         GenServer.cast(self(), {:recv, :window_update, frame})
       @continuation ->
-        Logger.debug("CONTINUATION frame: #{inspect(frame)}")
+        cont = Continuation.new(frame)
+        :gen_statem.cast(pid, {:recv, cont})
       _ ->
         Logger.debug("Unknown frame: #{inspect(frame)}")
     end
   end
 
+  def handle_rst_stream(pid, frame) do
+  end
+
   def open_promise_stream(frame, state) do
-    <<_::1, stream_id::31>> <> headers = frame.payload
+    pp_frame = PushPromise.new(frame)
     {:ok, pid} =
       %Stream{
-        id: stream_id,
+        id: pp_frame.stream_id,
         uri: state.uri,
         connection: self(),
         socket: state.socket,
@@ -353,8 +360,8 @@ defmodule Kadabra.Connection do
       }
       |> Stream.start_link
 
-    Registry.register(Registry.Kadabra, {state.uri, frame.stream_id}, pid)
-    GenServer.cast(pid, {:recv_push_promise, %{payload: headers}})
+    Registry.register(Registry.Kadabra, {state.uri, pp_frame.stream_id}, pid)
+    GenServer.cast(pid, {:recv, pp_frame})
   end
 
   def settings_param(identifier) do
