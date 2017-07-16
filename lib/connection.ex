@@ -5,9 +5,9 @@ defmodule Kadabra.Connection do
   use GenServer
   require Logger
 
-  alias Kadabra.{Error, Http2, Stream}
+  alias Kadabra.{Error, Frame, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Goaway, Headers, Ping,
-    PushPromise, RstStream}
+    PushPromise, RstStream, WindowUpdate}
 
   @data 0x0
   @headers 0x1
@@ -118,7 +118,7 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  def handle_cast({:recv, :settings, frame}, state) do
+  def handle_cast({:recv, %Frame.Settings{} = frame}, state) do
     state = do_recv_settings(frame, state)
     {:noreply, state}
   end
@@ -139,10 +139,8 @@ defmodule Kadabra.Connection do
     {:noreply, do_recv_rst_stream(frame, state)}
   end
 
-  def handle_cast({:recv, :window_update, %{stream_id: _stream_id,
-                                            payload: payload}}, state) do
-
-    <<_r::1, _window_size_inc::31>> = payload
+  def handle_cast({:recv, %WindowUpdate{}}, state) do
+    # TODO: Handle window updates
     {:noreply, state}
   end
 
@@ -222,30 +220,25 @@ defmodule Kadabra.Connection do
     Logger.error "Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{bin}"
   end
 
-  defp do_recv_settings(frame, %{socket: socket,
-                                 client: pid,
-                                 decoder_state: decoder}  = state) do
-    case frame[:flags] do
-      0x1 -> # SETTINGS ACK
-        send pid, {:ok, self()}
-        state
-      _ ->
-        settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
-        settings = parse_settings(frame[:payload])
-        table_size = fetch_setting(settings, "SETTINGS_MAX_HEADER_LIST_SIZE")
-        new_decoder = :hpack.new_max_table_size(table_size, decoder)
+  defp do_recv_settings(%Frame.Settings{settings: settings} = frame,
+                        %{socket: socket,
+                          client: pid,
+                          decoder_state: decoder}  = state) do
 
-        :ssl.send(socket, settings_ack)
-        send pid, {:ok, self()}
-        %{state | decoder_state: new_decoder}
-    end
-  end
+    if frame.ack do
+      send pid, {:ok, self()}
+      state
+    else
+      settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
+      #settings = parse_settings(frame[:payload])
+      #table_size = fetch_setting(settings, "SETTINGS_MAX_HEADER_LIST_SIZE")
 
-  def fetch_setting(settings, settings_key) do
-    case Enum.find(settings, fn({key, _val}) -> key == settings_key end) do
-      {^settings_key, value} -> value
-      nil -> nil
-    end
+      new_decoder = :hpack.new_max_table_size(settings.max_header_list_size, decoder)
+
+      :ssl.send(socket, settings_ack)
+      send pid, {:ok, self()}
+      %{state | decoder_state: new_decoder}
+    end 
   end
 
   defp do_recv_rst_stream(frame, %{client: pid} = state) do
@@ -327,7 +320,7 @@ defmodule Kadabra.Connection do
       @rst_stream ->
         :gen_statem.cast(pid, {:recv, RstStream.new(frame)})
       @settings ->
-        GenServer.cast(self(), {:recv, :settings, frame})
+        handle_settings(frame)
       @push_promise ->
         open_promise_stream(frame, state)
       @ping ->
@@ -335,16 +328,22 @@ defmodule Kadabra.Connection do
       @goaway ->
         GenServer.cast(self(), {:recv, Goaway.new(frame)})
       @window_update ->
-        GenServer.cast(self(), {:recv, :window_update, frame})
+        GenServer.cast(self(), {:recv, WindowUpdate.new(frame)})
       @continuation ->
-        cont = Continuation.new(frame)
-        :gen_statem.cast(pid, {:recv, cont})
+        :gen_statem.cast(pid, {:recv, Continuation.new(frame)})
       _ ->
         Logger.debug("Unknown frame: #{inspect(frame)}")
     end
   end
 
-  def handle_rst_stream(pid, frame) do
+  def handle_settings(frame) do
+    case Frame.Settings.new(frame) do
+      {:ok, s} ->
+        GenServer.cast(self(), {:recv, s})
+      _else ->
+        # TODO: handle bad settings
+        :error
+    end
   end
 
   def open_promise_stream(frame, state) do
@@ -362,24 +361,6 @@ defmodule Kadabra.Connection do
 
     Registry.register(Registry.Kadabra, {state.uri, pp_frame.stream_id}, pid)
     GenServer.cast(pid, {:recv, pp_frame})
-  end
-
-  def settings_param(identifier) do
-    case identifier do
-      0x1 -> "SETTINGS_HEADER_TABLE_SIZE"
-      0x2 -> "SETTINGS_ENABLE_PUSH"
-      0x3 -> "SETTINGS_MAX_CONCURRENT_STREAMS"
-      0x4 -> "SETTINGS_INITIAL_WINDOW_SIZE"
-      0x5 -> "SETTINGS_MAX_FRAME_SIZE"
-      0x6 -> "SETTINGS_MAX_HEADER_LIST_SIZE"
-      error -> "Unknown #{error}"
-    end
-  end
-
-  def parse_settings(<<>>), do: []
-  def parse_settings(bin) do
-    <<identifier::16, value::32, rest::bitstring>> = bin
-    [{settings_param(identifier), value}] ++ parse_settings(rest)
   end
 
   def maybe_reconnect(%{reconnect: false, client: pid} = state) do
