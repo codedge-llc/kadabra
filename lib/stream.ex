@@ -10,11 +10,6 @@ defmodule Kadabra.Stream do
 
   @data 0x0
   @headers 0x1
-  # @rst_stream 0x3
-  # @settings 0x4
-  # @ping 0x6
-  # @goaway 0x7
-  # @window_update 0x8
 
   @closed :closed
   @half_closed_local :half_closed_local
@@ -136,9 +131,7 @@ defmodule Kadabra.Stream do
     Enum.sort(h, fn({a, _b}, {c, _d}) -> a < c end)
   end
 
-  def init(stream) do
-    {:ok, @idle, stream}
-  end
+  def init(stream), do: {:ok, @idle, stream}
 
   def callback_mode, do: [:handle_event_function, :state_enter]
 

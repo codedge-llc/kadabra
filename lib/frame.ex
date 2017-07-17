@@ -1,6 +1,14 @@
 defmodule Kadabra.Frame do
   defstruct [:length, :type, :flags, :stream_id, :payload]
 
+  @type t :: %__MODULE__{
+    length: non_neg_integer,
+    type: non_neg_integer,
+    flags: <<_::8>>,
+    stream_id: non_neg_integer,
+    payload: bitstring
+  }
+
   def new(<<payload_size::24,
             frame_type::8,
             flags::8,
@@ -15,7 +23,7 @@ defmodule Kadabra.Frame do
         {:ok, %Kadabra.Frame{
           length: payload_size,
           type: frame_type,
-          flags: <<flags::bitstring>>,
+          flags: <<flags::8>>,
           stream_id: stream_id,
           payload: frame_payload
         }, rest}

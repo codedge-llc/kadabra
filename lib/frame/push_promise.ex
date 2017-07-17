@@ -1,13 +1,15 @@
 defmodule Kadabra.Frame.PushPromise do
   defstruct [:stream_id, :header_block_fragment, end_headers: false]
 
+  alias Kadabra.Frame.Flags
+
   def new(%{payload: <<_::1, stream_id::31, headers::bitstring>>,
             flags: flags}) do
 
     %__MODULE__{
       stream_id: stream_id,
       header_block_fragment: headers,
-      end_headers: (flags == 0x4) 
+      end_headers: Flags.end_headers?(flags)
     }
   end
 
@@ -23,7 +25,7 @@ defmodule Kadabra.Frame.PushPromise do
     %__MODULE__{
       stream_id: stream_id,
       header_block_fragment: headers,
-      end_headers: (flags == 0x4) 
+      end_headers: Flags.end_headers?(flags)
     }
   end
 end

@@ -1,13 +1,22 @@
 defmodule Kadabra.Frame.Priority do
   defstruct [:stream_dependency, :weight, exclusive: false]
 
-  def new(%{} = frame) do
-    case parse_payload(frame.payload) do
+  alias Kadabra.Frame
+
+  @type t :: %__MODULE__{
+    exclusive: boolean,
+    stream_dependency: non_neg_integer,
+    weight: integer
+  }
+
+  @spec new(Frame.t) :: {:ok, t} | {:error, Frame.t}
+  def new(%Frame{payload: payload} = frame) do
+    case parse_payload(payload) do
       {:ok, e, dep, weight} ->
         %__MODULE__{
-          exclusive: (e == 1),
+          exclusive: (e == 0x1),
           stream_dependency: dep,
-          weight: weight 
+          weight: weight
         }
       {:error, payload} ->
         {:error, frame}

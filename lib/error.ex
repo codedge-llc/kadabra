@@ -29,7 +29,7 @@ defmodule Kadabra.Error do
       iex> Kadabra.Error.protocol_error
       <<0, 0, 0, 1>>
   """
-  @spec no_error :: <<_::32>>
+  @spec protocol_error :: <<_::32>>
   def protocol_error, do: <<1::32>>
 
   @doc ~S"""

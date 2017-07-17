@@ -1,6 +1,16 @@
 defmodule Kadabra.Frame.Flags do
 
   @doc ~S"""
+  Returns `ACK` flag.
+
+  ## Examples
+
+      iex> Kadabra.Frame.Flags.ack
+      <<0::7, 1::1>>
+  """
+  def ack, do: <<0::7, 1::1>>
+
+  @doc ~S"""
   Returns `true` if bit 0 is set to 1.
 
   ## Examples
@@ -17,7 +27,7 @@ defmodule Kadabra.Frame.Flags do
   """
   def ack?(<<_::7, 1::1>>), do: true
   def ack?(0x1), do: true
-  def ack?(_), do: false
+  def ack?(_ack), do: false
 
   @doc ~S"""
   Returns `true` if bit 5 is set to 1.

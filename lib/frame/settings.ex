@@ -2,12 +2,13 @@ defmodule Kadabra.Frame.Settings do
   defstruct [:settings, ack: false]
 
   alias Kadabra.Connection
+  alias Kadabra.Frame.Flags
 
   def new(%{payload: p, flags: flags}) do
     s_list = parse_settings(p)
     case put_settings(%Connection.Settings{}, s_list) do
       {:ok, settings} ->
-        {:ok, %__MODULE__{settings: settings, ack: ack?(flags)}}
+        {:ok, %__MODULE__{settings: settings, ack: Flags.ack?(flags)}}
       {:error, code, _settings} -> {:error, code}
     end
   end

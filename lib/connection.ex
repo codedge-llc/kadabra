@@ -173,7 +173,7 @@ defmodule Kadabra.Connection do
                               debug_data: debug}, %{client: pid} = state) do
     log_goaway(error, id, debug)
     send pid, {:closed, self()}
-    {:noreply, %{state | streams: %{}}}
+    {:noreply, state}
   end
 
   def log_goaway(code, id, bin) do
@@ -198,7 +198,7 @@ defmodule Kadabra.Connection do
       send(pid, {:ok, self()})
 
       %{state | decoder_state: new_decoder}
-    end 
+    end
   end
 
   def handle_info({:finished, response}, %{client: pid} = state) do
@@ -237,7 +237,7 @@ defmodule Kadabra.Connection do
   end
 
   def parse_ssl(socket, bin, state) do
-    case Http2.parse_frame(bin) do
+    case Kadabra.Frame.new(bin) do
       {:ok, frame, rest} ->
         handle_response(frame, state)
         parse_ssl(socket, rest, state)
@@ -252,7 +252,7 @@ defmodule Kadabra.Connection do
   def handle_response(frame, state) do
     pid = pid_for_stream(state.uri, frame.stream_id) || self()
 
-    case frame[:frame_type] do
+    case frame.type do
       @data ->
         Stream.cast_recv(pid, Data.new(frame))
       @headers ->
@@ -326,10 +326,8 @@ defmodule Kadabra.Connection do
   end
 
   defp reset_state(state, socket) do
-    encoder = :hpack.new_context
-    decoder = :hpack.new_context
-    %{state | encoder_state: encoder,
-              decoder_state: decoder,
-              socket: socket}
+    enc = :hpack.new_context
+    dec = :hpack.new_context
+    %{state | encoder_state: enc, decoder_state: dec, socket: socket}
   end
 end
