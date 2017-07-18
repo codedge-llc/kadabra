@@ -20,8 +20,10 @@ defmodule Kadabra.Frame.RstStream do
       error_code: error_code
     }
   end
+end
 
+defimpl Kadabra.Encodable, for: Kadabra.Frame.RstStream do
   def to_bin(frame) do
-    Http2.build_frame(0x3, 0x0, frame.stream_id, frame.error_code)
+    Kadabra.Http2.build_frame(0x3, 0x0, frame.stream_id, frame.error_code)
   end
 end

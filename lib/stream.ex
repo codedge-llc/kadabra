@@ -5,7 +5,7 @@ defmodule Kadabra.Stream do
   defstruct [:id, :headers, :uri, :connection, :decoder, :encoder,
              :socket, body: "", scheme: :https]
 
-  alias Kadabra.{Connection, Http2, Stream}
+  alias Kadabra.{Connection, Encodable, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream}
 
   @data 0x0
@@ -43,7 +43,7 @@ defmodule Kadabra.Stream do
   end
 
   def handle_event(:enter, _old, @half_closed_remote, stream) do
-    bin = stream.id |> RstStream.new |> RstStream.to_bin
+    bin = stream.id |> RstStream.new |> Encodable.to_bin
     :ssl.send(stream.socket, bin)
 
     :gen_statem.cast(self(), :close)

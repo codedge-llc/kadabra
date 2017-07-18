@@ -17,7 +17,7 @@ defmodule Kadabra.Connection do
   use GenServer
   require Logger
 
-  alias Kadabra.{Error, Frame, Http2, Stream}
+  alias Kadabra.{Encodable, Error, Frame, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Goaway, Headers, Ping,
     PushPromise, RstStream, WindowUpdate}
 
@@ -133,9 +133,8 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-
   def handle_cast({:send, :ping}, %{socket: socket} = state) do
-    bin = Ping.new |> Ping.to_bin
+    bin = Ping.new |> Encodable.to_bin
     :ssl.send(socket, bin)
     {:noreply, state}
   end
@@ -164,7 +163,7 @@ defmodule Kadabra.Connection do
   end
 
   defp do_send_goaway(%{socket: socket, stream_id: stream_id}) do
-    bin = stream_id |> Goaway.new |> Goaway.to_bin
+    bin = stream_id |> Goaway.new |> Encodable.to_bin
     :ssl.send(socket, bin)
   end
 

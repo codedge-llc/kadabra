@@ -27,9 +27,11 @@ defmodule Kadabra.Frame.Ping do
 
   def ack_flag(%{ack: true}), do: 0x1
   def ack_flag(%{ack: false}), do: 0x0
+end
 
+defimpl Kadabra.Encodable, for: Kadabra.Frame.Ping do
   def to_bin(frame) do
     ack = if frame.ack, do: Flags.ack, else: 0x0
-    Http2.build_frame(0x6, ack, 0x0, frame.data)
+    Kadabra.Http2.build_frame(0x6, ack, 0x0, frame.data)
   end
 end

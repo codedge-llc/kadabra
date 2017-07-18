@@ -28,10 +28,11 @@ defmodule Kadabra.Frame.Goaway do
       debug_data: debug_data
     }
   end
+end
 
-  @spec to_bin(t) :: binary
+defimpl Kadabra.Encodable, for: Kadabra.Frame.Goaway do
   def to_bin(%{last_stream_id: id, error_code: error}) do
     payload = <<0::1, id::31>> <> error
-    Http2.build_frame(0x7, 0x0, 0, payload)
+    Kadabra.Http2.build_frame(0x7, 0x0, 0, payload)
   end
 end
