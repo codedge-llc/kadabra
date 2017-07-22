@@ -48,6 +48,21 @@ defmodule KadabraTest do
         flunk "No stream response received."
       end
     end
+
+    test "https://http2.golang.org/serverpush" do
+      uri = 'http2.golang.org'
+      {:ok, pid} = Kadabra.open(uri, :https)
+      Kadabra.get(pid, "/serverpush")
+
+      receive do
+        {:push_promise, response} ->
+          assert response.id == 2
+          refute response.status
+          assert Stream.Response.get_header(response.headers, ":path")
+      after 5_000 ->
+        flunk "No push promise received."
+      end
+    end
   end
 
   describe "PUT" do

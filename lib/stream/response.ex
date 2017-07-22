@@ -21,15 +21,16 @@ defmodule Kadabra.Stream.Response do
     }
   end
 
-  defp get_status(headers) do
-    result =
-      headers
-      |> Enum.filter(& &1 != :undefined)
-      |> Enum.find(fn({key, _val}) -> key == ":status" end)
-
-    case result do
+  def get_status(headers) do
+    case get_header(headers, ":status") do
       {":status", status} -> status |> String.to_integer
       nil -> nil
     end
+  end
+
+  def get_header(headers, header) do
+    headers
+    |> Enum.filter(& &1 != :undefined)
+    |> Enum.find(fn({key, _val}) -> key == header end)
   end
 end
