@@ -223,7 +223,7 @@ defmodule Kadabra.Connection do
   end
 
   def handle_info({:ssl_closed, _socket}, state) do
-   maybe_reconnect(state)
+    maybe_reconnect(state)
   end
 
   defp do_recv_ssl(bin, %{socket: socket} = state) do
