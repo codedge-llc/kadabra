@@ -1,5 +1,4 @@
 defmodule Kadabra.Frame.Flags do
-
   @doc ~S"""
   Returns `ACK` flag.
 

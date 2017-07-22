@@ -1,7 +1,7 @@
 defmodule Kadabra.Frame.Goaway do
   defstruct [:last_stream_id, :error_code, :debug_data]
 
-  alias Kadabra.{Error, Frame, Http2}
+  alias Kadabra.{Error, Frame}
 
   @type t :: %__MODULE__{
     debug_data: bitstring,
@@ -31,8 +31,10 @@ defmodule Kadabra.Frame.Goaway do
 end
 
 defimpl Kadabra.Encodable, for: Kadabra.Frame.Goaway do
+  alias Kadabra.Http2
+
   def to_bin(%{last_stream_id: id, error_code: error}) do
     payload = <<0::1, id::31>> <> error
-    Kadabra.Http2.build_frame(0x7, 0x0, 0, payload)
+    Http2.build_frame(0x7, 0x0, 0, payload)
   end
 end

@@ -1,7 +1,7 @@
 defmodule Kadabra.Frame.RstStream do
   defstruct [:stream_id, :error_code]
 
-  alias Kadabra.{Error, Frame, Http2}
+  alias Kadabra.{Error, Frame}
 
   @type t :: %__MODULE__{
     error_code: <<_::32>>,
@@ -23,7 +23,9 @@ defmodule Kadabra.Frame.RstStream do
 end
 
 defimpl Kadabra.Encodable, for: Kadabra.Frame.RstStream do
+  alias Kadabra.Http2
+
   def to_bin(frame) do
-    Kadabra.Http2.build_frame(0x3, 0x0, frame.stream_id, frame.error_code)
+    Http2.build_frame(0x3, 0x0, frame.stream_id, frame.error_code)
   end
 end

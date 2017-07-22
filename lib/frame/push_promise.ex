@@ -13,14 +13,14 @@ defmodule Kadabra.Frame.PushPromise do
     }
   end
 
-  def new(<<payload_size::24,
-            frame_type::8,
+  def new(<<_payload_size::24,
+            _frame_type::8,
             flags::8,
             _::1,
             _stream_id::31,
             _::1,
             stream_id::31,
-            headers::bitstring>> = bin) do
+            headers::bitstring>>) do
 
     %__MODULE__{
       stream_id: stream_id,

@@ -18,7 +18,7 @@ defmodule Kadabra.Frame.Priority do
           stream_dependency: dep,
           weight: weight
         }
-      {:error, payload} ->
+      {:error, _payload} ->
         {:error, frame}
     end
   end

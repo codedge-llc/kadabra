@@ -19,7 +19,7 @@ defmodule Kadabra do
 
   def ping(pid), do: GenServer.cast(pid, {:send, :ping})
 
-  def info(pid, opts \\ []) do
+  def info(pid, _opts \\ []) do
     case GenServer.call(pid, :get_info) do
       {:ok, info} ->
         # width = opts[:width] || 120
