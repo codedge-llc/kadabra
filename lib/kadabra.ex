@@ -19,19 +19,19 @@ defmodule Kadabra do
 
   def ping(pid), do: GenServer.cast(pid, {:send, :ping})
 
-  def info(pid, opts \\ []) do
+  def info(pid, _opts \\ []) do
     case GenServer.call(pid, :get_info) do
       {:ok, info} ->
-        width = opts[:width] || 120
-        headers = opts[:data] || [:id, :status, :headers, :body]
-        stream_table_opts = [width: width, data: headers]
+        # width = opts[:width] || 120
+        # headers = opts[:data] || [:id, :status, :headers, :body]
+        # stream_table_opts = [width: width, data: headers]
 
-        stream_data =
-          info.streams
-          |> Map.values
-          |> Enum.map(& Map.put(&1, :body, String.slice(&1.body, 0..40)))
-          |> Enum.sort_by(& &1.id)
-          |> Scribe.format(stream_table_opts)
+        # stream_data =
+        #   info.streams
+        #   |> Map.values
+        #   |> Enum.map(& Map.put(&1, :body, String.slice(&1.body, 0..40)))
+        #   |> Enum.sort_by(& &1.id)
+        #   |> Scribe.format(stream_table_opts)
 
         """
 
@@ -43,10 +43,8 @@ defmodule Kadabra do
         Next Available Stream ID: #{info.stream_id}
         Buffer: #{inspect(info.buffer)}
 
-        == Streams ==
-        #{stream_data}
         """
-        |> Pane.console
+        |> IO.puts
       _else -> :error
     end
   end
