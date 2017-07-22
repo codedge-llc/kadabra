@@ -16,7 +16,7 @@ defmodule Kadabra.Connection.Settings do
   @max_header_list_size 0x6
 
   def put(settings, @table_header_size, value) do
-    {:ok, %{settings | table_header_size: value}}
+    {:ok, %{settings | header_table_size: value}}
   end
 
   def put(settings, @enable_push, 1) do
