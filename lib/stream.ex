@@ -26,7 +26,7 @@ defmodule Kadabra.Stream do
       connection: self(),
       socket: conn.socket,
       encoder: conn.encoder_state,
-      decoder: conn.encoder_state
+      decoder: conn.decoder_state
     }
   end
 
