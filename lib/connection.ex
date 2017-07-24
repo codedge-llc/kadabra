@@ -112,6 +112,33 @@ defmodule Kadabra.Connection do
     {:noreply, inc_stream_id(state)}
   end
 
+  def handle_cast({:recv, %Frame.Headers{} = frame}, state) do
+    {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
+    case pid_for_stream(state.uri, frame.stream_id) do
+      nil -> nil
+      pid -> Stream.cast_recv(pid, frame)
+    end
+    {:noreply, %{state | decoder_state: new_dec}}
+  end
+
+  def handle_cast({:recv, %Frame.PushPromise{} = frame}, state) do
+    {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
+    case pid_for_stream(state.uri, frame.stream_id) do
+      nil -> nil
+      pid -> Stream.cast_recv(pid, frame)
+    end
+    {:noreply, %{state | decoder_state: new_dec}}
+  end
+
+  def handle_cast({:recv, %Frame.Continuation{} = frame}, state) do
+    {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
+    case pid_for_stream(state.uri, frame.stream_id) do
+      nil -> nil
+      pid -> Stream.cast_recv(pid, frame)
+    end
+    {:noreply, %{state | decoder_state: new_dec}}
+  end
+
   def handle_cast({:recv, %Frame.Goaway{} = frame}, state) do
     do_recv_goaway(frame, state)
     {:noreply, state}
@@ -255,7 +282,7 @@ defmodule Kadabra.Connection do
       @data ->
         Stream.cast_recv(pid, Data.new(frame))
       @headers ->
-        Stream.cast_recv(pid, Headers.new(frame))
+        Stream.cast_recv(self(), Headers.new(frame))
       @rst_stream ->
         Stream.cast_recv(pid, RstStream.new(frame))
       @settings ->
@@ -269,7 +296,7 @@ defmodule Kadabra.Connection do
       @window_update ->
         GenServer.cast(self(), {:recv, WindowUpdate.new(frame)})
       @continuation ->
-        Stream.cast_recv(pid, Continuation.new(frame))
+        Stream.cast_recv(self(), Continuation.new(frame))
       _ ->
         Logger.debug("Unknown frame: #{inspect(frame)}")
     end
@@ -301,7 +328,7 @@ defmodule Kadabra.Connection do
       |> Stream.start_link
 
     Registry.register(Registry.Kadabra, {state.uri, pp_frame.stream_id}, pid)
-    Stream.cast_recv(pid, pp_frame)
+    Stream.cast_recv(self(), pp_frame)
   end
 
   def maybe_reconnect(%{reconnect: false, client: pid} = state) do

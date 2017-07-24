@@ -2,8 +2,8 @@ defmodule Kadabra.Stream do
   @moduledoc """
   Struct returned from open connections.
   """
-  defstruct [:id, :headers, :uri, :connection, :decoder, :encoder,
-             :socket, body: "", scheme: :https]
+  defstruct [:id, :uri, :connection, :encoder,
+             :socket, headers: [], body: "", scheme: :https]
 
   alias Kadabra.{Connection, Encodable, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream}
@@ -25,8 +25,7 @@ defmodule Kadabra.Stream do
       uri: conn.uri,
       connection: self(),
       socket: conn.socket,
-      encoder: conn.encoder_state,
-      decoder: conn.decoder_state,
+      encoder: conn.encoder_state
     }
   end
 
@@ -64,28 +63,25 @@ defmodule Kadabra.Stream do
     {:next_state, :closed, stream}
   end
 
-  def handle_event(:cast, {:recv, %Continuation{} = frame}, state, stream)
+  def handle_event(:cast, {:recv, %Continuation{headers: headers} = frame}, state, stream)
     when state in [@idle] do
 
-    {:ok, {headers, new_dec}} = :hpack.decode(frame.header_block_fragment, stream.decoder)
-    stream = %Stream{stream | headers: headers, decoder: new_dec}
+    stream = %Stream{stream | headers: stream.headers ++ headers}
 
     {:keep_state, stream}
   end
 
-  def handle_event(:cast, {:recv, %PushPromise{} = frame}, state, stream)
+  def handle_event(:cast, {:recv, %PushPromise{headers: headers} = frame}, state, stream)
     when state in [@idle] do
 
-    {:ok, {headers, new_dec}} = :hpack.decode(frame.header_block_fragment, stream.decoder)
-    stream = %Stream{stream | headers: headers, decoder: new_dec}
+    stream = %Stream{stream | headers: stream.headers ++ headers}
 
     send(stream.connection, {:push_promise, Stream.Response.new(stream)})
     {:next_state, @reserved_remote, stream}
   end
 
-  def handle_event(:cast, {:recv, %Headers{} = frame}, _state, stream) do
-    {:ok, {headers, new_dec}} = :hpack.decode(frame.header_block_fragment, stream.decoder)
-    stream = %Stream{stream | headers: headers, decoder: new_dec}
+  def handle_event(:cast, {:recv, %Headers{headers: headers} = frame}, _state, stream) do
+    stream = %Stream{stream | headers: stream.headers ++ headers}
 
     if frame.end_stream do
       {:next_state, @half_closed_remote, stream}
