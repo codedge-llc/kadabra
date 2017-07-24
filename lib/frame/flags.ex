@@ -47,13 +47,13 @@ defmodule Kadabra.Frame.Flags do
 
   ## Examples
 
-      iex> Kadabra.Frame.Flags.padded?(<<0::5, 1::1, 0::2>>)
+      iex> Kadabra.Frame.Flags.padded?(<<0::4, 1::1, 0::3>>)
       true
 
       iex> Kadabra.Frame.Flags.padded?(<<0::8>>)
       false
   """
-  def padded?(<<_::5, 1::1, _::2>>), do: true
+  def padded?(<<_::4, 1::1, _::3>>), do: true
   def padded?(_), do: false
 
   @doc ~S"""
@@ -61,13 +61,13 @@ defmodule Kadabra.Frame.Flags do
 
   ## Examples
 
-      iex> Kadabra.Frame.Flags.end_headers?(<<0::6, 1::1, 0::1>>)
+      iex> Kadabra.Frame.Flags.end_headers?(<<0::5, 1::1, 0::2>>)
       true
 
       iex> Kadabra.Frame.Flags.end_headers?(<<0::8>>)
       false
   """
-  def end_headers?(<<_::6, 1::1, _::1>>), do: true
+  def end_headers?(<<_::5, 1::1, _::2>>), do: true
   def end_headers?(_), do: false
 
   @doc ~S"""

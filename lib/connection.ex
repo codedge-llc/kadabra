@@ -314,11 +314,9 @@ defmodule Kadabra.Connection do
     case do_connect(uri, opts) do
       {:ok, socket} ->
         Logger.debug "Socket closed, reopened automatically"
-        state |> inspect |> Logger.info
         {:noreply, reset_state(state, socket)}
       {:error, error} ->
         Logger.error "Socket closed, reopening failed with #{error}"
-        state |> inspect |> Logger.info
         send(pid, :closed)
          {:stop, :normal, state}
     end
