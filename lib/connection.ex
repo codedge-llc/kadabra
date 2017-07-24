@@ -17,7 +17,7 @@ defmodule Kadabra.Connection do
   use GenServer
   require Logger
 
-  alias Kadabra.{Encodable, Error, Frame, Http2, Stream}
+  alias Kadabra.{Encodable, Error, Frame, Hpack, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Goaway, Headers, Ping,
     PushPromise, RstStream, WindowUpdate}
 
@@ -47,8 +47,8 @@ defmodule Kadabra.Connection do
   end
 
   defp initial_state(socket, uri, pid, opts) do
-   encoder = :hpack.new_context
-   decoder = :hpack.new_context
+   {:ok, encoder} = Hpack.start_link
+   {:ok, decoder} = Hpack.start_link
    %__MODULE__{
       client: pid,
       uri: uri,
@@ -216,14 +216,16 @@ defmodule Kadabra.Connection do
       send(pid, {:ok, self()})
       state
     else
-      new_decoder = :hpack.new_max_table_size(settings.max_header_list_size, decoder)
+      #new_decoder = :hpack.new_max_table_size(settings.max_header_list_size, decoder)
+      Hpack.update_max_table_size(decoder, settings.max_header_list_size)
 
       settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
       :ssl.send(socket, settings_ack)
 
       send(pid, {:ok, self()})
 
-      %{state | decoder_state: new_decoder}
+      #%{state | decoder_state: new_decoder}
+      state
     end
   end
 
@@ -282,7 +284,7 @@ defmodule Kadabra.Connection do
       @data ->
         Stream.cast_recv(pid, Data.new(frame))
       @headers ->
-        Stream.cast_recv(self(), Headers.new(frame))
+        Stream.cast_recv(pid, Headers.new(frame))
       @rst_stream ->
         Stream.cast_recv(pid, RstStream.new(frame))
       @settings ->
@@ -296,7 +298,7 @@ defmodule Kadabra.Connection do
       @window_update ->
         GenServer.cast(self(), {:recv, WindowUpdate.new(frame)})
       @continuation ->
-        Stream.cast_recv(self(), Continuation.new(frame))
+        Stream.cast_recv(pid, Continuation.new(frame))
       _ ->
         Logger.debug("Unknown frame: #{inspect(frame)}")
     end
@@ -328,7 +330,7 @@ defmodule Kadabra.Connection do
       |> Stream.start_link
 
     Registry.register(Registry.Kadabra, {state.uri, pp_frame.stream_id}, pid)
-    Stream.cast_recv(self(), pp_frame)
+    Stream.cast_recv(pid, pp_frame)
   end
 
   def maybe_reconnect(%{reconnect: false, client: pid} = state) do
@@ -350,8 +352,8 @@ defmodule Kadabra.Connection do
   end
 
   defp reset_state(state, socket) do
-    enc = :hpack.new_context
-    dec = :hpack.new_context
+    {:ok, enc} = Hpack.start_link
+    {:ok, dec} = Hpack.start_link
     %{state | encoder_state: enc, decoder_state: dec, socket: socket}
   end
 end

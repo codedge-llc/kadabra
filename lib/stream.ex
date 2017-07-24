@@ -2,10 +2,10 @@ defmodule Kadabra.Stream do
   @moduledoc """
   Struct returned from open connections.
   """
-  defstruct [:id, :uri, :connection, :encoder,
+  defstruct [:id, :uri, :connection, :encoder, :decoder,
              :socket, headers: [], body: "", scheme: :https]
 
-  alias Kadabra.{Connection, Encodable, Http2, Stream}
+  alias Kadabra.{Connection, Encodable, Hpack, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream}
 
   @data 0x0
@@ -25,7 +25,8 @@ defmodule Kadabra.Stream do
       uri: conn.uri,
       connection: self(),
       socket: conn.socket,
-      encoder: conn.encoder_state
+      encoder: conn.encoder_state,
+      decoder: conn.encoder_state
     }
   end
 
@@ -63,24 +64,27 @@ defmodule Kadabra.Stream do
     {:next_state, :closed, stream}
   end
 
-  def handle_event(:cast, {:recv, %Continuation{headers: headers} = frame}, state, stream)
+  def handle_event(:cast, {:recv, %Continuation{header_block_fragment: fragment}}, state, stream)
     when state in [@idle] do
 
+    {:ok, headers} = Hpack.decode(stream.decoder, fragment)
     stream = %Stream{stream | headers: stream.headers ++ headers}
 
     {:keep_state, stream}
   end
 
-  def handle_event(:cast, {:recv, %PushPromise{headers: headers} = frame}, state, stream)
+  def handle_event(:cast, {:recv, %PushPromise{header_block_fragment: fragment}}, state, stream)
     when state in [@idle] do
 
+    {:ok, headers} = Hpack.decode(stream.decoder, fragment)
     stream = %Stream{stream | headers: stream.headers ++ headers}
 
     send(stream.connection, {:push_promise, Stream.Response.new(stream)})
     {:next_state, @reserved_remote, stream}
   end
 
-  def handle_event(:cast, {:recv, %Headers{headers: headers} = frame}, _state, stream) do
+  def handle_event(:cast, {:recv, %Headers{header_block_fragment: fragment} = frame}, _state, stream) do
+    {:ok, headers} = Hpack.decode(stream.decoder, fragment)
     stream = %Stream{stream | headers: stream.headers ++ headers}
 
     if frame.end_stream do
@@ -101,11 +105,12 @@ defmodule Kadabra.Stream do
 
   def handle_event(:cast, {:send_headers, headers, payload}, _state, stream) do
     headers = add_headers(headers, stream)
-    {:ok, {encoded, new_encoder}} = :hpack.encode(headers, stream.encoder)
+    #{:ok, {encoded, new_encoder}} = :hpack.encode(headers, stream.encoder)
+    {:ok, encoded} = Hpack.encode(stream.encoder, headers)
     headers_payload = :erlang.iolist_to_binary(encoded)
     h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
 
-    stream = %{stream | encoder: new_encoder}
+    #stream = %{stream | encoder: new_encoder}
 
     :ssl.send(stream.socket, h)
 
