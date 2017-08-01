@@ -31,20 +31,20 @@ defmodule Kadabra.Connection do
   end
 
   defp initial_state(socket, uri, pid, opts, stream_id \\ 1, streams \\ %{}) do
-   encoder = :hpack.new_context
-   decoder = :hpack.new_context
-   %{
-      buffer: "",
-      client: pid,
-      uri: uri,
-      scheme: opts[:scheme] || :https,
-      opts: opts,
-      socket: socket,
-      stream_id: stream_id,
-      streams: streams,
-      reconnect: opts[:reconnect] || :true,
-      encoder_state: encoder,
-      decoder_state: decoder
+    encoder = :hpack.new_context
+    decoder = :hpack.new_context
+    %{
+       buffer: "",
+       client: pid,
+       uri: uri,
+       scheme: opts[:scheme] || :https,
+       opts: opts,
+       socket: socket,
+       stream_id: stream_id,
+       streams: streams,
+       reconnect: opts[:reconnect],
+       encoder_state: encoder,
+       decoder_state: decoder
     }
   end
 
@@ -169,7 +169,7 @@ defmodule Kadabra.Connection do
 
     state = %{state | decoder_state: new_dec}
 
-    if flags == 0x5 do 
+    if flags == 0x5 do
       send pid, {:end_stream, stream}
       remove_stream(state, stream_id)
     else
@@ -363,13 +363,13 @@ defmodule Kadabra.Connection do
     case do_connect(uri, opts) do
       {:ok, socket} ->
         Logger.debug "Socket closed, reopened automatically"
-        state |> inspect |> Logger.info 
+        state |> inspect |> Logger.info
         encoder = :hpack.new_context
         decoder = :hpack.new_context
         {:noreply, %{state | encoder_state: encoder, decoder_state: decoder, socket: socket, streams: %{}}}
       {:error, error} ->
         Logger.error "Socket closed, reopening failed with #{error}"
-        state |> inspect |> Logger.info 
+        state |> inspect |> Logger.info
         send(pid, :closed)
          {:stop, :normal, state}
     end
