@@ -55,7 +55,7 @@ defmodule Kadabra.Connection do
       scheme: opts[:scheme] || :https,
       opts: opts,
       socket: socket,
-      reconnect: opts[:reconnect] || true,
+      reconnect: opts[:reconnect],
       encoder_state: encoder,
       decoder_state: decoder
     }
@@ -347,7 +347,7 @@ defmodule Kadabra.Connection do
       {:error, error} ->
         Logger.error "Socket closed, reopening failed with #{error}"
         send(pid, :closed)
-         {:stop, :normal, state}
+        {:stop, :normal, state}
     end
   end
 

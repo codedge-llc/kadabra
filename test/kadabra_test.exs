@@ -4,6 +4,32 @@ defmodule KadabraTest do
 
   alias Kadabra.Stream
 
+  describe "open/2" do
+    test "sets reconnect option if specified" do
+      uri = 'http2.golang.org'
+      opts = [{:active, :once}, {:reconnect, false}, {:port, 443}, :binary]
+      {:ok, pid} = Kadabra.open(uri, :https, opts)
+      state = :sys.get_state(pid)
+      refute state.reconnect
+    end
+
+    test "reconnect option defaults to true if not specified" do
+      uri = 'http2.golang.org'
+      opts = [{:active, :once}, {:port, 443}, :binary]
+      {:ok, pid} = Kadabra.open(uri, :https, opts)
+      state = :sys.get_state(pid)
+      assert state.reconnect
+    end
+
+    test "sets port if specified" do
+      uri = 'http2.golang.org'
+      opts = [{:active, :once}, {:reconnect, false}, {:port, 443}, :binary]
+      {:ok, pid} = Kadabra.open(uri, :https, opts)
+      state = :sys.get_state(pid)
+      assert state.opts[:port] == 443
+    end
+  end
+
   describe "GET"  do
     test "https://http2.golang.org/reqinfo" do
       uri = 'http2.golang.org'
