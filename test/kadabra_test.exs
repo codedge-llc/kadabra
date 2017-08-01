@@ -13,6 +13,14 @@ defmodule KadabraTest do
       refute state.reconnect
     end
 
+    test "reconnect option defaults to true if not specified" do
+      uri = 'http2.golang.org'
+      opts = [{:active, :once}, {:port, 443}, :binary]
+      {:ok, pid} = Kadabra.open(uri, :https, opts)
+      state = :sys.get_state(pid)
+      assert state.reconnect
+    end
+
     test "sets port if specified" do
       uri = 'http2.golang.org'
       opts = [{:active, :once}, {:reconnect, false}, {:port, 443}, :binary]
