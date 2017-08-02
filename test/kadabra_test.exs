@@ -39,7 +39,7 @@ defmodule KadabraTest do
     test "https://http2.golong.org/ECHO" do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
-      payload = "test"
+      payload = String.duplicate("test", 10_000)
       Kadabra.put(pid, "/ECHO", payload)
 
       expected_body = String.upcase(payload)
