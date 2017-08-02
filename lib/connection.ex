@@ -169,7 +169,7 @@ defmodule Kadabra.Connection do
 
     state = %{state | decoder_state: new_dec}
 
-    if flags == 0x5 do 
+    if flags == 0x5 do
       send pid, {:end_stream, stream}
       remove_stream(state, stream_id)
     else
@@ -190,11 +190,28 @@ defmodule Kadabra.Connection do
     :ssl.send(socket, h)
 
     if payload do
-      h_p = Http2.build_frame(@data, 0x1, stream_id, payload)
-      :ssl.send(socket, h_p)
+      chunks = chunk(16_384, payload)
+      send_chunks(socket, stream_id, chunks)
     end
     %{state | encoder_state: new_encoder}
   end
+
+  defp send_chunks(socket, _stream_id, []), do: :ok
+  defp send_chunks(socket, stream_id, [chunk | []]) do
+    h_p = Http2.build_frame(@data, 0x1, stream_id, chunk)
+    :ssl.send(socket, h_p)
+  end
+  defp send_chunks(socket, stream_id, [chunk | rest]) do
+    h_p = Http2.build_frame(@data, 0x0, stream_id, chunk)
+    :ssl.send(socket, h_p)
+  end
+
+  defp chunk(size, bin) when byte_size(bin) >= size do
+    {chunk, rest} = :erlang.split_binary(bin, size)
+    [chunk | chunk(size, rest)]
+  end
+  defp chunk(size, <<>>), do: []
+  defp chunk(size, bin), do: [bin]
 
   defp add_headers(headers, uri, state) do
     h = headers ++
@@ -363,13 +380,13 @@ defmodule Kadabra.Connection do
     case do_connect(uri, opts) do
       {:ok, socket} ->
         Logger.debug "Socket closed, reopened automatically"
-        state |> inspect |> Logger.info 
+        state |> inspect |> Logger.info
         encoder = :hpack.new_context
         decoder = :hpack.new_context
         {:noreply, %{state | encoder_state: encoder, decoder_state: decoder, socket: socket, streams: %{}}}
       {:error, error} ->
         Logger.error "Socket closed, reopening failed with #{error}"
-        state |> inspect |> Logger.info 
+        state |> inspect |> Logger.info
         send(pid, :closed)
          {:stop, :normal, state}
     end
