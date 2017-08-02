@@ -7,7 +7,7 @@ defmodule Kadabra do
   def open(uri, scheme, opts \\ []) do
     port = opts[:port] || 443
     reconnect = fetch_reconnect_option(opts)
-    start_opts = [scheme: scheme, ssl: nopts, port: port]
+
     nopts =
       opts
       |> List.keydelete(:port, 0)
