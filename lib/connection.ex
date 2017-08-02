@@ -42,7 +42,7 @@ defmodule Kadabra.Connection do
       socket: socket,
       stream_id: stream_id,
       streams: streams,
-      reconnect: opts[:reconnect] || :true,
+      reconnect: opts[:reconnect],
       encoder_state: encoder,
       decoder_state: decoder
     }

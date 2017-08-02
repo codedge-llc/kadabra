@@ -6,12 +6,25 @@ defmodule Kadabra do
 
   def open(uri, scheme, opts \\ []) do
     port = opts[:port] || 443
-    nopts = List.keydelete(opts, :port, 0)
+    reconnect = fetch_reconnect_option(opts)
     start_opts = [scheme: scheme, ssl: nopts, port: port]
+    nopts =
+      opts
+      |> List.keydelete(:port, 0)
+      |> List.keydelete(:reconnect, 0)
+    start_opts = [scheme: scheme, ssl: nopts, port: port, reconnect: reconnect]
 
     case Connection.start_link(uri, self(), start_opts) do
       {:ok, pid} -> {:ok, pid}
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp fetch_reconnect_option(opts) do
+    if List.keymember?(opts, :reconnect, 0) do
+      opts[:reconnect]
+    else
+      true
     end
   end
 
