@@ -157,7 +157,6 @@ defmodule Kadabra.Connection do
 
     if frame[:flags] == 0x1 do
      send pid, {:end_stream, stream}
-     IO.puts("removing because of data")
      remove_stream(state, stream_id)
     else
       put_stream(stream_id, state, stream)
@@ -182,11 +181,9 @@ defmodule Kadabra.Connection do
     case flags do
       0x5 ->
         send pid, {:end_stream, stream}
-       IO.puts("removing because of headers")
         remove_stream(state, stream_id)
       0x1 ->
         send pid, {:end_stream, stream}
-       IO.puts("removing because of headers")
         remove_stream(state, stream_id)
       _else ->
         put_stream(stream_id, state, stream)
@@ -196,16 +193,12 @@ defmodule Kadabra.Connection do
   defp do_send_headers(headers, payload, %{socket: socket,
                                            stream_id: stream_id,
                                            uri: uri,
-                                           streams: streams,
                                            active_stream_count: active_stream_count,
                                            max_concurrent_streams: max_streams,
                                            overflow: overflow,
                                            encoder_state: encoder} = state) do
 
-    IO.puts("[Adding] stream_count: #{active_stream_count}, max_streams: #{max_streams}")
-
     if active_stream_count < max_streams do
-      IO.puts("Sending... stream_id: #{stream_id}")
       headers = add_headers(headers, uri, state)
       {:ok, {encoded, new_encoder}} = :hpack.encode(headers, encoder)
       headers_payload = :erlang.iolist_to_binary(encoded)
@@ -223,7 +216,6 @@ defmodule Kadabra.Connection do
       |> Map.put(:active_stream_count, active_stream_count + 1)
       |> inc_stream_id()
     else
-      IO.puts("Queueing... stream_id: #{stream_id}")
       overflow = overflow ++ [{:send, headers, payload}]
       %{state | overflow: overflow}
     end
@@ -313,7 +305,6 @@ defmodule Kadabra.Connection do
     unless stream == nil do
       stream = Map.put(stream, :error, error)
       send pid, {:end_stream, stream}
-      IO.puts("removing because of rst_stream")
       remove_stream(state, frame[:stream_id])
     end
   end
@@ -329,8 +320,6 @@ defmodule Kadabra.Connection do
   end
 
   defp remove_stream(%{streams: streams} = state, id) do
-    IO.puts("[Removing] stream_id: #{id}, stream_count: #{state.active_stream_count}, max_streams: #{state.max_concurrent_streams}")
-
     id_string = Integer.to_string(id)
     state = %{state | streams: Map.delete(streams, id_string) }
     state = %{state | active_stream_count: state.active_stream_count - 1}
