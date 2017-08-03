@@ -43,6 +43,8 @@ defmodule Kadabra.Connection do
       stream_id: stream_id,
       streams: streams,
       reconnect: opts[:reconnect],
+      max_concurrent_streams: 100,
+      overflow: [],
       encoder_state: encoder,
       decoder_state: decoder
     }
@@ -180,20 +182,29 @@ defmodule Kadabra.Connection do
   defp do_send_headers(headers, payload, %{socket: socket,
                                            stream_id: stream_id,
                                            uri: uri,
+                                           streams: streams,
+                                           max_concurrent_streams: max_streams,
+                                           overflow: overflow,
                                            encoder_state: encoder} = state) do
 
-    headers = add_headers(headers, uri, state)
-    {:ok, {encoded, new_encoder}} = :hpack.encode(headers, encoder)
-    headers_payload = :erlang.iolist_to_binary(encoded)
-    h = Http2.build_frame(@headers, 0x4, stream_id, headers_payload)
+    stream_count = streams |> Map.keys |> Enum.count
+    if stream_count >= (max_streams - 1) do
+      overflow = overflow ++ [{:send, headers, payload}]
+      %{state | overflow: overflow}
+    else
+      headers = add_headers(headers, uri, state)
+      {:ok, {encoded, new_encoder}} = :hpack.encode(headers, encoder)
+      headers_payload = :erlang.iolist_to_binary(encoded)
+      h = Http2.build_frame(@headers, 0x4, stream_id, headers_payload)
 
-    :ssl.send(socket, h)
+      :ssl.send(socket, h)
 
-    if payload do
-      chunks = chunk(16_384, payload)
-      send_chunks(socket, stream_id, chunks)
+      if payload do
+        chunks = chunk(16_384, payload)
+        send_chunks(socket, stream_id, chunks)
+      end
+      %{state | encoder_state: new_encoder}
     end
-    %{state | encoder_state: new_encoder}
   end
 
   defp send_chunks(_socket, _stream_id, []), do: :ok
@@ -245,6 +256,7 @@ defmodule Kadabra.Connection do
 
   defp do_recv_settings(frame, %{socket: socket,
                                  client: pid,
+                                 max_concurrent_streams: old_max,
                                  decoder_state: decoder}  = state) do
     case frame[:flags] do
       0x1 -> # SETTINGS ACK
@@ -252,13 +264,16 @@ defmodule Kadabra.Connection do
         state
       _ ->
         settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
+
         settings = parse_settings(frame[:payload])
         table_size = fetch_setting(settings, "SETTINGS_MAX_HEADER_LIST_SIZE")
+        max_streams = fetch_setting(settings, "SETTINGS_MAX_CONCURRENT_STREAMS") || old_max
+        IO.inspect(max_streams, label: "setting max streams")
         new_decoder = :hpack.new_max_table_size(table_size, decoder)
 
         :ssl.send(socket, settings_ack)
         send pid, {:ok, self()}
-        %{state | decoder_state: new_decoder}
+        %{state | decoder_state: new_decoder, max_concurrent_streams: max_streams}
     end
   end
 
@@ -286,9 +301,23 @@ defmodule Kadabra.Connection do
     state[:streams][id_string] || %Kadabra.Stream{id: id}
   end
 
-  defp remove_stream %{streams: streams} = state, id do
+  defp remove_stream(%{streams: streams} = state, id) do
     id_string = Integer.to_string(id)
-    %{state | streams: Map.delete(streams, id_string) }
+    state = %{state | streams: Map.delete(streams, id_string) }
+    stream_count = state.streams |> Map.keys |> Enum.count
+
+    if stream_count < state.max_concurrent_streams do
+      case state.overflow do
+        [] -> state
+        [{:send, headers, payload} | []] ->
+          do_send_headers(headers, payload, state)
+        [{:send, headers, payload} | rest] ->
+          state = %{state | overflow: rest}
+          do_send_headers(headers, payload, state)
+      end
+    else
+      state
+    end
   end
 
   def handle_info({:tcp, _socket, _bin}, state) do
