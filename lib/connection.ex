@@ -44,6 +44,7 @@ defmodule Kadabra.Connection do
       streams: streams,
       reconnect: opts[:reconnect],
       max_concurrent_streams: 100,
+      active_stream_count: 0,
       overflow: [],
       encoder_state: encoder,
       decoder_state: decoder
@@ -99,7 +100,7 @@ defmodule Kadabra.Connection do
 
   def handle_cast({:send, :headers, headers, payload}, state) do
     new_state = do_send_headers(headers, payload, state)
-    {:noreply, inc_stream_id(new_state)}
+    {:noreply, state}
   end
 
   def handle_cast({:send, :goaway}, state) do
@@ -148,6 +149,9 @@ defmodule Kadabra.Connection do
     body = stream.body || ""
     stream = %Stream{stream | body: body <> frame[:payload]}
 
+    h = Http2.build_frame(@window_update, 0x0, 0, <<byte_size(frame[:payload])::32>>)
+    :ssl.send(state.socket, h)
+
     if frame[:flags] == 0x1 do
      send pid, {:end_stream, stream}
      remove_stream(state, stream_id)
@@ -171,11 +175,15 @@ defmodule Kadabra.Connection do
 
     state = %{state | decoder_state: new_dec}
 
-    if flags == 0x5 do
-      send pid, {:end_stream, stream}
-      remove_stream(state, stream_id)
-    else
-      put_stream(stream_id, state, stream)
+    case flags do
+      0x5 ->
+        send pid, {:end_stream, stream}
+        remove_stream(state, stream_id)
+      0x1 ->
+        send pid, {:end_stream, stream}
+        remove_stream(state, stream_id)
+      _else ->
+        put_stream(stream_id, state, stream)
     end
   end
 
@@ -183,15 +191,15 @@ defmodule Kadabra.Connection do
                                            stream_id: stream_id,
                                            uri: uri,
                                            streams: streams,
+                                           active_stream_count: active_stream_count,
                                            max_concurrent_streams: max_streams,
                                            overflow: overflow,
                                            encoder_state: encoder} = state) do
 
-    stream_count = streams |> Map.keys |> Enum.count
-    if stream_count >= (max_streams - 1) do
-      overflow = overflow ++ [{:send, headers, payload}]
-      %{state | overflow: overflow}
-    else
+    IO.puts("[Adding] stream_count: #{active_stream_count}, max_streams: #{max_streams}")
+
+    if active_stream_count < max_streams do
+      IO.puts("Sending...")
       headers = add_headers(headers, uri, state)
       {:ok, {encoded, new_encoder}} = :hpack.encode(headers, encoder)
       headers_payload = :erlang.iolist_to_binary(encoded)
@@ -203,7 +211,12 @@ defmodule Kadabra.Connection do
         chunks = chunk(16_384, payload)
         send_chunks(socket, stream_id, chunks)
       end
-      %{state | encoder_state: new_encoder}
+      %{state | encoder_state: new_encoder, active_stream_count: active_stream_count + 1}
+      |> inc_stream_id()
+    else
+      IO.puts("Queueing...")
+      overflow = overflow ++ [{:send, headers, payload}]
+      %{state | overflow: overflow}
     end
   end
 
@@ -268,6 +281,7 @@ defmodule Kadabra.Connection do
         settings = parse_settings(frame[:payload])
         table_size = fetch_setting(settings, "SETTINGS_MAX_HEADER_LIST_SIZE")
         max_streams = fetch_setting(settings, "SETTINGS_MAX_CONCURRENT_STREAMS") || old_max
+        IO.puts("--- max_streams: #{max_streams}")
         new_decoder = :hpack.new_max_table_size(table_size, decoder)
 
         :ssl.send(socket, settings_ack)
@@ -302,11 +316,13 @@ defmodule Kadabra.Connection do
   end
 
   defp remove_stream(%{streams: streams} = state, id) do
+    IO.puts("[Removing] stream_count: #{state.active_stream_count}, max_streams: #{state.max_concurrent_streams}")
+
     id_string = Integer.to_string(id)
     state = %{state | streams: Map.delete(streams, id_string) }
-    stream_count = state.streams |> Map.keys |> Enum.count
+    state = %{state | active_stream_count: state.active_stream_count - 1}
 
-    if stream_count < state.max_concurrent_streams do
+    if state.active_stream_count < state.max_concurrent_streams do
       case state.overflow do
         [] -> state
         [{:send, headers, payload} | []] ->
@@ -379,7 +395,7 @@ defmodule Kadabra.Connection do
       @window_update ->
         GenServer.cast(self(), {:recv, :window_update, frame})
       _ ->
-        Logger.debug("Unknown frame: #{inspect(frame)}")
+        Logger.info("Unknown frame: #{inspect(frame)}")
     end
   end
 
