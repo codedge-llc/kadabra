@@ -100,7 +100,7 @@ defmodule Kadabra.Connection do
 
   def handle_cast({:send, :headers, headers, payload}, state) do
     new_state = do_send_headers(headers, payload, state)
-    {:noreply, state}
+    {:noreply, new_state}
   end
 
   def handle_cast({:send, :goaway}, state) do
@@ -145,17 +145,19 @@ defmodule Kadabra.Connection do
   end
 
   defp do_recv_data(%{stream_id: stream_id} = frame, %{client: pid} = state) do
+    payload = frame[:payload]
     stream = get_stream(stream_id, state)
     body = stream.body || ""
-    stream = %Stream{stream | body: body <> frame[:payload]}
+    stream = %Stream{stream | body: body <> payload}
 
-    unless frame[:payload] == nil do
-      window_update = Http2.build_frame(0x8, 0x0, 0x0, <<byte_size(frame[:payload])::32>>)
+    unless payload == nil || byte_size(payload) <= 0 do
+      window_update = Http2.build_frame(0x8, 0x0, 0x0, <<byte_size(payload)::32>>)
       :ssl.send(state.socket, window_update)
     end
 
     if frame[:flags] == 0x1 do
      send pid, {:end_stream, stream}
+     IO.puts("removing because of data")
      remove_stream(state, stream_id)
     else
       put_stream(stream_id, state, stream)
@@ -180,9 +182,11 @@ defmodule Kadabra.Connection do
     case flags do
       0x5 ->
         send pid, {:end_stream, stream}
+       IO.puts("removing because of headers")
         remove_stream(state, stream_id)
       0x1 ->
         send pid, {:end_stream, stream}
+       IO.puts("removing because of headers")
         remove_stream(state, stream_id)
       _else ->
         put_stream(stream_id, state, stream)
@@ -213,7 +217,10 @@ defmodule Kadabra.Connection do
         chunks = chunk(16_384, payload)
         send_chunks(socket, stream_id, chunks)
       end
-      %{state | encoder_state: new_encoder, active_stream_count: active_stream_count + 1}
+
+      state
+      |> Map.put(:encoder_state, new_encoder)
+      |> Map.put(:active_stream_count, active_stream_count + 1)
       |> inc_stream_id()
     else
       IO.puts("Queueing... stream_id: #{stream_id}")
@@ -302,9 +309,13 @@ defmodule Kadabra.Connection do
   defp do_recv_rst_stream(frame, %{client: pid} = state) do
     code = :binary.decode_unsigned(frame[:payload])
     error = Error.string(code)
-    stream = frame[:stream_id] |> get_stream(state) |> Map.put(:error, error)
-    send pid, {:end_stream, stream}
-    remove_stream(state, frame[:stream_id])
+    stream = frame[:stream_id] |> get_stream(state)
+    unless stream == nil do
+      stream = Map.put(stream, :error, error)
+      send pid, {:end_stream, stream}
+      IO.puts("removing because of rst_stream")
+      remove_stream(state, frame[:stream_id])
+    end
   end
 
   defp put_stream(id, state, stream) do
@@ -318,7 +329,7 @@ defmodule Kadabra.Connection do
   end
 
   defp remove_stream(%{streams: streams} = state, id) do
-    IO.puts("[Removing] stream_count: #{state.active_stream_count}, max_streams: #{state.max_concurrent_streams}")
+    IO.puts("[Removing] stream_id: #{id}, stream_count: #{state.active_stream_count}, max_streams: #{state.max_concurrent_streams}")
 
     id_string = Integer.to_string(id)
     state = %{state | streams: Map.delete(streams, id_string) }
