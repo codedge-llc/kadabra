@@ -382,15 +382,13 @@ defmodule Kadabra.Connection do
     case do_connect(uri, opts) do
       {:ok, socket} ->
         Logger.debug "Socket closed, reopened automatically"
-        state |> inspect |> Logger.info
         encoder = :hpack.new_context
         decoder = :hpack.new_context
         {:noreply, %{state | encoder_state: encoder, decoder_state: decoder, socket: socket, streams: %{}}}
       {:error, error} ->
-        Logger.error "Socket closed, reopening failed with #{error}"
-        state |> inspect |> Logger.info
+        Logger.error "Socket closed, reopening failed with #{inspect(error)}"
         send(pid, :closed)
-         {:stop, :normal, state}
+       {:stop, :normal, state}
     end
   end
 
