@@ -149,8 +149,10 @@ defmodule Kadabra.Connection do
     body = stream.body || ""
     stream = %Stream{stream | body: body <> frame[:payload]}
 
-    h = Http2.build_frame(@window_update, 0x0, 0, <<byte_size(frame[:payload])::32>>)
-    :ssl.send(state.socket, h)
+    unless frame[:payload] == nil do
+      window_update = Http2.build_frame(0x8, 0x0, 0x0, <<byte_size(frame[:payload])::32>>)
+      :ssl.send(state.socket, window_update)
+    end
 
     if frame[:flags] == 0x1 do
      send pid, {:end_stream, stream}
@@ -196,10 +198,10 @@ defmodule Kadabra.Connection do
                                            overflow: overflow,
                                            encoder_state: encoder} = state) do
 
-    IO.puts("[Adding] stream_count: #{active_stream_count}, max_streams: #{max_streams}")
+    # IO.puts("[Adding] stream_count: #{active_stream_count}, max_streams: #{max_streams}")
 
     if active_stream_count < max_streams do
-      IO.puts("Sending...")
+      # IO.puts("Sending...")
       headers = add_headers(headers, uri, state)
       {:ok, {encoded, new_encoder}} = :hpack.encode(headers, encoder)
       headers_payload = :erlang.iolist_to_binary(encoded)
@@ -214,7 +216,7 @@ defmodule Kadabra.Connection do
       %{state | encoder_state: new_encoder, active_stream_count: active_stream_count + 1}
       |> inc_stream_id()
     else
-      IO.puts("Queueing...")
+      # IO.puts("Queueing...")
       overflow = overflow ++ [{:send, headers, payload}]
       %{state | overflow: overflow}
     end
@@ -281,7 +283,7 @@ defmodule Kadabra.Connection do
         settings = parse_settings(frame[:payload])
         table_size = fetch_setting(settings, "SETTINGS_MAX_HEADER_LIST_SIZE")
         max_streams = fetch_setting(settings, "SETTINGS_MAX_CONCURRENT_STREAMS") || old_max
-        IO.puts("--- max_streams: #{max_streams}")
+        # IO.puts("--- max_streams: #{max_streams}")
         new_decoder = :hpack.new_max_table_size(table_size, decoder)
 
         :ssl.send(socket, settings_ack)
@@ -316,7 +318,7 @@ defmodule Kadabra.Connection do
   end
 
   defp remove_stream(%{streams: streams} = state, id) do
-    IO.puts("[Removing] stream_count: #{state.active_stream_count}, max_streams: #{state.max_concurrent_streams}")
+    # IO.puts("[Removing] stream_count: #{state.active_stream_count}, max_streams: #{state.max_concurrent_streams}")
 
     id_string = Integer.to_string(id)
     state = %{state | streams: Map.delete(streams, id_string) }

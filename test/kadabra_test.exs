@@ -21,7 +21,7 @@ defmodule KadabraTest do
     test "https://http2.golang.org/reqinfo a lot" do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
-      count = 500
+      count = 1000
 
       for x <- 1..count do
         Kadabra.get(pid, "/reqinfo")
