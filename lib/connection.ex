@@ -191,20 +191,17 @@ defmodule Kadabra.Connection do
 
     if payload do
       chunks = chunk(16_384, payload)
-      chunks |> inspect |> Logger.info
       send_chunks(socket, stream_id, chunks)
     end
     %{state | encoder_state: new_encoder}
   end
 
-  defp send_chunks(socket, _stream_id, []), do: :ok
+  defp send_chunks(_socket, _stream_id, []), do: :ok
   defp send_chunks(socket, stream_id, [chunk | []]) do
-    Logger.debug "Sending last chunk of size #{byte_size(chunk)}..."
     h_p = Http2.build_frame(@data, 0x1, stream_id, chunk)
     :ssl.send(socket, h_p)
   end
   defp send_chunks(socket, stream_id, [chunk | rest]) do
-    Logger.debug "Sending chunk of size #{byte_size(chunk)}..."
     h_p = Http2.build_frame(@data, 0x0, stream_id, chunk)
     :ssl.send(socket, h_p)
 
@@ -215,8 +212,8 @@ defmodule Kadabra.Connection do
     {chunk, rest} = :erlang.split_binary(bin, size)
     [chunk | chunk(size, rest)]
   end
-  defp chunk(size, <<>>), do: []
-  defp chunk(size, bin), do: [bin]
+  defp chunk(_size, <<>>), do: []
+  defp chunk(_size, bin), do: [bin]
 
   defp add_headers(headers, uri, state) do
     h = headers ++
@@ -255,7 +252,7 @@ defmodule Kadabra.Connection do
         state
       _ ->
         settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
-        settings = parse_settings(frame[:payload]) |> IO.inspect
+        settings = parse_settings(frame[:payload])
         table_size = fetch_setting(settings, "SETTINGS_MAX_HEADER_LIST_SIZE")
         new_decoder = :hpack.new_max_table_size(table_size, decoder)
 
