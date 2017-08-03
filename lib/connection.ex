@@ -190,7 +190,7 @@ defmodule Kadabra.Connection do
     :ssl.send(socket, h)
 
     if payload do
-      chunks = chunk(10_000, payload)
+      chunks = chunk(16_384, payload)
       chunks |> inspect |> Logger.info
       send_chunks(socket, stream_id, chunks)
     end
