@@ -268,7 +268,6 @@ defmodule Kadabra.Connection do
         settings = parse_settings(frame[:payload])
         table_size = fetch_setting(settings, "SETTINGS_MAX_HEADER_LIST_SIZE")
         max_streams = fetch_setting(settings, "SETTINGS_MAX_CONCURRENT_STREAMS") || old_max
-        IO.inspect(max_streams, label: "setting max streams")
         new_decoder = :hpack.new_max_table_size(table_size, decoder)
 
         :ssl.send(socket, settings_ack)
@@ -286,8 +285,9 @@ defmodule Kadabra.Connection do
 
   defp do_recv_rst_stream(frame, %{client: pid} = state) do
     code = :binary.decode_unsigned(frame[:payload])
-    _error = Error.string(code)
-    send pid, {:end_stream, get_stream(frame[:stream_id], state)}
+    error = Error.string(code)
+    stream = frame[:stream_id] |> get_stream(state) |> Map.put(:error, error)
+    send pid, {:end_stream, stream}
     remove_stream(state, frame[:stream_id])
   end
 
