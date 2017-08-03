@@ -95,7 +95,7 @@ defmodule Kadabra.Connection do
 
   def handle_cast({:send, :headers, headers}, state) do
     new_state = do_send_headers(headers, nil, state)
-    {:noreply, inc_stream_id(new_state)}
+    {:noreply, new_state}
   end
 
   def handle_cast({:send, :headers, headers, payload}, state) do
@@ -198,10 +198,10 @@ defmodule Kadabra.Connection do
                                            overflow: overflow,
                                            encoder_state: encoder} = state) do
 
-    # IO.puts("[Adding] stream_count: #{active_stream_count}, max_streams: #{max_streams}")
+    IO.puts("[Adding] stream_count: #{active_stream_count}, max_streams: #{max_streams}")
 
     if active_stream_count < max_streams do
-      # IO.puts("Sending...")
+      IO.puts("Sending... stream_id: #{stream_id}")
       headers = add_headers(headers, uri, state)
       {:ok, {encoded, new_encoder}} = :hpack.encode(headers, encoder)
       headers_payload = :erlang.iolist_to_binary(encoded)
@@ -216,7 +216,7 @@ defmodule Kadabra.Connection do
       %{state | encoder_state: new_encoder, active_stream_count: active_stream_count + 1}
       |> inc_stream_id()
     else
-      # IO.puts("Queueing...")
+      IO.puts("Queueing... stream_id: #{stream_id}")
       overflow = overflow ++ [{:send, headers, payload}]
       %{state | overflow: overflow}
     end
@@ -318,7 +318,7 @@ defmodule Kadabra.Connection do
   end
 
   defp remove_stream(%{streams: streams} = state, id) do
-    # IO.puts("[Removing] stream_count: #{state.active_stream_count}, max_streams: #{state.max_concurrent_streams}")
+    IO.puts("[Removing] stream_count: #{state.active_stream_count}, max_streams: #{state.max_concurrent_streams}")
 
     id_string = Integer.to_string(id)
     state = %{state | streams: Map.delete(streams, id_string) }
@@ -327,8 +327,6 @@ defmodule Kadabra.Connection do
     if state.active_stream_count < state.max_concurrent_streams do
       case state.overflow do
         [] -> state
-        [{:send, headers, payload} | []] ->
-          do_send_headers(headers, payload, state)
         [{:send, headers, payload} | rest] ->
           state = %{state | overflow: rest}
           do_send_headers(headers, payload, state)

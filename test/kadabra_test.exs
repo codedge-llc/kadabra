@@ -23,13 +23,14 @@ defmodule KadabraTest do
       {:ok, pid} = Kadabra.open(uri, :https)
       count = 1000
 
-      for x <- 1..count do
+      for _x <- 1..count do
         Kadabra.get(pid, "/reqinfo")
       end
 
-      for x <- 1..count do
+      streams = 1..(2*count) |> Enum.filter(& rem(&1, 2) == 1)
+      for x <- streams do
         assert_receive {:end_stream, %Stream{
-          id: x,
+          id: ^x,
           #headers: _headers,
           #body: _body,
           #status: 200
