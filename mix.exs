@@ -15,6 +15,13 @@ defmodule Kadabra.Mixfile do
       source_url: "https://github.com/codedge-llc/kadabra",
       docs: [main: "readme",
              extras: ["README.md"]],
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+        "coveralls": :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ],
       dialyzer: [plt_add_deps: true, plt_add_apps: [:ssl]]
     ]
   end
@@ -38,6 +45,7 @@ defmodule Kadabra.Mixfile do
       {:scribe, "~> 0.4", optional: true},
       {:ex_doc, "~> 0.14", only: :dev},
       {:dogma, "~> 0.1", only: :dev},
+      {:excoveralls, "~> 0.7", only: :test},
       {:dialyxir, "~> 0.5", only: [:dev], runtime: false}
     ]
   end

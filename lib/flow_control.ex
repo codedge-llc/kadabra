@@ -5,8 +5,6 @@ defmodule Kadabra.FlowControl do
 
   use GenServer
 
-  alias Kadabra.Connection
-
   def start_link do
     GenServer.start_link(__MODULE__, :ok)
   end

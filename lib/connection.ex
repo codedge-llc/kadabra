@@ -121,69 +121,12 @@ defmodule Kadabra.Connection do
     {:noreply, new_state}
   end
 
-  def handle_cast({:send, :goaway}, state) do
-    do_send_goaway(state)
-    {:noreply, increment_stream_id(state)}
+  def handle_cast({:recv, frame}, state) do
+    recv(frame, state)
   end
 
-  def handle_cast({:recv, %Frame.Headers{} = frame}, state) do
-    {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
-    case pid_for_stream(state.ref, frame.stream_id) do
-      nil -> nil
-      pid -> Stream.cast_recv(pid, frame)
-    end
-    {:noreply, %{state | decoder_state: new_dec}}
-  end
-
-  def handle_cast({:recv, %Frame.PushPromise{} = frame}, state) do
-    {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
-    case pid_for_stream(state.ref, frame.stream_id) do
-      nil -> nil
-      pid -> Stream.cast_recv(pid, frame)
-    end
-    {:noreply, %{state | decoder_state: new_dec}}
-  end
-
-  def handle_cast({:recv, %Frame.Continuation{} = frame}, state) do
-    {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
-    case pid_for_stream(state.ref, frame.stream_id) do
-      nil -> nil
-      pid -> Stream.cast_recv(pid, frame)
-    end
-    {:noreply, %{state | decoder_state: new_dec}}
-  end
-
-  def handle_cast({:recv, %Frame.RstStream{}}, state) do
-    Logger.error("recv unstarted stream rst")
-    {:noreply, state}
-  end
-
-  def handle_cast({:recv, %Frame.Goaway{} = frame}, state) do
-    do_recv_goaway(frame, state)
-    {:noreply, state}
-  end
-
-  def handle_cast({:recv, %Frame.Settings{} = frame}, state) do
-    state = do_recv_settings(frame, state)
-    {:noreply, state}
-  end
-
-  def handle_cast({:recv, %Frame.Ping{ack: ack}}, %{client: pid} = state) do
-    resp = if ack, do: :pong, else: :ping
-    send(pid, {resp, self()})
-    {:noreply, state}
-  end
-
-  def handle_cast({:recv, %Frame.WindowUpdate{stream_id: id, window_size_increment: inc}}, state) do
-    #IO.puts("--> Window Update, Stream ID: #{id}, Increment: #{inc} bytes")
-    state = %{state | bytes_remaining: state.bytes_remaining + inc}
-    {:noreply, state}
-  end
-
-  def handle_cast({:send, :ping}, %{socket: socket} = state) do
-    bin = Ping.new |> Encodable.to_bin
-    :ssl.send(socket, bin)
-    {:noreply, state}
+  def handle_cast({:send, type}, state) do
+    sendf(type, state)
   end
 
   def handle_cast(msg, state) do
@@ -191,18 +134,102 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
+  # sendf
+
+  def sendf(:ping, %{socket: socket} = state) do
+    bin = Ping.new |> Encodable.to_bin
+    :ssl.send(socket, bin)
+    {:noreply, state}
+  end
+
+  def sendf(:goaway, %{socket: socket, stream_id: stream_id} = state) do
+    bin = stream_id |> Goaway.new |> Encodable.to_bin
+    :ssl.send(socket, bin)
+    {:noreply, increment_stream_id(state)}
+  end
+
+  # recv
+
+  def recv(%Frame.Data{} = frame, state) do
+    case pid_for_stream(state.ref, frame.stream_id) do
+      nil -> nil
+      pid -> Stream.cast_recv(pid, frame)
+    end
+    {:noreply, state}
+  end
+
+  def recv(%Frame.Headers{} = frame, state) do
+    case pid_for_stream(state.ref, frame.stream_id) do
+      nil -> nil
+      pid -> Stream.cast_recv(pid, frame)
+    end
+    {:noreply, state}
+  end
+
+  def recv(%Frame.RstStream{}, state) do
+    Logger.error("recv unstarted stream rst")
+    {:noreply, state}
+  end
+
+  def recv(%Frame.Ping{ack: ack}, %{client: pid} = state) do
+    resp = if ack, do: :pong, else: :ping
+    send(pid, {resp, self()})
+    {:noreply, state}
+  end
+
+  def recv(%Frame.PushPromise{} = frame, state) do
+    {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
+    case pid_for_stream(state.ref, frame.stream_id) do
+      nil -> nil
+      pid -> Stream.cast_recv(pid, frame)
+    end
+    {:noreply, %{state | decoder_state: new_dec}}
+  end
+
+  def recv(%Frame.Settings{ack: true}, state) do
+    state = %{state | settings_acked: true}
+    {:noreply, state}
+  end
+  def recv(%Frame.Settings{ack: false, settings: settings}, %{socket: socket,
+                                                              settings: pid,
+                                                              flow_control: flow,
+                                                              decoder_state: decoder} = state) do
+
+    ConnectionSettings.update(pid, settings)
+    FlowControl.set_max_stream_count(flow, settings.max_concurrent_streams)
+    Hpack.update_max_table_size(decoder, settings.max_header_list_size)
+
+    settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
+    :ssl.send(socket, settings_ack)
+
+    {:noreply, state}
+  end
+
+  def recv(%Goaway{last_stream_id: id,
+                   error_code: error,
+                   debug_data: debug}, %{client: pid} = state) do
+    log_goaway(error, id, debug)
+    send pid, {:closed, self()}
+    {:noreply, state}
+  end
+
+  def recv(%Frame.WindowUpdate{stream_id: id, window_size_increment: inc}, state) do
+    #IO.puts("--> Window Update, Stream ID: #{id}, Increment: #{inc} bytes")
+    state = %{state | bytes_remaining: state.bytes_remaining + inc}
+    {:noreply, state}
+  end
+
+  def recv(%Frame.Continuation{} = frame, state) do
+    {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
+    case pid_for_stream(state.ref, frame.stream_id) do
+      nil -> nil
+      pid -> Stream.cast_recv(pid, frame)
+    end
+    {:noreply, %{state | decoder_state: new_dec}}
+  end
+
   defp increment_stream_id(%{stream_id: stream_id} = state) do
     %{state | stream_id: stream_id + 2}
-  end
-
-  defp increment_active_stream_count(state) do
-    # IO.puts("[inc] stream_count: #{state.active_stream_count + 1}")
-    %{state | active_stream_count: state.active_stream_count + 1}
-  end
-
-  defp decrement_active_stream_count(state) do
-    # IO.puts("[dec] stream_count: #{state.active_stream_count - 1}")
-    %{state | active_stream_count: state.active_stream_count - 1}
   end
 
   defp do_recv_data(%{stream_id: stream_id} = frame, %{client: pid} = state) do
@@ -235,65 +262,42 @@ defmodule Kadabra.Connection do
 
     {:ok, settings} = Kadabra.ConnectionSettings.fetch(settings_pid)
 
+    # TODO: Refactor this somewhere else
     if FlowControl.can_send?(flow) do
-      #IO.puts("#{active_stream_count} / #{settings.max_concurrent_streams}")
-      {:ok, pid} =
-        state
-        |> Stream.new(stream_id)
-        |> Stream.start_link
-
-      Registry.register(Registry.Kadabra, {ref, stream_id}, pid)
+      stream = Stream.new(state)
+      {:ok, pid} = Stream.start_link(stream)
+      Registry.register(Registry.Kadabra, {state.ref, stream.id}, pid)
 
       :gen_statem.cast(pid, {:send_headers, headers, payload})
+
+      headers = Stream.add_headers(headers, stream)
+
+      {:ok, encoded} = Hpack.encode(stream.encoder, headers)
+      headers_payload = :erlang.iolist_to_binary(encoded)
+
+      h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
+      :ssl.send(stream.socket, h)
+      #IO.puts("Sending, Stream ID: #{stream.id}")
+
+      if payload do
+        {:ok, settings} = Kadabra.ConnectionSettings.fetch(stream.settings)
+        chunks = Stream.chunk(settings.max_frame_size, payload)
+        Stream.send_chunks(stream.socket, stream.id, chunks)
+      end
 
       FlowControl.increment_active_stream_count(flow)
 
       state
       |> increment_stream_id()
     else
-      #IO.puts("#{active_stream_count} / #{settings.max_concurrent_streams}")
-      #IO.puts("queueing...")
       overflow = overflow ++ [{:send, headers, payload}]
       %{state | overflow: overflow}
     end
   end
 
-  defp do_send_goaway(%{socket: socket, stream_id: stream_id}) do
-    bin = stream_id |> Goaway.new |> Encodable.to_bin
-    :ssl.send(socket, bin)
-  end
-
-  defp do_recv_goaway(%Goaway{last_stream_id: id,
-                              error_code: error,
-                              debug_data: debug}, %{client: pid} = state) do
-    log_goaway(error, id, debug)
-    send pid, {:closed, self()}
-    {:noreply, state}
-  end
-
   def log_goaway(code, id, bin) do
     error = Error.string(code)
     Logger.error "Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{bin}"
-  end
-
-  defp do_recv_settings(%Frame.Settings{ack: true}, state) do
-    state = %{state | settings_acked: true}
-    process_queue(state)
-  end
-  defp do_recv_settings(%Frame.Settings{ack: false, settings: settings},
-                        %{socket: socket,
-                          settings: pid,
-                          flow_control: flow,
-                          decoder_state: decoder} = state) do
-
-    ConnectionSettings.update(pid, settings)
-    FlowControl.set_max_stream_count(flow, settings.max_concurrent_streams)
-    Hpack.update_max_table_size(decoder, settings.max_header_list_size)
-
-    settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
-    :ssl.send(socket, settings_ack)
-
-    state
   end
 
   defp process_queue(%{overflow: []} = state), do: state
@@ -329,6 +333,11 @@ defmodule Kadabra.Connection do
 
   def handle_info({:push_promise, stream}, %{client: pid} = state) do
     send(pid, {:push_promise, stream})
+    {:noreply, state}
+  end
+
+  def handle_info({:registered, stream_id, pid}, state) do
+    Registry.register(Registry.Kadabra, {state.ref, stream_id}, pid)
     {:noreply, state}
   end
 
@@ -376,12 +385,16 @@ defmodule Kadabra.Connection do
     case frame.type do
       @data ->
         data = Data.new(frame)
-        #IO.puts("<-- Window Update, #{byte_size(data.data)} bytes")
-        window_update = Http2.build_frame(0x8, 0x0, 0x0, <<byte_size(data.data)::32>>)
-        :ssl.send(state.socket, window_update)
+        if byte_size(data.data) > 0 do
+          #IO.puts("<-- Window Update, #{byte_size(data.data)} bytes")
+          window_update = Http2.build_frame(0x8, 0x0, 0x0, <<byte_size(data.data)::32>>)
+          :ssl.send(state.socket, window_update)
+        end
         Stream.cast_recv(pid, data)
+        #GenServer.cast(self(), {:recv, data})
       @headers ->
         Stream.cast_recv(pid, Headers.new(frame))
+        #GenServer.cast(self(), {:recv, Headers.new(frame)})
       @rst_stream ->
         rst = RstStream.new(frame)
         Stream.cast_recv(pid, rst)
@@ -411,8 +424,8 @@ defmodule Kadabra.Connection do
 
   def handle_settings(frame, state) do
     case Frame.Settings.new(frame) do
-      {:ok, s} ->
-        do_recv_settings(s, state)
+      {:ok, settings_frame} ->
+        recv(settings_frame, state)
       _else ->
         # TODO: handle bad settings
         :error

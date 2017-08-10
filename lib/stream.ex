@@ -2,10 +2,10 @@ defmodule Kadabra.Stream do
   @moduledoc """
   Struct returned from open connections.
   """
-  defstruct [:id, :uri, :connection, :encoder, :decoder, :settings,
-             :socket, headers: [], body: "", scheme: :https]
+  defstruct [:id, :stream_id, :uri, :connection, :encoder, :decoder, :settings,
+             :socket, :flow_control, headers: [], body: "", scheme: :https]
 
-  alias Kadabra.{Connection, Encodable, Hpack, Http2, Stream}
+  alias Kadabra.{Connection, Encodable, FlowControl, Hpack, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream}
 
   @data 0x0
@@ -19,16 +19,22 @@ defmodule Kadabra.Stream do
   # @reserved_local :reserved_local
   @reserved_remote :reserved_remote
 
-  def new(%Connection{} = conn, stream_id) do
+  def new(%Connection{} = conn) do
     %__MODULE__{
-      id: stream_id,
+      id: conn.stream_id,
       uri: conn.uri,
       connection: self(),
       socket: conn.socket,
       settings: conn.settings,
       encoder: conn.encoder_state,
-      decoder: conn.decoder_state
+      decoder: conn.decoder_state,
+      flow_control: conn.flow_control
     }
+  end
+  def new(%Connection{} = conn, stream_id) do
+    conn
+    |> new()
+    |> Map.put(:id, stream_id)
   end
 
   def start_link(stream) do
@@ -46,11 +52,11 @@ defmodule Kadabra.Stream do
   def recv(%Data{end_stream: end_stream?, data: data}, _state, stream) do
     stream = %Stream{stream | body: stream.body <> data}
 
-    #unless data == nil || byte_size(data) <= 0 do
-      # IO.inspect(byte_size(data), label: "window update bytes")
-      # window_update = Http2.build_frame(0x8, 0x0, 0x0, <<byte_size(data)::32>>)
-      # :ssl.send(stream.socket, window_update)
-      #end
+    # unless data == nil || byte_size(data) <= 0 do
+    #   IO.inspect(byte_size(data), label: "window update bytes")
+    #   window_update = Http2.build_frame(0x8, 0x0, 0x0, <<byte_size(data)::32>>)
+    #   :ssl.send(stream.socket, window_update)
+    # end
 
     cond do
       end_stream? -> {:next_state, @half_closed_remote, stream}
@@ -124,43 +130,47 @@ defmodule Kadabra.Stream do
   end
 
   def handle_event(:cast, {:send_headers, headers, payload}, _state, stream) do
-    #IO.puts("Sending, Stream ID: #{stream.id}")
-    headers = add_headers(headers, stream)
-    {:ok, encoded} = Hpack.encode(stream.encoder, headers)
-    headers_payload = :erlang.iolist_to_binary(encoded)
-    h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
+    # headers = add_headers(headers, stream)
 
-    :ssl.send(stream.socket, h)
+    # {:ok, encoded} = Hpack.encode(stream.encoder, headers)
+    # headers_payload = :erlang.iolist_to_binary(encoded)
 
-    if payload do
-      {:ok, settings} = Kadabra.ConnectionSettings.fetch(stream.settings)
-      chunks = chunk(settings.max_frame_size, payload)
-      send_chunks(stream.socket, stream.id, chunks)
-    end
+    # #{:ok, stream} = FlowControl.checkout_stream_id(stream.flow_control, stream, headers_payload)
+    # h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
+    # :ssl.send(stream.socket, h)
+    # IO.puts("Sending, Stream ID: #{stream.id}")
+
+    # #send(stream.connection, {:registered, stream.id, self()})
+
+    # if payload do
+    #   {:ok, settings} = Kadabra.ConnectionSettings.fetch(stream.settings)
+    #   chunks = chunk(settings.max_frame_size, payload)
+    #   send_chunks(stream.socket, stream.id, chunks)
+    # end
 
     {:next_state, @open, stream}
   end
 
-  defp send_chunks(_socket, _stream_id, []), do: :ok
-  defp send_chunks(socket, stream_id, [chunk | []]) do
+  def send_chunks(_socket, _stream_id, []), do: :ok
+  def send_chunks(socket, stream_id, [chunk | []]) do
     h_p = Http2.build_frame(@data, 0x1, stream_id, chunk)
     :ssl.send(socket, h_p)
   end
-  defp send_chunks(socket, stream_id, [chunk | rest]) do
+  def send_chunks(socket, stream_id, [chunk | rest]) do
     h_p = Http2.build_frame(@data, 0x0, stream_id, chunk)
     :ssl.send(socket, h_p)
 
     send_chunks(socket, stream_id, rest)
   end
 
-  defp chunk(size, bin) when byte_size(bin) >= size do
+  def chunk(size, bin) when byte_size(bin) >= size do
     {chunk, rest} = :erlang.split_binary(bin, size)
     [chunk | chunk(size, rest)]
   end
-  defp chunk(_size, <<>>), do: []
-  defp chunk(_size, bin), do: [bin]
+  def chunk(_size, <<>>), do: []
+  def chunk(_size, bin), do: [bin]
 
-  defp add_headers(headers, stream) do
+  def add_headers(headers, stream) do
     h = headers ++
     [
       {":scheme", Atom.to_string(stream.scheme)},
