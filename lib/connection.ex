@@ -3,7 +3,8 @@ defmodule Kadabra.Connection do
   Worker for maintaining an open HTTP/2 connection.
   """
 
-  defstruct buffer: "",
+  defstruct ref: nil,
+            buffer: "",
             client: nil,
             uri: nil,
             scheme: :https,
@@ -59,6 +60,7 @@ defmodule Kadabra.Connection do
    {:ok, settings} = ConnectionSettings.start_link
    {:ok, flow} = FlowControl.start_link
    %__MODULE__{
+      ref: :erlang.make_ref,
       client: pid,
       uri: uri,
       scheme: opts[:scheme] || :https,
@@ -126,7 +128,7 @@ defmodule Kadabra.Connection do
 
   def handle_cast({:recv, %Frame.Headers{} = frame}, state) do
     {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
-    case pid_for_stream(state.uri, frame.stream_id) do
+    case pid_for_stream(state.ref, frame.stream_id) do
       nil -> nil
       pid -> Stream.cast_recv(pid, frame)
     end
@@ -135,7 +137,7 @@ defmodule Kadabra.Connection do
 
   def handle_cast({:recv, %Frame.PushPromise{} = frame}, state) do
     {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
-    case pid_for_stream(state.uri, frame.stream_id) do
+    case pid_for_stream(state.ref, frame.stream_id) do
       nil -> nil
       pid -> Stream.cast_recv(pid, frame)
     end
@@ -144,7 +146,7 @@ defmodule Kadabra.Connection do
 
   def handle_cast({:recv, %Frame.Continuation{} = frame}, state) do
     {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
-    case pid_for_stream(state.uri, frame.stream_id) do
+    case pid_for_stream(state.ref, frame.stream_id) do
       nil -> nil
       pid -> Stream.cast_recv(pid, frame)
     end
@@ -223,6 +225,7 @@ defmodule Kadabra.Connection do
   end
 
   defp do_send_headers(headers, payload, %{stream_id: stream_id,
+                                           ref: ref,
                                            uri: uri,
                                            active_stream_count: active_stream_count,
                                            overflow: overflow,
@@ -239,7 +242,7 @@ defmodule Kadabra.Connection do
         |> Stream.new(stream_id)
         |> Stream.start_link
 
-      Registry.register(Registry.Kadabra, {uri, stream_id}, pid)
+      Registry.register(Registry.Kadabra, {ref, stream_id}, pid)
 
       :gen_statem.cast(pid, {:send_headers, headers, payload})
 
@@ -368,7 +371,7 @@ defmodule Kadabra.Connection do
     Logger.info "Got binary: #{inspect(frame)}"
   end
   def handle_response(frame, state) do
-    pid = pid_for_stream(state.uri, frame.stream_id) || self()
+    pid = pid_for_stream(state.ref, frame.stream_id) || self()
 
     case frame.type do
       @data ->
@@ -399,8 +402,8 @@ defmodule Kadabra.Connection do
     end
   end
 
-  def pid_for_stream(uri, stream_id) do
-    case Registry.lookup(Registry.Kadabra, {uri, stream_id}) do
+  def pid_for_stream(ref, stream_id) do
+    case Registry.lookup(Registry.Kadabra, {ref, stream_id}) do
       [{_self, pid}] -> pid
       [] -> nil
     end
