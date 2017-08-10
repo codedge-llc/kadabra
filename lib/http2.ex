@@ -20,6 +20,7 @@ defmodule Kadabra.Http2 do
       # {"SETTINGS_MAX_CONCURRENT_STREAMS", Integer.to_string(500)},
       # {"SETTINGS_MAX_FRAME_SIZE", Integer.to_string(16384)},
       # {"SETTINGS_MAX_HEADER_LIST_SIZE", Integer.to_string(8000)}
+      # {"SETTINGS_INITIAL_WINDOW_SIZE", Integer.to_string(1_048_576)}
     ]
     encoded = for {key, value} <- headers, do: encode_header(key, value)
     headers_payload = Enum.reduce(encoded, <<>>, fn(x, acc) -> acc <> x end)

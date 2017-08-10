@@ -1,10 +1,19 @@
 defmodule Kadabra.Connection.Settings do
   defstruct header_table_size: 4096,
             enable_push: true,
-            max_concurrent_streams: nil,
+            max_concurrent_streams: :infinite,
             initial_window_size: 65_535,
             max_frame_size: 16_384,
             max_header_list_size: nil
+
+  @type t :: %__MODULE__{
+    header_table_size: non_neg_integer,
+    enable_push: boolean,
+    max_concurrent_streams: non_neg_integer | :infinite,
+    initial_window_size: non_neg_integer,
+    max_frame_size: non_neg_integer,
+    max_header_list_size: non_neg_integer
+  }
 
   alias Kadabra.Error
 
@@ -52,4 +61,15 @@ defmodule Kadabra.Connection.Settings do
   end
 
   def put(settings, _else, _value), do: {:ok, settings}
+
+  def merge(old_settings, new_settings) do
+    Map.merge(old_settings, new_settings, fn(k, v1, v2) ->
+      cond do
+        k == :__struct__ -> v1
+        v1 == nil -> v2
+        v2 == nil -> v1
+        true -> v2
+      end
+    end)
+  end
 end

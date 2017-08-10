@@ -2,7 +2,7 @@ defmodule Kadabra.Stream do
   @moduledoc """
   Struct returned from open connections.
   """
-  defstruct [:id, :uri, :connection, :encoder, :decoder,
+  defstruct [:id, :uri, :connection, :encoder, :decoder, :settings,
              :socket, headers: [], body: "", scheme: :https]
 
   alias Kadabra.{Connection, Encodable, Hpack, Http2, Stream}
@@ -25,6 +25,7 @@ defmodule Kadabra.Stream do
       uri: conn.uri,
       connection: self(),
       socket: conn.socket,
+      settings: conn.settings,
       encoder: conn.encoder_state,
       decoder: conn.decoder_state
     }
@@ -42,6 +43,8 @@ defmodule Kadabra.Stream do
     :gen_statem.cast(pid, {:send, frame})
   end
 
+  # Enter Events
+
   def handle_event(:enter, _old, @half_closed_remote, stream) do
     bin = stream.id |> RstStream.new |> Encodable.to_bin
     :ssl.send(stream.socket, bin)
@@ -51,7 +54,7 @@ defmodule Kadabra.Stream do
   end
   def handle_event(:enter, _old, @closed, stream) do
     send(stream.connection, {:finished, Stream.Response.new(stream)})
-    {:keep_state, stream}
+    {:stop, :normal}
   end
   def handle_event(:enter, _old, _new, stream), do: {:keep_state, stream}
 
@@ -97,6 +100,13 @@ defmodule Kadabra.Stream do
   def handle_event(:cast, {:recv, %Data{end_stream: end_stream?,
                                         data: data}}, _state, stream) do
     stream = %Stream{stream | body: stream.body <> data}
+
+    #unless data == nil || byte_size(data) <= 0 do
+      # IO.inspect(byte_size(data), label: "window update bytes")
+      # window_update = Http2.build_frame(0x8, 0x0, 0x0, <<byte_size(data)::32>>)
+      # :ssl.send(stream.socket, window_update)
+      #end
+
     cond do
       end_stream? -> {:next_state, @half_closed_remote, stream}
       true -> {:keep_state, stream}
@@ -104,23 +114,41 @@ defmodule Kadabra.Stream do
   end
 
   def handle_event(:cast, {:send_headers, headers, payload}, _state, stream) do
+    #IO.puts("Sending, Stream ID: #{stream.id}")
     headers = add_headers(headers, stream)
-    #{:ok, {encoded, new_encoder}} = :hpack.encode(headers, stream.encoder)
     {:ok, encoded} = Hpack.encode(stream.encoder, headers)
     headers_payload = :erlang.iolist_to_binary(encoded)
     h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
 
-    #stream = %{stream | encoder: new_encoder}
-
     :ssl.send(stream.socket, h)
 
     if payload do
-      h_p = Http2.build_frame(@data, 0x1, stream.id, payload)
-      :ssl.send(stream.socket, h_p)
+      {:ok, settings} = Kadabra.ConnectionSettings.fetch(stream.settings)
+      chunks = chunk(settings.max_frame_size, payload)
+      send_chunks(stream.socket, stream.id, chunks)
     end
 
     {:next_state, @open, stream}
   end
+
+  defp send_chunks(_socket, _stream_id, []), do: :ok
+  defp send_chunks(socket, stream_id, [chunk | []]) do
+    h_p = Http2.build_frame(@data, 0x1, stream_id, chunk)
+    :ssl.send(socket, h_p)
+  end
+  defp send_chunks(socket, stream_id, [chunk | rest]) do
+    h_p = Http2.build_frame(@data, 0x0, stream_id, chunk)
+    :ssl.send(socket, h_p)
+
+    send_chunks(socket, stream_id, rest)
+  end
+
+  defp chunk(size, bin) when byte_size(bin) >= size do
+    {chunk, rest} = :erlang.split_binary(bin, size)
+    [chunk | chunk(size, rest)]
+  end
+  defp chunk(_size, <<>>), do: []
+  defp chunk(_size, bin), do: [bin]
 
   defp add_headers(headers, stream) do
     h = headers ++

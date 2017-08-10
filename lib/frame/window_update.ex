@@ -9,9 +9,9 @@ defmodule Kadabra.Frame.WindowUpdate do
   }
 
   @spec new(Frame.t) :: t
-  def new(%Frame{payload: p, stream_id: stream_id}) do
+  def new(%Frame{payload: <<inc::32>>, stream_id: stream_id}) do
     %__MODULE__{
-      window_size_increment: p,
+      window_size_increment: inc,
       stream_id: stream_id
     }
   end

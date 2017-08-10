@@ -35,7 +35,7 @@ defmodule Kadabra.Mixfile do
   defp deps do
     [
       {:hpack, "~> 0.2.3", hex: :hpack_erl},
-      {:scribe, "~> 0.4"},
+      {:scribe, "~> 0.4", optional: true},
       {:ex_doc, "~> 0.14", only: :dev},
       {:dogma, "~> 0.1", only: :dev},
       {:dialyxir, "~> 0.5", only: [:dev], runtime: false}

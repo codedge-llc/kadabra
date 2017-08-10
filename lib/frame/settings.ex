@@ -30,3 +30,13 @@ defmodule Kadabra.Frame.Settings do
     end
   end
 end
+
+defimpl Kadabra.Encodable, for: Kadabra.Frame.Settings do
+  alias Kadabra.Http2
+  alias Kadabra.Frame.Flags
+
+  def to_bin(frame) do
+    ack = if frame.ack, do: Flags.ack, else: 0x0
+    Http2.build_frame(0x4, 0x0, 0x0, <<>>)
+  end
+end
