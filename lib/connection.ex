@@ -131,10 +131,6 @@ defmodule Kadabra.Connection do
     ]
   end
 
-  def handle_call(:get_info, _from, state) do
-    {:reply, {:ok, state}, state}
-  end
-
   def handle_cast({:send, :headers, headers}, state) do
     new_state = do_send_headers(headers, nil, state)
     {:noreply, new_state}
@@ -188,15 +184,6 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  def recv(%Frame.PushPromise{} = frame, state) do
-    {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
-    case pid_for_stream(state.ref, frame.stream_id) do
-      nil -> nil
-      pid -> Stream.cast_recv(pid, frame)
-    end
-    {:noreply, %{state | decoder_state: new_dec}}
-  end
-
   def recv(%Frame.Settings{ack: true}, state) do
     # Do nothing on ACK. Might change in the future.
     {:noreply, state}
@@ -227,15 +214,6 @@ defmodule Kadabra.Connection do
     # IO.puts("--> Window Update, Stream ID: #{id}, Increment: #{inc} bytes")
     FlowControl.add_bytes(state.flow_control, inc)
     {:noreply, state}
-  end
-
-  def recv(%Frame.Continuation{} = frame, state) do
-    {:ok, frame, new_dec} = Frame.Headers.decode(frame, state.decoder_state)
-    case pid_for_stream(state.ref, frame.stream_id) do
-      nil -> nil
-      pid -> Stream.cast_recv(pid, frame)
-    end
-    {:noreply, %{state | decoder_state: new_dec}}
   end
 
   def recv(_else, state), do: {:noreply, state}

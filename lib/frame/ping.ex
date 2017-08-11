@@ -25,13 +25,6 @@ defmodule Kadabra.Frame.Ping do
     }
   end
 
-  def new(opts) do
-    %__MODULE__{
-      data: opts[:data],
-      ack: opts[:ack]
-    }
-  end
-
   def ack_flag(%{ack: true}), do: 0x1
   def ack_flag(%{ack: false}), do: 0x0
 end

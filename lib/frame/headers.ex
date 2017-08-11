@@ -25,6 +25,24 @@ defmodule Kadabra.Frame.Headers do
 
   alias Kadabra.Frame.Flags
 
+  @doc ~S"""
+  Initializes a new `Frame.Headers` from given `Frame`.
+
+  ## Examples
+
+      iex> frame = %Kadabra.Frame{stream_id: 1, flags: 0x5, payload: <<136>>}
+      iex> Kadabra.Frame.Headers.new(frame)
+      %Kadabra.Frame.Headers{stream_id: 1, end_stream: true, end_headers: true,
+      priority: false, header_block_fragment: <<136>>, weight: nil,
+      exclusive: nil, stream_dependency: nil}
+
+      iex> frame = %Kadabra.Frame{stream_id: 3, flags: 0x25,
+      ...> payload: <<1::1, 1::31, 2::8, 136::8>>}
+      iex> Kadabra.Frame.Headers.new(frame)
+      %Kadabra.Frame.Headers{stream_id: 3, end_stream: true,
+      end_headers: true, priority: true, header_block_fragment: <<136>>,
+      weight: 3, exclusive: true, stream_dependency: 1}
+  """
   def new(%{stream_id: stream_id, flags: flags, payload: p}) do
     frame =
       %__MODULE__{
@@ -39,23 +57,11 @@ defmodule Kadabra.Frame.Headers do
       %{frame |
         stream_dependency: stream_dep,
         exclusive: (e == 1),
-        weight: weight,
+        weight: weight + 1,
         header_block_fragment: headers
       }
     else
       %{frame | header_block_fragment: p}
     end
-  end
-
-  def encode(frame, context) do
-    {bin, new_context} = :hpack.encode(frame.headers, context)
-    frame = %{frame | header_block_fragment: bin}
-    {:ok, frame, new_context}
-  end
-
-  def decode(%{header_block_fragment: h} = frame, context) do
-    {:ok, {headers, new_context}} = :hpack.decode(h, context)
-    frame = %{frame | headers: headers}
-    {:ok, frame, new_context}
   end
 end
