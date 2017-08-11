@@ -1,7 +1,6 @@
 defmodule Kadabra.Stream do
-  @moduledoc """
-  Struct returned from open connections.
-  """
+  @moduledoc false
+
   defstruct [:id, :uri, :connection, :encoder, :decoder, :settings,
              :socket, :flow_control, headers: [], body: "", scheme: :https]
 

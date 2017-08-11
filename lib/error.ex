@@ -1,7 +1,5 @@
 defmodule Kadabra.Error do
-  @moduledoc """
-  Handles error code conversions.
-  """
+  @moduledoc false
 
   @doc ~S"""
   32-bit error code of type `NO_ERROR`
@@ -11,7 +9,7 @@ defmodule Kadabra.Error do
   a connection.
 
   ## Examples
-    
+
       iex> Kadabra.Error.no_error
       <<0, 0, 0, 0>>
   """
@@ -25,7 +23,7 @@ defmodule Kadabra.Error do
   when a more specific error code is not available.
 
   ## Examples
-    
+
       iex> Kadabra.Error.protocol_error
       <<0, 0, 0, 1>>
   """
@@ -38,7 +36,7 @@ defmodule Kadabra.Error do
   The endpoint detected that its peer violated the flow-control protocol.
 
   ## Examples
-    
+
       iex> Kadabra.Error.flow_control_error
       <<0, 0, 0, 3>>
   """
@@ -49,7 +47,7 @@ defmodule Kadabra.Error do
   32-bit error code of type `FRAME_SIZE_ERROR`
 
   ## Examples
-    
+
       iex> Kadabra.Error.frame_size_error
       <<0, 0, 0, 6>>
   """

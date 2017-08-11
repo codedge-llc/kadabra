@@ -4,6 +4,16 @@ defmodule Kadabra do
   """
   alias Kadabra.{Connection}
 
+  @doc ~S"""
+  Opens a new connection.
+
+  ## Examples
+
+      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> is_pid(pid)
+      true
+  """
+  @spec open(charlist, :https, Keyword.t) :: {:ok, pid} | {:error, term}
   def open(uri, scheme, opts \\ []) do
     port = opts[:port] || 443
     reconnect = fetch_reconnect_option(opts)
@@ -28,10 +38,34 @@ defmodule Kadabra do
     end
   end
 
+  @doc ~S"""
+  Closes an existing connection.
+
+  ## Examples
+
+      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> Kadabra.close(pid)
+      :ok
+  """
+  @spec close(pid) :: :ok
   def close(pid), do: GenServer.cast(pid, {:send, :goaway})
 
+
+  @doc ~S"""
+  Pings an existing connection.
+
+  ## Examples
+
+      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> Kadabra.ping(pid)
+      iex> receive do
+      ...>   {:pong, ^pid} -> "got pong!"
+      ...> end
+      "got pong!"
+  """
   def ping(pid), do: GenServer.cast(pid, {:send, :ping})
 
+  @doc false
   def info(pid, _opts \\ []) do
     case GenServer.call(pid, :get_info) do
       {:ok, info} ->
@@ -62,14 +96,67 @@ defmodule Kadabra do
     end
   end
 
+  @doc ~S"""
+  Makes a request with given headers.
+
+  ## Examples
+
+      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> path = "/reqinfo" # Route echoes PUT body in uppercase
+      iex> headers = [
+      ...>   {":method", "GET"},
+      ...>   {":path", path},
+      ...> ]
+      iex> Kadabra.request(pid, headers)
+      iex> response = receive do
+      ...>   {:end_stream, %Kadabra.Stream.Response{} = response} -> response
+      ...> after 5_000 -> :timed_out
+      ...> end
+      iex> {response.id, response.status}
+      {1, 200}
+  """
   def request(pid, headers) do
     GenServer.cast(pid, {:send, :headers, headers})
   end
 
-  def request(pid, headers, payload) do
-    GenServer.cast(pid, {:send, :headers, headers, payload})
+  @doc ~S"""
+  Makes a request with given headers and body.
+
+  ## Examples
+
+      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> path = "/ECHO" # Route echoes PUT body in uppercase
+      iex> body = "sample echo request"
+      iex> headers = [
+      ...>   {":method", "PUT"},
+      ...>   {":path", path},
+      ...> ]
+      iex> Kadabra.request(pid, headers, body)
+      iex> response = receive do
+      ...>   {:end_stream, %Kadabra.Stream.Response{} = response} -> response
+      ...> after 5_000 -> :timed_out
+      ...> end
+      iex> {response.id, response.status, response.body}
+      {1, 200, "SAMPLE ECHO REQUEST"}
+  """
+  def request(pid, headers, body) do
+    GenServer.cast(pid, {:send, :headers, headers, body})
   end
 
+  @doc ~S"""
+  Makes a GET request.
+
+  ## Examples
+
+      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> Kadabra.get(pid, "/reqinfo")
+      :ok
+      iex> response = receive do
+      ...>   {:end_stream, response} -> response
+      ...> end
+      iex> {response.id, response.status}
+      {1, 200}
+  """
   def get(pid, path) do
     headers = [
       {":method", "GET"},
@@ -78,6 +165,9 @@ defmodule Kadabra do
     request(pid, headers)
   end
 
+  @doc ~S"""
+  Makes a POST request.
+  """
   def post(pid, path, payload) do
     headers = [
       {":method", "POST"},
@@ -87,7 +177,7 @@ defmodule Kadabra do
   end
 
   @doc ~S"""
-  Makes HTTP/2 PUT request.
+  Makes a PUT request.
 
   ## Examples
 

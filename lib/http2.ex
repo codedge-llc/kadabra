@@ -1,7 +1,6 @@
 defmodule Kadabra.Http2 do
-  @moduledoc """
-  Handles all HTTP2 connection, request and response functions.
-  """
+  @moduledoc false
+
   require Logger
 
   def connection_preface, do: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
