@@ -1,7 +1,5 @@
 defmodule Kadabra.Connection do
-  @moduledoc """
-  Worker for maintaining an open HTTP/2 connection.
-  """
+  @moduledoc false
 
   defstruct ref: nil,
             buffer: "",
@@ -21,10 +19,39 @@ defmodule Kadabra.Connection do
   use GenServer
   require Logger
 
-  alias Kadabra.{ConnectionSettings, Encodable, Error, FlowControl, Frame, Hpack,
-    Http2, Stream}
+  alias Kadabra.{Connection, ConnectionSettings, Encodable, Error,
+    FlowControl, Frame, Hpack, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Goaway, Headers, Ping,
     PushPromise, RstStream, WindowUpdate}
+
+  @type t :: %__MODULE__{
+    ref: nil,
+    buffer: binary,
+    client: pid,
+    uri: charlist,
+    scheme: :https,
+    opts: Keyword.t,
+    socket: sock,
+    stream_id: pos_integer,
+    reconnect: boolean,
+    settings: pid,
+    overflow: [...],
+    encoder_state: pid,
+    decoder_state: pid,
+    flow_control: pid
+  }
+
+  @type sock :: {:sslsocket, any, pid | {any, any}}
+
+  @type frame :: Data.t
+               | Headers.t
+               | RstStream.t
+               | Frame.Settings.t
+               | PushPromise.t
+               | Ping.t
+               | Goaway.t
+               | WindowUpdate.t
+               | Continuation.t
 
   @data 0x0
   @headers 0x1
@@ -133,20 +160,21 @@ defmodule Kadabra.Connection do
 
   # sendf
 
-  def sendf(:ping, %{socket: socket} = state) do
+  @spec sendf(:goaway | :ping, t) :: {:noreply, t}
+  def sendf(:ping, %Connection{socket: socket} = state) do
     bin = Ping.new |> Encodable.to_bin
     :ssl.send(socket, bin)
     {:noreply, state}
   end
-
-  def sendf(:goaway, %{socket: socket, stream_id: stream_id} = state) do
-    bin = stream_id |> Goaway.new |> Encodable.to_bin
+  def sendf(:goaway, %Connection{socket: socket, stream_id: id} = state) do
+    bin = id |> Goaway.new |> Encodable.to_bin
     :ssl.send(socket, bin)
     {:noreply, increment_stream_id(state)}
   end
 
   # recv
 
+  @spec recv(frame, t) :: {:noreply, t}
   def recv(%Frame.Data{} = frame, state) do
     case pid_for_stream(state.ref, frame.stream_id) do
       nil -> nil
@@ -187,17 +215,15 @@ defmodule Kadabra.Connection do
     # Do nothing on ACK. Might change in the future.
     {:noreply, state}
   end
-  def recv(%Frame.Settings{ack: false, settings: settings}, %{socket: socket,
-                                                              settings: pid,
-                                                              flow_control: flow,
-                                                              decoder_state: decoder} = state) do
+  def recv(%Frame.Settings{ack: false, settings: settings},
+           %{flow_control: flow, decoder_state: decoder} = state) do
 
-    ConnectionSettings.update(pid, settings)
+    ConnectionSettings.update(state.settings, settings)
     FlowControl.set_max_stream_count(flow, settings.max_concurrent_streams)
     Hpack.update_max_table_size(decoder, settings.max_header_list_size)
 
-    settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
-    :ssl.send(socket, settings_ack)
+    bin = Frame.Settings.ack |> Encodable.to_bin
+    :ssl.send(state.socket, bin)
 
     {:noreply, state}
   end
@@ -210,7 +236,8 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  def recv(%Frame.WindowUpdate{stream_id: _id, window_size_increment: inc}, state) do
+  def recv(%Frame.WindowUpdate{stream_id: _id,
+                               window_size_increment: inc}, state) do
     # IO.puts("--> Window Update, Stream ID: #{id}, Increment: #{inc} bytes")
     FlowControl.add_bytes(state.flow_control, inc)
     {:noreply, state}
@@ -286,7 +313,9 @@ defmodule Kadabra.Connection do
     end
   end
 
-  def handle_info({:finished, response}, %{client: pid, flow_control: flow} = state) do
+  def handle_info({:finished, response},
+                  %{client: pid, flow_control: flow} = state) do
+
     send(pid, {:end_stream, response})
     # IO.puts(":: Finished stream_id: #{response.id} ::")
 
@@ -300,11 +329,6 @@ defmodule Kadabra.Connection do
 
   def handle_info({:push_promise, stream}, %{client: pid} = state) do
     send(pid, {:push_promise, stream})
-    {:noreply, state}
-  end
-
-  def handle_info({:registered, stream_id, pid}, state) do
-    Registry.register(Registry.Kadabra, {state.ref, stream_id}, pid)
     {:noreply, state}
   end
 
@@ -347,36 +371,85 @@ defmodule Kadabra.Connection do
     Logger.info "Got binary: #{inspect(frame)}"
   end
   def handle_response(frame, state) do
-    pid = pid_for_stream(state.ref, frame.stream_id) || self()
+    parsed_frame =
+      case frame.type do
+        @data -> Frame.Data.new(frame)
+        @headers -> Frame.Headers.new(frame)
+        @rst_stream -> Frame.RstStream.new(frame)
+        @settings ->
+          case Frame.Settings.new(frame) do
+            {:ok, settings_frame} -> settings_frame
+            _else -> :error
+          end
+        @push_promise -> Frame.PushPromise.new(frame)
+        @ping -> Frame.Ping.new(frame)
+        @goaway -> Frame.Goaway.new(frame)
+        @window_update -> Frame.WindowUpdate.new(frame)
+        @continuation -> Frame.Continuation.new(frame)
+        _ ->
+          Logger.info("Unknown frame: #{inspect(frame)}")
+          :error
+      end
 
-    case frame.type do
-      @data ->
-        data = Data.new(frame)
-        if byte_size(data.data) > 0 do
-          # IO.puts("<-- Window Update, #{byte_size(data.data)} bytes")
-          window_update = Http2.build_frame(0x8, 0x0, 0x0, <<byte_size(data.data)::32>>)
-          :ssl.send(state.socket, window_update)
-        end
-        Stream.cast_recv(pid, data)
-      @headers ->
-        Stream.cast_recv(pid, Headers.new(frame))
-      @rst_stream ->
-        rst = RstStream.new(frame)
-        Stream.cast_recv(pid, rst)
-      @settings ->
-        handle_settings(frame, state)
-      @push_promise ->
-        open_promise_stream(frame, state)
-      @ping ->
-        GenServer.cast(self(), {:recv, Ping.new(frame)})
-      @goaway ->
-        GenServer.cast(self(), {:recv, Goaway.new(frame)})
-      @window_update ->
-        GenServer.cast(self(), {:recv, WindowUpdate.new(frame)})
-      @continuation ->
-        Stream.cast_recv(pid, Continuation.new(frame))
-      _ ->
-        Logger.info("Unknown frame: #{inspect(frame)}")
+    process(parsed_frame, state)
+  end
+
+  @spec process(frame, t) :: :ok
+  def process(%Frame.Data{} = frame, state) do
+    pid = pid_for_stream(state.ref, frame.stream_id) || self()
+    send_window_update(state.socket, frame)
+    Stream.cast_recv(pid, frame)
+  end
+
+  def process(%Frame.Headers{} = frame, state) do
+    pid = pid_for_stream(state.ref, frame.stream_id) || self()
+    Stream.cast_recv(pid, frame)
+  end
+
+  def process(%Frame.RstStream{} = frame, state) do
+    pid = pid_for_stream(state.ref, frame.stream_id) || self()
+    Stream.cast_recv(pid, frame)
+  end
+
+  def process(%Frame.Settings{} = frame, state) do
+    recv(frame, state)
+  end
+
+  def process(%Frame.PushPromise{stream_id: stream_id} = frame, state) do
+    {:ok, pid} =
+      state
+      |> Stream.new(stream_id)
+      |> Stream.start_link
+
+    Registry.register(Registry.Kadabra, {state.ref, stream_id}, pid)
+    Stream.cast_recv(pid, frame)
+  end
+
+  def process(%Frame.Ping{} = frame, _state) do
+    GenServer.cast(self(), {:recv, frame})
+  end
+
+  def process(%Frame.Goaway{} = frame, _state) do
+    GenServer.cast(self(), {:recv, frame})
+  end
+
+  def process(%Frame.WindowUpdate{} = frame, _state) do
+    GenServer.cast(self(), {:recv, frame})
+  end
+
+  def process(%Frame.Continuation{} = frame, state) do
+    pid = pid_for_stream(state.ref, frame.stream_id) || self()
+    Stream.cast_recv(pid, frame)
+  end
+
+  def process(:error, _state), do: :ok
+
+  def send_window_update(_socket, %Data{data: nil}), do: :ok
+  def send_window_update(socket, %Data{data: data}) do
+    if byte_size(data) > 0 do
+      # IO.puts("<-- Window Update, #{byte_size(data)} bytes")
+      bin = WindowUpdate.new(0x0, data) |> Encodable.to_bin
+      :ssl.send(socket, bin)
     end
   end
 
@@ -387,35 +460,16 @@ defmodule Kadabra.Connection do
     end
   end
 
-  def handle_settings(frame, state) do
-    case Frame.Settings.new(frame) do
-      {:ok, settings_frame} ->
-        recv(settings_frame, state)
-      _else ->
-        # TODO: handle bad settings
-        :error
-    end
-  end
-
-  def open_promise_stream(frame, state) do
-    pp_frame = PushPromise.new(frame)
-
-    {:ok, pid} =
-      state
-      |> Stream.new(pp_frame.stream_id)
-      |> Stream.start_link
-
-    Registry.register(Registry.Kadabra, {state.uri, pp_frame.stream_id}, pid)
-    Stream.cast_recv(pid, pp_frame)
-  end
-
   def maybe_reconnect(%{reconnect: false, client: pid} = state) do
     Logger.debug "Socket closed, not reopening, informing client"
     send(pid, {:closed, self()})
     {:noreply, reset_state(state, nil)}
   end
 
-  def maybe_reconnect(%{reconnect: true, uri: uri, opts: opts, client: pid} = state) do
+  def maybe_reconnect(%{reconnect: true,
+                        uri: uri,
+                        opts: opts,
+                        client: pid} = state) do
     case do_connect(uri, opts) do
       {:ok, socket} ->
         Logger.debug "Socket closed, reopened automatically"

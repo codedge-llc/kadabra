@@ -55,7 +55,12 @@ defmodule KadabraTest do
 
       streams = 1..(2 * count) |> Enum.filter(& rem(&1, 2) == 1)
       for x <- streams do
-        assert_receive {:end_stream, %Stream.Response{id: ^x,}}, 15_000
+        assert_receive {:end_stream, %Stream.Response{
+          id: ^x,
+          headers: _headers,
+          body: _body,
+          status: _status
+        }}, 15_000
       end
     end
 

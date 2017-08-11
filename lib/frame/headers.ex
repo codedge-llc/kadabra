@@ -1,7 +1,27 @@
 defmodule Kadabra.Frame.Headers do
   @moduledoc false
-  defstruct [:stream_dependency, :weight, :exclusive, :header_block_fragment,
-    priority: false, end_stream: false, end_headers: false, headers: [], stream_id: nil]
+
+  defstruct end_headers: false,
+            end_stream: false,
+            exclusive: nil,
+            header_block_fragment: nil,
+            headers: [],
+            priority: false,
+            stream_dependency: nil,
+            stream_id: nil,
+            weight: nil
+
+  @type t :: %__MODULE__{
+    end_headers: boolean,
+    end_stream: boolean,
+    exclusive: boolean,
+    header_block_fragment: binary,
+    headers: [...],
+    priority: boolean,
+    stream_dependency: pos_integer,
+    stream_id: pos_integer,
+    weight: non_neg_integer
+  }
 
   alias Kadabra.Frame.Flags
 
@@ -33,8 +53,8 @@ defmodule Kadabra.Frame.Headers do
     {:ok, frame, new_context}
   end
 
-  def decode(frame, context) do
-    {:ok, {headers, new_context}} = :hpack.decode(frame.header_block_fragment, context)
+  def decode(%{header_block_fragment: h} = frame, context) do
+    {:ok, {headers, new_context}} = :hpack.decode(h, context)
     frame = %{frame | headers: headers}
     {:ok, frame, new_context}
   end

@@ -2,11 +2,25 @@ defmodule Kadabra.Stream do
   @moduledoc """
   Struct returned from open connections.
   """
-  defstruct [:id, :stream_id, :uri, :connection, :encoder, :decoder, :settings,
+  defstruct [:id, :uri, :connection, :encoder, :decoder, :settings,
              :socket, :flow_control, headers: [], body: "", scheme: :https]
 
   alias Kadabra.{Connection, Encodable, Hpack, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream}
+
+  @type t :: %__MODULE__{
+    id: pos_integer,
+    uri: charlist,
+    connection: pid,
+    encoder: pid,
+    decoder: pid,
+    settings: pid,
+    socket: pid,
+    flow_control: pid,
+    headers: [...],
+    body: binary,
+    scheme: :https
+  }
 
   @data 0x0
   # @headers 0x1
@@ -52,12 +66,6 @@ defmodule Kadabra.Stream do
   def recv(%Data{end_stream: end_stream?, data: data}, _state, stream) do
     stream = %Stream{stream | body: stream.body <> data}
 
-    # unless data == nil || byte_size(data) <= 0 do
-    #   IO.inspect(byte_size(data), label: "window update bytes")
-    #   window_update = Http2.build_frame(0x8, 0x0, 0x0, <<byte_size(data)::32>>)
-    #   :ssl.send(stream.socket, window_update)
-    # end
-
     cond do
       end_stream? -> {:next_state, @half_closed_remote, stream}
       true -> {:keep_state, stream}
@@ -100,7 +108,8 @@ defmodule Kadabra.Stream do
   end
 
   def recv(frame, state, stream) do
-    IO.puts("Unknown RECV: #{inspect(frame)}, #{state}, #{stream}")
+    IO.puts("Unknown RECV: #{inspect(frame)}, #{inspect(state)},
+    #{inspect(stream)}")
     {:keep_state, stream}
   end
 
@@ -129,13 +138,12 @@ defmodule Kadabra.Stream do
     recv(frame, state, stream)
   end
 
-  def handle_event(:cast, {:send_headers, _headers, _payload}, _state, stream) do
+  def handle_event(:cast, {:send_headers, _h, _p}, _state, stream) do
     # headers = add_headers(headers, stream)
 
     # {:ok, encoded} = Hpack.encode(stream.encoder, headers)
     # headers_payload = :erlang.iolist_to_binary(encoded)
 
-    # #{:ok, stream} = FlowControl.checkout_stream_id(stream.flow_control, stream, headers_payload)
     # h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
     # :ssl.send(stream.socket, h)
     # IO.puts("Sending, Stream ID: #{stream.id}")
@@ -149,6 +157,16 @@ defmodule Kadabra.Stream do
     # end
 
     {:next_state, @open, stream}
+  end
+
+  def handle_event(:cast, msg, state, stream) do
+    IO.inspect("""
+    === Unknown cast ===
+    #{inspect(msg)}
+    State: #{inspect(state)}
+    Stream: #{inspect(stream)}
+    """)
+    {:keep_state, stream}
   end
 
   def send_chunks(_socket, _stream_id, []), do: :ok

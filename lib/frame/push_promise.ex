@@ -1,9 +1,19 @@
 defmodule Kadabra.Frame.PushPromise do
   @moduledoc false
 
-  defstruct [:stream_id, :header_block_fragment, end_headers: false, headers: []]
+  defstruct end_headers: false,
+            header_block_fragment: nil,
+            headers: [],
+            stream_id: nil
 
   alias Kadabra.Frame.Flags
+
+  @type t :: %__MODULE__{
+    end_headers: boolean,
+    header_block_fragment: binary,
+    headers: [...],
+    stream_id: pos_integer
+  }
 
   def new(%{payload: <<_::1, stream_id::31, headers::bitstring>>,
             flags: flags}) do

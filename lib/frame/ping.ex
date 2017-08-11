@@ -6,6 +6,11 @@ defmodule Kadabra.Frame.Ping do
   alias Kadabra.Frame
   alias Kadabra.Frame.Flags
 
+  @type t :: %__MODULE__{
+    ack: boolean,
+    data: <<_::32>>
+  }
+
   def new do
     %__MODULE__{
       data: <<0, 0, 0, 0, 0, 0, 0, 0>>,
