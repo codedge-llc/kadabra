@@ -39,12 +39,16 @@ defmodule Kadabra.FlowControl do
     GenServer.call(pid, {:remove_bytes, bytes})
   end
 
-  def handle_call(:inc_stream_count, _pid, %{active_stream_count: count} = state) do
+  def handle_call(:inc_stream_count,
+                  _pid,
+                  %{active_stream_count: count} = state) do
     state = %{state | active_stream_count: count + 1}
     {:reply, {:ok, state.active_stream_count}, state}
   end
 
-  def handle_call(:dec_stream_count, _pid, %{active_stream_count: count} = state) do
+  def handle_call(:dec_stream_count,
+                  _pid,
+                  %{active_stream_count: count} = state) do
     state = %{state | active_stream_count: count - 1}
     {:reply, {:ok, state.active_stream_count}, state}
   end
@@ -60,12 +64,16 @@ defmodule Kadabra.FlowControl do
     {:reply, {:ok, max}, %{state | max_stream_count: max}}
   end
 
-  def handle_call({:add_bytes, bytes}, _pid, %{bytes_remaining: b_rem} = state) do
+  def handle_call({:add_bytes, bytes},
+                  _pid,
+                  %{bytes_remaining: b_rem} = state) do
     new_rem = b_rem + bytes
     {:reply, {:ok, new_rem}, %{state | bytes_remaining: new_rem}}
   end
 
-  def handle_call({:remove_bytes, bytes}, _pid, %{bytes_remaining: b_rem} = state) do
+  def handle_call({:remove_bytes, bytes},
+                  _pid,
+                  %{bytes_remaining: b_rem} = state) do
     new_rem = b_rem - bytes
     {:reply, {:ok, new_rem}, %{state | bytes_remaining: new_rem}}
   end

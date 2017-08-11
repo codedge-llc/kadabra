@@ -17,4 +17,24 @@ defmodule Kadabra.Frame.WindowUpdate do
       stream_id: stream_id
     }
   end
+
+  @spec new(non_neg_integer, pos_integer | binary) :: t
+  def new(stream_id, increment) when is_integer(increment) do
+    %__MODULE__{
+      stream_id: stream_id,
+      window_size_increment: increment
+    }
+  end
+  def new(stream_id, bin) when is_binary(bin) do
+    new(stream_id, byte_size(bin))
+  end
+end
+
+defimpl Kadabra.Encodable, for: Kadabra.Frame.WindowUpdate do
+  alias Kadabra.Http2
+
+  def to_bin(frame) do
+    size = <<frame.window_size_increment::32>> |> IO.inspect
+    Http2.build_frame(0x8, 0x0, frame.stream_id, size)
+  end
 end

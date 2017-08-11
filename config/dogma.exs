@@ -13,5 +13,5 @@ config :dogma,
 
   # Override an existing rule configuration
   override: [
-    %Rule.LineLength{ max_length: 100 },
+    #%Rule.LineLength{ max_length: 100 },
   ]

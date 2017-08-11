@@ -1,12 +1,14 @@
 defmodule Kadabra.Connection.Settings do
   @moduledoc false
 
-  defstruct header_table_size: 4096,
-            enable_push: true,
-            max_concurrent_streams: :infinite,
+  defstruct enable_push: true,
+            header_table_size: 4096,
             initial_window_size: 65_535,
+            max_concurrent_streams: :infinite,
             max_frame_size: 16_384,
             max_header_list_size: nil
+
+  alias Kadabra.Error
 
   @type t :: %__MODULE__{
     header_table_size: non_neg_integer,
@@ -17,8 +19,6 @@ defmodule Kadabra.Connection.Settings do
     max_header_list_size: non_neg_integer
   }
 
-  alias Kadabra.Error
-
   @table_header_size 0x1
   @enable_push 0x2
   @max_concurrent_streams 0x3
@@ -26,6 +26,7 @@ defmodule Kadabra.Connection.Settings do
   @max_frame_size 0x5
   @max_header_list_size 0x6
 
+  @spec put(t, non_neg_integer, term) :: {:ok, t} | {:error, binary, t}
   def put(settings, @table_header_size, value) do
     {:ok, %{settings | header_table_size: value}}
   end
@@ -51,11 +52,13 @@ defmodule Kadabra.Connection.Settings do
     {:ok, %{settings | initial_window_size: value}}
   end
 
-  def put(settings, @max_frame_size, value) when value > 16_777_215 or value < 16_384 do
-    {:error, Error.protocol_error, settings}
-  end
   def put(settings, @max_frame_size, value) do
-    {:ok, %{settings | max_frame_size: value}}
+    cond do
+      value < 16_384 or value > 16_777_215 ->
+        {:error, Error.protocol_error, settings}
+      true ->
+        {:ok, %{settings | max_frame_size: value}}
+    end
   end
 
   def put(settings, @max_header_list_size, value) do

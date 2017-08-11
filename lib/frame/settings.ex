@@ -6,6 +6,11 @@ defmodule Kadabra.Frame.Settings do
   alias Kadabra.Connection
   alias Kadabra.Frame.Flags
 
+  @type t :: %__MODULE__{
+    ack: boolean,
+    settings: Connection.Settings.t
+  }
+
   def new(%{payload: p, flags: flags}) do
     s_list = parse_settings(p)
     case put_settings(%Connection.Settings{}, s_list) do

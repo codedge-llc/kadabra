@@ -11,6 +11,7 @@ defmodule Kadabra.Frame do
     payload: bitstring
   }
 
+  @spec new(binary) :: {:ok, t, binary} | {:error, binary}
   def new(<<payload_size::24,
             frame_type::8,
             flags::8,
@@ -35,7 +36,7 @@ defmodule Kadabra.Frame do
   end
   def new(bin), do: {:error, bin}
 
-  def parse_payload(size, bin) do
+  defp parse_payload(size, bin) do
     case bin do
       <<frame_payload::size(size), rest::bitstring>> ->
         {:ok, <<frame_payload::size(size)>>, <<rest::bitstring>>}
