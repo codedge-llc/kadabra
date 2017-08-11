@@ -39,7 +39,7 @@ defmodule Kadabra.Mixfile do
 
   defp description do
     """
-    HTTP/2 client for Elixir
+    HTTP2 client for Elixir
     """
   end
 
