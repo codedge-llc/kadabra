@@ -2,11 +2,25 @@ defmodule Kadabra.Stream do
   @moduledoc """
   Struct returned from open connections.
   """
-  defstruct [:id, :stream_id, :uri, :connection, :encoder, :decoder, :settings,
+  defstruct [:id, :uri, :connection, :encoder, :decoder, :settings,
              :socket, :flow_control, headers: [], body: "", scheme: :https]
 
   alias Kadabra.{Connection, Encodable, Hpack, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream}
+
+  @type t :: %__MODULE__{
+    id: pos_integer,
+    uri: charlist,
+    connection: pid,
+    encoder: pid,
+    decoder: pid,
+    settings: pid,
+    socket: pid,
+    flow_control: pid,
+    headers: [...],
+    body: binary,
+    scheme: :https
+  }
 
   @data 0x0
   # @headers 0x1
@@ -143,6 +157,16 @@ defmodule Kadabra.Stream do
     # end
 
     {:next_state, @open, stream}
+  end
+
+  def handle_event(:cast, msg, state, stream) do
+    IO.inspect("""
+    === Unknown cast ===
+    #{inspect(msg)}
+    State: #{inspect(state)}
+    Stream: #{inspect(stream)}
+    """)
+    {:keep_state, stream}
   end
 
   def send_chunks(_socket, _stream_id, []), do: :ok

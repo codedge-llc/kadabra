@@ -31,7 +31,7 @@ defmodule Kadabra.Connection do
     uri: charlist,
     scheme: :https,
     opts: Keyword.t,
-    socket: pid,
+    socket: sock,
     stream_id: pos_integer,
     reconnect: boolean,
     settings: pid,
@@ -40,6 +40,8 @@ defmodule Kadabra.Connection do
     decoder_state: pid,
     flow_control: pid
   }
+
+  @type sock :: {:sslsocket, any, pid | {any, any}}
 
   @type frame :: Data.t
                | Headers.t
@@ -158,7 +160,7 @@ defmodule Kadabra.Connection do
 
   # sendf
 
-  @spec sendf(:ping | :goaway, t) :: {:noreply, t}
+  @spec sendf(:goaway | :ping, t) :: {:noreply, t}
   def sendf(:ping, %Connection{socket: socket} = state) do
     bin = Ping.new |> Encodable.to_bin
     :ssl.send(socket, bin)
@@ -220,8 +222,8 @@ defmodule Kadabra.Connection do
     FlowControl.set_max_stream_count(flow, settings.max_concurrent_streams)
     Hpack.update_max_table_size(decoder, settings.max_header_list_size)
 
-    settings_ack = Http2.build_frame(@settings, 0x1, 0x0, <<>>)
-    :ssl.send(state.socket, settings_ack)
+    bin = Frame.Settings.ack |> Encodable.to_bin
+    :ssl.send(state.socket, bin)
 
     {:noreply, state}
   end
@@ -276,7 +278,7 @@ defmodule Kadabra.Connection do
 
       h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
       :ssl.send(stream.socket, h)
-      IO.puts("Sending, Stream ID: #{stream.id}")
+      # IO.puts("Sending, Stream ID: #{stream.id}")
 
       if payload do
         {:ok, settings} = Kadabra.ConnectionSettings.fetch(stream.settings)
@@ -315,7 +317,7 @@ defmodule Kadabra.Connection do
                   %{client: pid, flow_control: flow} = state) do
 
     send(pid, {:end_stream, response})
-    IO.puts(":: Finished stream_id: #{response.id} ::")
+    # IO.puts(":: Finished stream_id: #{response.id} ::")
 
     FlowControl.decrement_active_stream_count(flow)
 
@@ -371,19 +373,19 @@ defmodule Kadabra.Connection do
   def handle_response(frame, state) do
     parsed_frame =
       case frame.type do
-        @data -> Data.new(frame)
-        @headers -> Headers.new(frame)
-        @rst_stream -> RstStream.new(frame)
+        @data -> Frame.Data.new(frame)
+        @headers -> Frame.Headers.new(frame)
+        @rst_stream -> Frame.RstStream.new(frame)
         @settings ->
           case Frame.Settings.new(frame) do
             {:ok, settings_frame} -> settings_frame
             _else -> :error
           end
-        @push_promise -> PushPromise.new(frame)
-        @ping -> Ping.new(frame)
-        @goaway -> Goaway.new(frame)
-        @window_update -> WindowUpdate.new(frame)
-        @continuation -> Continuation.new(frame)
+        @push_promise -> Frame.PushPromise.new(frame)
+        @ping -> Frame.Ping.new(frame)
+        @goaway -> Frame.Goaway.new(frame)
+        @window_update -> Frame.WindowUpdate.new(frame)
+        @continuation -> Frame.Continuation.new(frame)
         _ ->
           Logger.info("Unknown frame: #{inspect(frame)}")
           :error
@@ -392,19 +394,19 @@ defmodule Kadabra.Connection do
     process(parsed_frame, state)
   end
 
-  @spec process(frame, Connection.t) :: :ok
-  def process(%Data{} = frame, state) do
+  @spec process(frame, t) :: :ok
+  def process(%Frame.Data{} = frame, state) do
     pid = pid_for_stream(state.ref, frame.stream_id) || self()
     send_window_update(state.socket, frame)
     Stream.cast_recv(pid, frame)
   end
 
-  def process(%Headers{} = frame, state) do
+  def process(%Frame.Headers{} = frame, state) do
     pid = pid_for_stream(state.ref, frame.stream_id) || self()
     Stream.cast_recv(pid, frame)
   end
 
-  def process(%RstStream{} = frame, state) do
+  def process(%Frame.RstStream{} = frame, state) do
     pid = pid_for_stream(state.ref, frame.stream_id) || self()
     Stream.cast_recv(pid, frame)
   end
@@ -413,7 +415,7 @@ defmodule Kadabra.Connection do
     recv(frame, state)
   end
 
-  def process(%PushPromise{stream_id: stream_id} = frame, state) do
+  def process(%Frame.PushPromise{stream_id: stream_id} = frame, state) do
     {:ok, pid} =
       state
       |> Stream.new(stream_id)
@@ -423,19 +425,19 @@ defmodule Kadabra.Connection do
     Stream.cast_recv(pid, frame)
   end
 
-  def process(%Ping{} = frame, _state) do
+  def process(%Frame.Ping{} = frame, _state) do
     GenServer.cast(self(), {:recv, frame})
   end
 
-  def process(%Goaway{} = frame, _state) do
+  def process(%Frame.Goaway{} = frame, _state) do
     GenServer.cast(self(), {:recv, frame})
   end
 
-  def process(%WindowUpdate{} = frame, _state) do
+  def process(%Frame.WindowUpdate{} = frame, _state) do
     GenServer.cast(self(), {:recv, frame})
   end
 
-  def process(%Continuation{} = frame, state) do
+  def process(%Frame.Continuation{} = frame, state) do
     pid = pid_for_stream(state.ref, frame.stream_id) || self()
     Stream.cast_recv(pid, frame)
   end
@@ -443,14 +445,11 @@ defmodule Kadabra.Connection do
   def process(:error, _state), do: :ok
 
   def send_window_update(_socket, %Data{data: nil}), do: :ok
-  def send_window_update(socket, %Data{data: data, stream_id: stream_id}) do
-    case byte_size(data) do
-      size when size > 0 ->
-        bin = stream_id |> WindowUpdate.new(size) |> Encodable.to_bin
-        :ssl.send(socket, bin)
-      size ->
-        IO.inspect(size, label: "window update byte size?")
-        :ok
+  def send_window_update(socket, %Data{data: data}) do
+    if byte_size(data) > 0 do
+      # IO.puts("<-- Window Update, #{byte_size(data)} bytes")
+      bin = WindowUpdate.new(0x0, data) |> Encodable.to_bin
+      :ssl.send(socket, bin)
     end
   end
 

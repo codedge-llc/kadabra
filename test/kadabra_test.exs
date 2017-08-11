@@ -48,14 +48,19 @@ defmodule KadabraTest do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https, reconnect: false)
 
-      count = 500
+      count = 5_000
       for _x <- 1..count do
         Kadabra.get(pid, "/reqinfo")
       end
 
       streams = 1..(2 * count) |> Enum.filter(& rem(&1, 2) == 1)
       for x <- streams do
-        assert_receive {:end_stream, %Stream.Response{id: ^x,}}, 15_000
+        assert_receive {:end_stream, %Stream.Response{
+          id: ^x,
+          headers: _headers,
+          body: _body,
+          status: _status
+        }}, 15_000
       end
     end
 

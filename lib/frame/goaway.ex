@@ -44,8 +44,10 @@ end
 defimpl Kadabra.Encodable, for: Kadabra.Frame.Goaway do
   alias Kadabra.Http2
 
+  @goaway 0x7
+
   def to_bin(%{last_stream_id: id, error_code: error}) do
     payload = <<0::1, id::31>> <> error
-    Http2.build_frame(0x7, 0x0, 0, payload)
+    Http2.build_frame(@goaway, 0x0, 0, payload)
   end
 end
