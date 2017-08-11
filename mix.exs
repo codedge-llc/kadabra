@@ -22,7 +22,11 @@ defmodule Kadabra.Mixfile do
         "coveralls.post": :test,
         "coveralls.html": :test
       ],
-      dialyzer: [plt_add_deps: true, plt_add_apps: [:ssl]]
+      dialyzer: [
+        plt_add_deps: true,
+        plt_add_apps: [:ssl],
+        ignore_warnings: "config/dialyzer.ignore-warnings"
+      ]
     ]
   end
 
