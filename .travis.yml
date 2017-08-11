@@ -7,3 +7,5 @@ matrix:
       elixir: 1.4.5
     - otp_release: 20.0
       elixir: 1.5.0
+script:
+    - "MIX_ENV=test mix do deps.get, test && mix compile && mix coveralls.travis"

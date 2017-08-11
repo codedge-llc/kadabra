@@ -153,8 +153,7 @@ defmodule Kadabra.Connection do
     sendf(type, state)
   end
 
-  def handle_cast(msg, state) do
-    IO.inspect msg
+  def handle_cast(_msg, state) do
     {:noreply, state}
   end
 
@@ -171,26 +170,13 @@ defmodule Kadabra.Connection do
     :ssl.send(socket, bin)
     {:noreply, increment_stream_id(state)}
   end
+  def sendf(_else, state) do
+    {:noreply, state}
+  end
 
   # recv
 
   @spec recv(frame, t) :: {:noreply, t}
-  def recv(%Frame.Data{} = frame, state) do
-    case pid_for_stream(state.ref, frame.stream_id) do
-      nil -> nil
-      pid -> Stream.cast_recv(pid, frame)
-    end
-    {:noreply, state}
-  end
-
-  def recv(%Frame.Headers{} = frame, state) do
-    case pid_for_stream(state.ref, frame.stream_id) do
-      nil -> nil
-      pid -> Stream.cast_recv(pid, frame)
-    end
-    {:noreply, state}
-  end
-
   def recv(%Frame.RstStream{}, state) do
     Logger.error("recv unstarted stream rst")
     {:noreply, state}
@@ -251,6 +237,8 @@ defmodule Kadabra.Connection do
     end
     {:noreply, %{state | decoder_state: new_dec}}
   end
+
+  def recv(_else, state), do: {:noreply, state}
 
   defp increment_stream_id(%{stream_id: stream_id} = state) do
     %{state | stream_id: stream_id + 2}
@@ -448,7 +436,7 @@ defmodule Kadabra.Connection do
   def send_window_update(socket, %Data{data: data}) do
     if byte_size(data) > 0 do
       # IO.puts("<-- Window Update, #{byte_size(data)} bytes")
-      bin = WindowUpdate.new(0x0, data) |> Encodable.to_bin
+      bin = data |> WindowUpdate.new |> Encodable.to_bin
       :ssl.send(socket, bin)
     end
   end

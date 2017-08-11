@@ -2,7 +2,8 @@ defmodule Kadabra.Stream.Response do
   @moduledoc """
   Response struct returned from open streams.
 
-  If received as a push promise, `:status` and `:body` will most likely be empty.
+  If received as a push promise, `:status` and `:body` will
+  most likely be empty.
 
   *Sample response for a `PUT` request*
 
