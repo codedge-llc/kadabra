@@ -45,7 +45,10 @@ defmodule Kadabra do
 
       iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
       iex> Kadabra.close(pid)
-      :ok
+      iex> receive do
+      ...>   {:closed, ^pid} -> "connection closed!"
+      ...> end
+      "connection closed!"
   """
   @spec close(pid) :: :ok
   def close(pid), do: GenServer.cast(pid, {:send, :goaway})
@@ -64,37 +67,6 @@ defmodule Kadabra do
       "got pong!"
   """
   def ping(pid), do: GenServer.cast(pid, {:send, :ping})
-
-  @doc false
-  def info(pid, _opts \\ []) do
-    case GenServer.call(pid, :get_info) do
-      {:ok, info} ->
-        # width = opts[:width] || 120
-        # headers = opts[:data] || [:id, :status, :headers, :body]
-        # stream_table_opts = [width: width, data: headers]
-
-        # stream_data =
-        #   info.streams
-        #   |> Map.values
-        #   |> Enum.map(& Map.put(&1, :body, String.slice(&1.body, 0..40)))
-        #   |> Enum.sort_by(& &1.id)
-        #   |> Scribe.format(stream_table_opts)
-
-        """
-
-        == Connection Information ==
-        Uri: #{info.uri}
-        Scheme: #{info.scheme}
-        Client: #{inspect(info.client)}
-        SSL Socket: #{inspect(info.socket)}
-        Next Available Stream ID: #{info.stream_id}
-        Buffer: #{inspect(info.buffer)}
-
-        """
-        |> IO.puts
-      _else -> :error
-    end
-  end
 
   @doc ~S"""
   Makes a request with given headers.

@@ -10,6 +10,17 @@ defmodule Kadabra.Frame.Continuation do
 
   alias Kadabra.Frame.Flags
 
+  @doc ~S"""
+  Initializes a new `Frame.Continuation` given a `Frame`.
+
+
+  ## Examples
+
+      iex> frame = %Kadabra.Frame{payload: <<136>>, flags: 0x4}
+      iex> Kadabra.Frame.Continuation.new(frame)
+      %Kadabra.Frame.Continuation{header_block_fragment: <<136>>,
+      end_headers: true}
+  """
   @spec new(Kadabra.Frame.t) :: t
   def new(%{payload: payload, flags: flags}) do
     %__MODULE__{
