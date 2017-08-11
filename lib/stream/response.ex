@@ -4,6 +4,8 @@ defmodule Kadabra.Stream.Response do
   """
   defstruct [:id, :headers, :body, :status]
 
+  alias Kadabra.Stream
+
   @type t :: %__MODULE__{
     id: integer,
     headers: Keyword.t,
@@ -11,8 +13,8 @@ defmodule Kadabra.Stream.Response do
     status: integer
   }
 
-  @spec new(%Kadabra.Stream{}) :: t
-  def new(%Kadabra.Stream{id: id, headers: headers, body: body}) do
+  @spec new(Stream.t) :: t
+  def new(%Stream{id: id, headers: headers, body: body}) do
     %__MODULE__{
       id: id,
       headers: headers,
