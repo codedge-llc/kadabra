@@ -70,7 +70,7 @@ defmodule Kadabra.Error do
       0xb -> "ENHANCE_YOUR_CALM"
       0xc -> "INADEQUATE_SECURITY"
       0xd -> "HTTP_1_1_REQUIRED"
-      error -> "Unknown Error: #{inspect(error)}"
+      error -> error
     end
   end
 
@@ -90,7 +90,7 @@ defmodule Kadabra.Error do
       "ENHANCE_YOUR_CALM"   -> 0xb
       "INADEQUATE_SECURITY" -> 0xc
       "HTTP_1_1_REQUIRED"   -> 0xd
-      error -> "Unknown Error: #{inspect(error)}"
+      error                 -> error
     end
   end
 end
