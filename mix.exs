@@ -32,7 +32,7 @@ defmodule Kadabra.Mixfile do
 
   def application do
     [
-      applications: [:logger, :hpack],
+      extra_applications: [:logger],
       mod: {Kadabra.Application, []}
     ]
   end
