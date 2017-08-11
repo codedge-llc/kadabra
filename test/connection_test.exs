@@ -6,7 +6,7 @@ defmodule Kadabra.ConnectionTest do
     {:ok, pid} = Kadabra.open(uri, :https)
 
     %{socket: socket} = :sys.get_state(pid)
-    :ssl.close(socket) 
+    :ssl.close(socket)
     send(pid, {:ssl_closed, socket}) # Why does close/1 not send this?
 
     Kadabra.ping(pid)

@@ -1,4 +1,6 @@
 defmodule Kadabra.Frame.Data do
+  @moduledoc false
+
   defstruct [:stream_id, :data, end_stream: false]
 
   alias Kadabra.Frame.Flags

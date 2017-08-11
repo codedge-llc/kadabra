@@ -1,4 +1,6 @@
 defmodule Kadabra.Frame.Continuation do
+  @moduledoc false
+
   defstruct [:header_block_fragment, end_headers: false, headers: []]
 
   @type t :: %__MODULE__{

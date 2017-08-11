@@ -1,4 +1,6 @@
 defmodule Kadabra.Frame do
+  @moduledoc false
+
   defstruct [:length, :type, :flags, :stream_id, :payload]
 
   @type t :: %__MODULE__{

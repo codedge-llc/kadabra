@@ -1,4 +1,6 @@
 defmodule Kadabra.ConnectionSettings do
+  @moduledoc false
+
   use GenServer
 
   alias Kadabra.Connection
@@ -21,7 +23,6 @@ defmodule Kadabra.ConnectionSettings do
 
   def handle_call({:put, settings}, _pid, old_settings) do
     settings = Connection.Settings.merge(old_settings, settings)
-    #IO.inspect(settings, label: "new settings")
     {:reply, {:ok, settings}, settings}
   end
 

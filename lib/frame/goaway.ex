@@ -1,4 +1,6 @@
 defmodule Kadabra.Frame.Goaway do
+  @moduledoc false
+
   defstruct [:last_stream_id, :error_code, :debug_data]
 
   alias Kadabra.{Error, Frame}
@@ -9,6 +11,15 @@ defmodule Kadabra.Frame.Goaway do
     last_stream_id: non_neg_integer,
   }
 
+  @doc ~S"""
+  Initializes a new GOAWAY frame with no error.
+
+  ## Examples
+
+      iex> Kadabra.Frame.Goaway.new(3)
+      %Kadabra.Frame.Goaway{last_stream_id: 3, error_code: <<0, 0, 0, 0>>,
+      debug_data: nil}
+  """
   @spec new(non_neg_integer) :: t
   def new(stream_id) when is_integer(stream_id) do
     %__MODULE__{

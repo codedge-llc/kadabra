@@ -1,7 +1,5 @@
 defprotocol Kadabra.Encodable do
-  @doc ~S"""
-  Packs frame into sendable frame with frame header.
-  """
+  @moduledoc false
 
   @dialyzer {:nowarn_function, __protocol__: 1}
   @fallback_to_any true

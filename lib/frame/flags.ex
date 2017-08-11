@@ -1,4 +1,6 @@
 defmodule Kadabra.Frame.Flags do
+  @moduledoc false
+
   use Bitwise
 
   @doc ~S"""

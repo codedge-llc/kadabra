@@ -1,4 +1,6 @@
 defmodule Kadabra.Frame.PushPromise do
+  @moduledoc false
+
   defstruct [:stream_id, :header_block_fragment, end_headers: false, headers: []]
 
   alias Kadabra.Frame.Flags

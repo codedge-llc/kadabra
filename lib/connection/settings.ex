@@ -1,4 +1,6 @@
 defmodule Kadabra.Connection.Settings do
+  @moduledoc false
+
   defstruct header_table_size: 4096,
             enable_push: true,
             max_concurrent_streams: :infinite,

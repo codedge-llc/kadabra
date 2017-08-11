@@ -1,4 +1,5 @@
 defmodule Kadabra.Frame.Priority do
+  @moduledoc false
   defstruct [:stream_dependency, :weight, exclusive: false]
 
   alias Kadabra.Frame

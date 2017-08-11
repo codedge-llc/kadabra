@@ -1,4 +1,5 @@
 defmodule Kadabra.Frame.Headers do
+  @moduledoc false
   defstruct [:stream_dependency, :weight, :exclusive, :header_block_fragment,
     priority: false, end_stream: false, end_headers: false, headers: [], stream_id: nil]
 

@@ -13,18 +13,15 @@ defmodule Kadabra.Connection do
             stream_id: 1,
             reconnect: true,
             settings: nil,
-            active_stream_count: 0,
             overflow: [],
             encoder_state: nil,
             decoder_state: nil,
-            flow_control: nil,
-            bytes_remaining: 65_535,
-            settings_acked: false
+            flow_control: nil
 
   use GenServer
   require Logger
 
-  alias Kadabra.{Connection, ConnectionSettings, Encodable, Error, FlowControl, Frame, Hpack,
+  alias Kadabra.{ConnectionSettings, Encodable, Error, FlowControl, Frame, Hpack,
     Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Goaway, Headers, Ping,
     PushPromise, RstStream, WindowUpdate}
@@ -187,7 +184,7 @@ defmodule Kadabra.Connection do
   end
 
   def recv(%Frame.Settings{ack: true}, state) do
-    state = %{state | settings_acked: true}
+    # Do nothing on ACK. Might change in the future.
     {:noreply, state}
   end
   def recv(%Frame.Settings{ack: false, settings: settings}, %{socket: socket,
@@ -213,9 +210,9 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  def recv(%Frame.WindowUpdate{stream_id: id, window_size_increment: inc}, state) do
-    #IO.puts("--> Window Update, Stream ID: #{id}, Increment: #{inc} bytes")
-    state = %{state | bytes_remaining: state.bytes_remaining + inc}
+  def recv(%Frame.WindowUpdate{stream_id: _id, window_size_increment: inc}, state) do
+    # IO.puts("--> Window Update, Stream ID: #{id}, Increment: #{inc} bytes")
+    FlowControl.add_bytes(state.flow_control, inc)
     {:noreply, state}
   end
 
@@ -232,32 +229,9 @@ defmodule Kadabra.Connection do
     %{state | stream_id: stream_id + 2}
   end
 
-  defp do_recv_data(%{stream_id: stream_id} = frame, %{client: pid} = state) do
-    payload = frame[:payload]
-    stream = get_stream(stream_id, state)
-    body = stream.body || ""
-    stream = %Stream{stream | body: body <> payload}
-
-    unless payload == nil || byte_size(payload) <= 0 do
-      window_update = Http2.build_frame(0x8, 0x0, 0x0, <<byte_size(payload)::32>>)
-      :ssl.send(state.socket, window_update)
-    end
-
-    if frame[:flags] == 0x1 do
-     send pid, {:end_stream, stream}
-     remove_stream(state, stream_id)
-    else
-      put_stream(stream_id, state, stream)
-    end
-  end
-
-  defp do_send_headers(headers, payload, %{stream_id: stream_id,
-                                           ref: ref,
-                                           uri: uri,
-                                           active_stream_count: active_stream_count,
+  defp do_send_headers(headers, payload, %{ref: ref,
                                            overflow: overflow,
                                            flow_control: flow,
-                                           settings_acked: acked?,
                                            settings: settings_pid} = state) do
 
     {:ok, settings} = Kadabra.ConnectionSettings.fetch(settings_pid)
@@ -266,7 +240,7 @@ defmodule Kadabra.Connection do
     if FlowControl.can_send?(flow) do
       stream = Stream.new(state)
       {:ok, pid} = Stream.start_link(stream)
-      Registry.register(Registry.Kadabra, {state.ref, stream.id}, pid)
+      Registry.register(Registry.Kadabra, {ref, stream.id}, pid)
 
       :gen_statem.cast(pid, {:send_headers, headers, payload})
 
@@ -277,7 +251,7 @@ defmodule Kadabra.Connection do
 
       h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
       :ssl.send(stream.socket, h)
-      #IO.puts("Sending, Stream ID: #{stream.id}")
+      # IO.puts("Sending, Stream ID: #{stream.id}")
 
       if payload do
         {:ok, settings} = Kadabra.ConnectionSettings.fetch(stream.settings)
@@ -304,9 +278,7 @@ defmodule Kadabra.Connection do
   defp process_queue(%{overflow: [{:send, headers, payload} | rest]} = state) do
     state = %{state | overflow: rest}
     state = do_send_headers(headers, payload, state)
-    #IO.puts("overflow remaining: #{Enum.count(rest)}")
 
-    {:ok, settings} = ConnectionSettings.fetch(state.settings)
     if FlowControl.can_send?(state.flow_control) do
       process_queue(state)
     else
@@ -314,14 +286,9 @@ defmodule Kadabra.Connection do
     end
   end
 
-  defp can_send?(%{max_concurrent_streams: :infinite}, _stream_count), do: true
-  defp can_send?(%{max_concurrent_streams: max}, count) when count < max, do: true
-  defp can_send?(_, _), do: false
-
   def handle_info({:finished, response}, %{client: pid, flow_control: flow} = state) do
     send(pid, {:end_stream, response})
-    #IO.puts(":: Finished stream_id: #{response.id} ::")
-    #state = decrement_active_stream_count(state)
+    # IO.puts(":: Finished stream_id: #{response.id} ::")
 
     FlowControl.decrement_active_stream_count(flow)
 
@@ -386,15 +353,13 @@ defmodule Kadabra.Connection do
       @data ->
         data = Data.new(frame)
         if byte_size(data.data) > 0 do
-          #IO.puts("<-- Window Update, #{byte_size(data.data)} bytes")
+          # IO.puts("<-- Window Update, #{byte_size(data.data)} bytes")
           window_update = Http2.build_frame(0x8, 0x0, 0x0, <<byte_size(data.data)::32>>)
           :ssl.send(state.socket, window_update)
         end
         Stream.cast_recv(pid, data)
-        #GenServer.cast(self(), {:recv, data})
       @headers ->
         Stream.cast_recv(pid, Headers.new(frame))
-        #GenServer.cast(self(), {:recv, Headers.new(frame)})
       @rst_stream ->
         rst = RstStream.new(frame)
         Stream.cast_recv(pid, rst)

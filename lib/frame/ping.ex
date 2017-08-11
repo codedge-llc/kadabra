@@ -1,4 +1,6 @@
 defmodule Kadabra.Frame.Ping do
+  @moduledoc false
+
   defstruct [:data, ack: false]
 
   alias Kadabra.Frame

@@ -5,11 +5,11 @@ defmodule Kadabra.Stream do
   defstruct [:id, :stream_id, :uri, :connection, :encoder, :decoder, :settings,
              :socket, :flow_control, headers: [], body: "", scheme: :https]
 
-  alias Kadabra.{Connection, Encodable, FlowControl, Hpack, Http2, Stream}
+  alias Kadabra.{Connection, Encodable, Hpack, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream}
 
   @data 0x0
-  @headers 0x1
+  # @headers 0x1
 
   @closed :closed
   @half_closed_local :half_closed_local
@@ -129,7 +129,7 @@ defmodule Kadabra.Stream do
     recv(frame, state, stream)
   end
 
-  def handle_event(:cast, {:send_headers, headers, payload}, _state, stream) do
+  def handle_event(:cast, {:send_headers, _headers, _payload}, _state, stream) do
     # headers = add_headers(headers, stream)
 
     # {:ok, encoded} = Hpack.encode(stream.encoder, headers)

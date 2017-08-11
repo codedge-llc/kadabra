@@ -1,4 +1,6 @@
 defmodule Kadabra.FlowControl do
+  @moduledoc false
+
   defstruct active_stream_count: 0,
             max_stream_count: :infinite,
             bytes_remaining: 65_535
@@ -38,25 +40,20 @@ defmodule Kadabra.FlowControl do
   end
 
   def handle_call(:inc_stream_count, _pid, %{active_stream_count: count} = state) do
-    #IO.puts("#{count} -> #{count + 1}")
     state = %{state | active_stream_count: count + 1}
     {:reply, {:ok, state.active_stream_count}, state}
   end
 
   def handle_call(:dec_stream_count, _pid, %{active_stream_count: count} = state) do
-    #IO.puts("#{count} -> #{count - 1}")
     state = %{state | active_stream_count: count - 1}
     {:reply, {:ok, state.active_stream_count}, state}
   end
 
   def handle_call(:can_send?, _pid, %{bytes_remaining: bytes,
                                       active_stream_count: count,
-                                      max_stream_count: max} = state) when bytes > 0 and count < max do
-    #IO.puts("#{count} / #{max}")
-    {:reply, true, state}
-  end
-  def handle_call(:can_send?, _pid, state) do
-    {:reply, false, state}
+                                      max_stream_count: max} = state) do
+    can_send? = bytes > 0 and count < max
+    {:reply, can_send?, state}
   end
 
   def handle_call({:set_max_stream_count, max}, _pid, state) do

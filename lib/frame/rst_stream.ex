@@ -1,4 +1,6 @@
 defmodule Kadabra.Frame.RstStream do
+  @moduledoc false
+
   defstruct [:stream_id, :error_code]
 
   alias Kadabra.{Error, Frame}

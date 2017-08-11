@@ -1,4 +1,6 @@
 defmodule Kadabra.Frame.WindowUpdate do
+  @moduledoc false
+
   defstruct [:stream_id, :window_size_increment]
 
   alias Kadabra.Frame
