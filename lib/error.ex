@@ -54,6 +54,17 @@ defmodule Kadabra.Error do
   @spec frame_size_error :: <<_::32>>
   def frame_size_error, do: <<6::32>>
 
+  @doc ~S"""
+  Returns a string error given integer error in range 0x0 - 0xd.
+
+  ## Examples
+
+      iex> Kadabra.Error.string(0x1)
+      "PROTOCOL_ERROR"
+      iex> Kadabra.Error.string(0xfff)
+      0xfff
+  """
+  @spec string(integer) :: String.t | integer
   def string(code) do
     case code do
       0x0 -> "NO_ERROR"
@@ -74,6 +85,16 @@ defmodule Kadabra.Error do
     end
   end
 
+  @doc ~S"""
+  Returns integer error code given string error.
+
+  ## Examples
+
+      iex> Kadabra.Error.code("PROTOCOL_ERROR")
+      0x1
+      iex> Kadabra.Error.code("NOT_AN_ERROR")
+      "NOT_AN_ERROR"
+  """
   def code(string) do
     case string do
       "NO_ERROR"            -> 0x0

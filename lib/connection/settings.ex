@@ -44,6 +44,15 @@ defmodule Kadabra.Connection.Settings do
       {:ok, %Kadabra.Connection.Settings{initial_window_size: 70_000}}
       iex> Kadabra.Connection.Settings.put(s, init_window_size, 5_000_000_000)
       {:error, Kadabra.Error.flow_control_error, s}
+
+      iex> s = %Kadabra.Connection.Settings{}
+      iex> max_frame_size = 0x5
+      iex> Kadabra.Connection.Settings.put(s, max_frame_size, 20_000)
+      {:ok, %Kadabra.Connection.Settings{max_frame_size: 20_000}}
+      iex> Kadabra.Connection.Settings.put(s, max_frame_size, 20_000_000)
+      {:error, Kadabra.Error.protocol_error, s}
+      iex> Kadabra.Connection.Settings.put(s, max_frame_size, 2_000)
+      {:error, Kadabra.Error.protocol_error, s}
   """
   @spec put(t, non_neg_integer, term) :: {:ok, t} | {:error, binary, t}
   def put(settings, @table_header_size, value) do

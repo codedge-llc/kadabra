@@ -11,9 +11,9 @@ defmodule Kadabra.Frame.PushPromise do
 
   @type t :: %__MODULE__{
     end_headers: boolean,
-    header_block_fragment: binary,
-    headers: [...],
-    stream_id: pos_integer
+    header_block_fragment: bitstring,
+    headers: [] | [...],
+    stream_id: non_neg_integer
   }
 
   @doc ~S"""
@@ -32,22 +32,6 @@ defmodule Kadabra.Frame.PushPromise do
       stream_id: id,
       header_block_fragment: headers,
       end_headers: Flags.end_headers?(f)
-    }
-  end
-
-  def new(<<_payload_size::24,
-            _frame_type::8,
-            flags::8,
-            _::1,
-            _stream_id::31,
-            _::1,
-            stream_id::31,
-            headers::bitstring>>) do
-
-    %__MODULE__{
-      stream_id: stream_id,
-      header_block_fragment: headers,
-      end_headers: Flags.end_headers?(flags)
     }
   end
 end
