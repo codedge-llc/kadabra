@@ -26,6 +26,25 @@ defmodule Kadabra.Connection.Settings do
   @max_frame_size 0x5
   @max_header_list_size 0x6
 
+  @doc ~S"""
+  Puts setting value, returning an error if present.
+
+  ## Examples
+
+      iex> s = %Kadabra.Connection.Settings{}
+      iex> enable_push = 0x2
+      iex> Kadabra.Connection.Settings.put(s, enable_push, 1)
+      {:ok, %Kadabra.Connection.Settings{enable_push: true}}
+      iex> Kadabra.Connection.Settings.put(s, enable_push, :bad)
+      {:error, Kadabra.Error.protocol_error, s}
+
+      iex> s = %Kadabra.Connection.Settings{}
+      iex> init_window_size = 0x4
+      iex> Kadabra.Connection.Settings.put(s, init_window_size, 70_000)
+      {:ok, %Kadabra.Connection.Settings{initial_window_size: 70_000}}
+      iex> Kadabra.Connection.Settings.put(s, init_window_size, 5_000_000_000)
+      {:error, Kadabra.Error.flow_control_error, s}
+  """
   @spec put(t, non_neg_integer, term) :: {:ok, t} | {:error, binary, t}
   def put(settings, @table_header_size, value) do
     {:ok, %{settings | header_table_size: value}}

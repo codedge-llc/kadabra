@@ -11,6 +11,15 @@ defmodule Kadabra.Frame.Ping do
     data: <<_::32>>
   }
 
+  @doc ~S"""
+  Returns new unacked ping frame.
+
+  ## Examples
+
+      iex> Kadabra.Frame.Ping.new
+      %Kadabra.Frame.Ping{data: <<0, 0, 0, 0, 0, 0, 0, 0>>,
+      ack: false}
+  """
   def new do
     %__MODULE__{
       data: <<0, 0, 0, 0, 0, 0, 0, 0>>,
@@ -18,6 +27,17 @@ defmodule Kadabra.Frame.Ping do
     }
   end
 
+  @doc ~S"""
+  Initializes a new `Frame.Ping` given a `Frame`.
+
+
+  ## Examples
+
+      iex> frame = %Kadabra.Frame{payload: <<0, 0, 0, 0, 0, 0, 0, 0>>,
+      ...> flags: 0x1, type: 0x6}
+      iex> Kadabra.Frame.Ping.new(frame)
+      %Kadabra.Frame.Ping{data: <<0, 0, 0, 0, 0, 0, 0, 0>>, ack: true}
+  """
   def new(%Frame{type: 0x6, payload: data, flags: flags}) do
     %__MODULE__{
       data: data,
