@@ -15,7 +15,7 @@ defprotocol Kadabra.Encodable do
       iex> Kadabra.Encodable.to_bin(:any_non_frame_term)
       :error
   """
-  @spec to_bin(any) :: bitstring | :error
+  @spec to_bin(any) :: binary | :error
   def to_bin(frame)
 end
 
