@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/codedge-llc/kadabra.svg?branch=master)](https://travis-ci.org/codedge-llc/kadabra) [![Coverage Status](https://coveralls.io/repos/github/codedge-llc/kadabra/badge.svg?branch=coveralls)](https://coveralls.io/github/codedge-llc/kadabra?branch=coveralls) [![Hex.pm](http://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra) [![Hex.pm](http://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
+[![Build Status](https://travis-ci.org/codedge-llc/kadabra.svg?branch=master)](https://travis-ci.org/codedge-llc/kadabra) [![Coverage Status](https://coveralls.io/repos/github/codedge-llc/kadabra/badge.svg?branch=master)](https://coveralls.io/github/codedge-llc/kadabra?branch=master) [![Hex.pm](http://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra) [![Hex.pm](http://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
 
 # Kadabra
 
