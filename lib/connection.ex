@@ -17,7 +17,7 @@ defmodule Kadabra.Connection do
   require Logger
 
   alias Kadabra.{Connection, ConnectionSettings, Encodable, Error,
-    FlowControl, Frame, Hpack, Http2, Stream}
+    Frame, Hpack, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Goaway, Headers, Ping,
     PushPromise, RstStream, WindowUpdate}
 
@@ -32,7 +32,7 @@ defmodule Kadabra.Connection do
     stream_id: pos_integer,
     reconnect: boolean,
     overflow: [...],
-    flow_control: pid
+    flow_control: term
   }
 
   @type sock :: {:sslsocket, any, pid | {any, any}}
@@ -73,8 +73,6 @@ defmodule Kadabra.Connection do
   end
 
   defp initial_state(socket, uri, pid, opts) do
-   {:ok, flow} = FlowControl.start_link
-
    ref = :erlang.make_ref
    Kadabra.Supervisor.start_settings(ref)
    Kadabra.Supervisor.start_decoder(ref)
@@ -88,7 +86,7 @@ defmodule Kadabra.Connection do
       opts: opts,
       socket: socket,
       reconnect: opts[:reconnect],
-      flow_control: flow
+      flow_control: %Kadabra.Connection.FlowControl{}
     }
   end
 
@@ -194,7 +192,7 @@ defmodule Kadabra.Connection do
            %{flow_control: flow, ref: ref} = state) do
 
     ConnectionSettings.update(ref, settings)
-    FlowControl.set_max_stream_count(flow, settings.max_concurrent_streams)
+    flow = Connection.FlowControl.put_settings(flow, settings)
 
     pid = {:via, Registry, {Registry.Kadabra, {state.ref, :encoder}}}
     Hpack.update_max_table_size(pid, settings.max_header_list_size)
@@ -202,7 +200,7 @@ defmodule Kadabra.Connection do
     bin = Frame.Settings.ack |> Encodable.to_bin
     :ssl.send(state.socket, bin)
 
-    {:noreply, state}
+    {:noreply, %{state | flow_control: flow}}
   end
 
   def recv(%Goaway{last_stream_id: id,
@@ -215,8 +213,8 @@ defmodule Kadabra.Connection do
 
   def recv(%Frame.WindowUpdate{window_size_increment: inc}, state) do
     # IO.puts("--> Window Update, Stream ID: 0, Increment: #{inc} bytes")
-    FlowControl.add_bytes(state.flow_control, inc)
-    {:noreply, state}
+    flow = Connection.FlowControl.increment_window(state.flow_control, inc)
+    {:noreply, %{state | flow_control: flow}}
   end
 
   def recv(_else, state), do: {:noreply, state}
@@ -225,42 +223,18 @@ defmodule Kadabra.Connection do
     %{state | stream_id: stream_id + 2}
   end
 
-  defp do_send_headers(headers, payload, %{ref: ref,
-                                           overflow: overflow,
-                                           flow_control: flow} = state) do
+  defp do_send_headers(headers, payload, %{flow_control: flow} = state) do
+    flow =
+      flow
+      |> Connection.FlowControl.add(headers, payload)
+      |> Connection.FlowControl.process(state)
 
-    if FlowControl.can_send?(flow) do
-      {:ok, settings} = Kadabra.ConnectionSettings.fetch(ref)
-      {:ok, pid} = Kadabra.Supervisor.start_stream(state, settings)
-      Registry.register(Registry.Kadabra, {ref, state.stream_id}, pid)
-
-      :gen_statem.call(pid, {:send_headers, headers, payload})
-
-      FlowControl.increment_active_stream_count(flow)
-
-      state
-      |> increment_stream_id()
-    else
-      overflow = overflow ++ [{:send, headers, payload}]
-      %{state | overflow: overflow}
-    end
+    %{state | flow_control: flow}
   end
 
   def log_goaway(code, id, bin) do
     error = Error.string(code)
     Logger.error "Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{bin}"
-  end
-
-  defp process_queue(%{overflow: []} = state), do: state
-  defp process_queue(%{overflow: [{:send, headers, payload} | rest]} = state) do
-    state = %{state | overflow: rest}
-    state = do_send_headers(headers, payload, state)
-
-    if FlowControl.can_send?(state.flow_control) do
-      process_queue(state)
-    else
-      state
-    end
   end
 
   def handle_info({:finished, response},
@@ -269,12 +243,12 @@ defmodule Kadabra.Connection do
     send(pid, {:end_stream, response})
     # IO.puts(":: Finished stream_id: #{response.id} ::")
 
-    FlowControl.decrement_active_stream_count(flow)
+    flow =
+      flow
+      |> Connection.FlowControl.decrement_active_stream_count
+      |> Connection.FlowControl.process(state)
 
-    state =
-      state
-      |> process_queue()
-    {:noreply, state}
+    {:noreply, %{state | flow_control: flow}}
   end
 
   def handle_info({:push_promise, stream}, %{client: pid} = state) do
