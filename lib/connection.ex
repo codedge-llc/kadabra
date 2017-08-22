@@ -372,12 +372,9 @@ defmodule Kadabra.Connection do
 
   def process(%Frame.PushPromise{stream_id: stream_id} = frame, %{ref: ref} = state) do
     {:ok, settings} = Kadabra.ConnectionSettings.fetch(ref)
-    {:ok, pid} =
-      state
-      |> Stream.new(settings, stream_id)
-      |> Stream.start_link
+    {:ok, pid} = Kadabra.Supervisor.start_stream(state, settings, stream_id)
+    Registry.register(Registry.Kadabra, {ref, state.stream_id}, pid)
 
-    Registry.register(Registry.Kadabra, {state.ref, stream_id}, pid)
     Stream.cast_recv(pid, frame)
   end
 

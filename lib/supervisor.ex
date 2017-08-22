@@ -18,8 +18,8 @@ defmodule Kadabra.Supervisor do
     start_hpack(ref, :encoder)
 	end
 
-  def start_stream(connection, settings) do
-    stream = Stream.new(connection, settings, connection.stream_id)
+  def start_stream(connection, settings, stream_id \\ nil) do
+    stream = Stream.new(connection, settings, stream_id || connection.stream_id)
     spec = worker(Stream, [stream], id: :erlang.make_ref, restart: :transient)
 		case Supervisor.start_child(__MODULE__, spec) do
       {:ok, pid} -> {:ok, pid}
