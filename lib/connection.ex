@@ -111,13 +111,19 @@ defmodule Kadabra.Connection do
     ssl_opts = ssl_options(opts[:ssl])
     case :ssl.connect(uri, opts[:port], ssl_opts) do
       {:ok, ssl} ->
-        :ssl.send(ssl, Http2.connection_preface)
-        bin = %Frame.Settings{} |> Encodable.to_bin
-        :ssl.send(ssl, bin)
+        send_preface_and_settings(ssl)
         {:ok, ssl}
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  defp send_preface_and_settings(socket) do
+    :ssl.send(socket, Http2.connection_preface)
+    bin =
+      %Frame.Settings{settings: Connection.Settings.default}
+      |> Encodable.to_bin
+    :ssl.send(socket, bin)
   end
 
   defp ssl_options(nil), do: ssl_options([])
@@ -130,6 +136,8 @@ defmodule Kadabra.Connection do
       :binary
     ]
   end
+
+  # handle_cast
 
   def handle_cast({:send, :headers, headers}, state) do
     new_state = do_send_headers(headers, nil, state)
@@ -224,33 +232,30 @@ defmodule Kadabra.Connection do
 
   defp do_send_headers(headers, payload, %{ref: ref,
                                            overflow: overflow,
-                                           flow_control: flow,
-                                           settings: settings_pid} = state) do
+                                           flow_control: flow} = state) do
 
-    {:ok, settings} = Kadabra.ConnectionSettings.fetch(settings_pid)
-
-    # TODO: Refactor this somewhere else
+    # {:ok, settings} = Kadabra.ConnectionSettings.fetch(settings_pid)
     if FlowControl.can_send?(flow) do
       stream = Stream.new(state)
       {:ok, pid} = Stream.start_link(stream)
       Registry.register(Registry.Kadabra, {ref, stream.id}, pid)
 
-      :gen_statem.cast(pid, {:send_headers, headers, payload})
+      :gen_statem.call(pid, {:send_headers, headers, payload})
 
-      headers = Stream.add_headers(headers, stream)
+      # headers = Stream.add_headers(headers, stream)
 
-      {:ok, encoded} = Hpack.encode(stream.encoder, headers)
-      headers_payload = :erlang.iolist_to_binary(encoded)
+      # {:ok, encoded} = Hpack.encode(stream.encoder, headers)
+      # headers_payload = :erlang.iolist_to_binary(encoded)
 
-      h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
-      :ssl.send(stream.socket, h)
-      # IO.puts("Sending, Stream ID: #{stream.id}")
+      # h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
+      # :ssl.send(stream.socket, h)
+      # # IO.puts("Sending, Stream ID: #{stream.id}")
 
-      if payload do
-        {:ok, settings} = Kadabra.ConnectionSettings.fetch(stream.settings)
-        chunks = Stream.chunk(settings.max_frame_size, payload)
-        Stream.send_chunks(stream.socket, stream.id, chunks)
-      end
+      # if payload do
+      #   {:ok, settings} = Kadabra.ConnectionSettings.fetch(stream.settings)
+      #   chunks = Stream.chunk(settings.max_frame_size, payload) |> IO.inspect
+      #   Stream.send_chunks(stream.socket, stream.id, chunks) |> IO.inspect
+      # end
 
       FlowControl.increment_active_stream_count(flow)
 
@@ -399,8 +404,9 @@ defmodule Kadabra.Connection do
     GenServer.cast(self(), {:recv, frame})
   end
 
-  def process(%Frame.WindowUpdate{} = frame, _state) do
-    GenServer.cast(self(), {:recv, frame})
+  def process(%Frame.WindowUpdate{} = frame, state) do
+    pid = pid_for_stream(state.ref, frame.stream_id) || self()
+    Stream.cast_recv(pid, frame)
   end
 
   def process(%Frame.Continuation{} = frame, state) do
@@ -411,11 +417,17 @@ defmodule Kadabra.Connection do
   def process(:error, _state), do: :ok
 
   def send_window_update(_socket, %Data{data: nil}), do: :ok
-  def send_window_update(socket, %Data{data: data}) do
+  def send_window_update(socket, %Data{stream_id: sid, data: data}) do
     if byte_size(data) > 0 do
       # IO.puts("<-- Window Update, #{byte_size(data)} bytes")
       bin = data |> WindowUpdate.new |> Encodable.to_bin
       :ssl.send(socket, bin)
+
+      s_bin =
+        sid
+        |> WindowUpdate.new(byte_size(data))
+        |> Encodable.to_bin
+      :ssl.send(socket, s_bin)
     end
   end
 

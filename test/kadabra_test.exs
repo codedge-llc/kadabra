@@ -2,9 +2,12 @@ defmodule KadabraTest do
   use ExUnit.Case
   doctest Kadabra
 
+  @moduletag report: [:pid]
+
   alias Kadabra.Stream
 
   describe "open/2" do
+    @tag :golang
     test "sets reconnect option if specified" do
       uri = 'http2.golang.org'
       opts = [{:active, :once}, {:reconnect, false}, {:port, 443}, :binary]
@@ -13,6 +16,7 @@ defmodule KadabraTest do
       refute state.reconnect
     end
 
+    @tag :golang
     test "reconnect option defaults to true if not specified" do
       uri = 'http2.golang.org'
       opts = [{:active, :once}, {:port, 443}, :binary]
@@ -21,6 +25,7 @@ defmodule KadabraTest do
       assert state.reconnect
     end
 
+    @tag :golang
     test "sets port if specified" do
       uri = 'http2.golang.org'
       opts = [{:active, :once}, {:reconnect, false}, {:port, 443}, :binary]
@@ -31,6 +36,7 @@ defmodule KadabraTest do
   end
 
   describe "GET"  do
+    @tag :golang
     test "https://http2.golang.org/reqinfo" do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
@@ -44,6 +50,7 @@ defmodule KadabraTest do
       }}, 5_000
     end
 
+    @tag :golang
     test "https://http2.golang.org/reqinfo a lot" do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https, reconnect: false)
@@ -64,6 +71,7 @@ defmodule KadabraTest do
       end
     end
 
+    @tag :golang
     test "https://http2.golang.org/redirect" do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
@@ -80,6 +88,7 @@ defmodule KadabraTest do
       }}, 5_000
     end
 
+    @tag :golang
     test "https://http2.golang.org/file/gopher.png" do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
@@ -95,6 +104,7 @@ defmodule KadabraTest do
       end
     end
 
+    @tag :golang
     test "https://http2.golang.org/serverpush" do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
@@ -112,10 +122,11 @@ defmodule KadabraTest do
   end
 
   describe "PUT" do
+    @tag :golang
     test "https://http2.golong.org/ECHO" do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
-      payload = String.duplicate("test", 10_000)
+      payload = String.duplicate("test", 10)
       Kadabra.put(pid, "/ECHO", payload)
 
       expected_body = String.upcase(payload)
@@ -125,9 +136,27 @@ defmodule KadabraTest do
         headers: _headers,
         body: ^expected_body,
         status: 200
-      }}, 5_000
+      }}, 15_000
     end
 
+    @tag :golang
+    test "https://http2.golong.org/ECHO with large payload" do
+      uri = 'http2.golang.org'
+      {:ok, pid} = Kadabra.open(uri, :https)
+      payload = String.duplicate("test", 1_000_000)
+      Kadabra.put(pid, "/ECHO", payload)
+
+      expected_body = String.upcase(payload)
+
+      assert_receive {:end_stream, %Stream.Response{
+        id: 1,
+        headers: _headers,
+        body: ^expected_body,
+        status: 200
+      }}, 45_000
+    end
+
+    @tag :golang
     test "https://http2.golong.org/crc32" do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
