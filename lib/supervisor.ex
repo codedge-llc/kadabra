@@ -41,15 +41,4 @@ defmodule Kadabra.Supervisor do
     spec = worker(Kadabra.Hpack, [{ref, name}], start_opts())
     Supervisor.start_child(__MODULE__, spec)
   end
-
-  def pid_for(ref, name) do
-    case Registry.lookup(Registry.Kadabra, via_tuple(ref, name)) do
-      [{_self, pid}] -> pid
-      [] -> nil
-    end
-  end
-
-  def via_tuple(ref, name) do
-    {:via, Registry, {Registry.Kadabra, {ref, name}}}
-  end
 end
