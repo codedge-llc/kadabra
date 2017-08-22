@@ -214,7 +214,7 @@ defmodule Kadabra.Connection do
   end
 
   def recv(%Frame.WindowUpdate{window_size_increment: inc}, state) do
-    #IO.puts("--> Window Update, Stream ID: 0, Increment: #{inc} bytes")
+    # IO.puts("--> Window Update, Stream ID: 0, Increment: #{inc} bytes")
     FlowControl.add_bytes(state.flow_control, inc)
     {:noreply, state}
   end
@@ -357,7 +357,6 @@ defmodule Kadabra.Connection do
 
   def process(%Frame.Headers{} = frame, state) do
     pid = pid_for_stream(state.ref, frame.stream_id) || self()
-    #name = Stream.via_tuple(state.ref, frame.stream_id)
     Stream.cast_recv(pid, frame)
   end
 
@@ -370,10 +369,10 @@ defmodule Kadabra.Connection do
     recv(frame, state)
   end
 
-  def process(%Frame.PushPromise{stream_id: stream_id} = frame, %{ref: ref} = state) do
-    {:ok, settings} = Kadabra.ConnectionSettings.fetch(ref)
+  def process(%Frame.PushPromise{stream_id: stream_id} = frame, state) do
+    {:ok, settings} = Kadabra.ConnectionSettings.fetch(state.ref)
     {:ok, pid} = Kadabra.Supervisor.start_stream(state, settings, stream_id)
-    Registry.register(Registry.Kadabra, {ref, state.stream_id}, pid)
+    Registry.register(Registry.Kadabra, {state.ref, state.stream_id}, pid)
 
     Stream.cast_recv(pid, frame)
   end
@@ -447,9 +446,6 @@ defmodule Kadabra.Connection do
   end
 
   defp reset_state(state, socket) do
-    #{:ok, enc} = Hpack.start_link
-    #{:ok, dec} = Hpack.start_link
-    #%{state | encoder_state: enc, decoder_state: dec, socket: socket}
     %{state | socket: socket}
   end
 end

@@ -125,10 +125,10 @@ defmodule Kadabra.Stream do
     {:keep_state, %{stream | flow: flow}}
   end
 
-  def recv(%PushPromise{header_block_fragment: fragment}, state, %{ref: ref} = stream)
+  def recv(%PushPromise{header_block_fragment: fragment}, state, stream)
     when state in [@idle] do
 
-    {:ok, headers} = Hpack.decode(ref, fragment)
+    {:ok, headers} = Hpack.decode(stream.ref, fragment)
     stream = %Stream{stream | headers: stream.headers ++ headers}
 
     send(stream.connection, {:push_promise, Stream.Response.new(stream)})
