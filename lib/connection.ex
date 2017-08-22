@@ -10,10 +10,7 @@ defmodule Kadabra.Connection do
             socket: nil,
             stream_id: 1,
             reconnect: true,
-            settings: nil,
             overflow: [],
-            encoder_state: nil,
-            decoder_state: nil,
             flow_control: nil
 
   use GenServer
@@ -34,10 +31,7 @@ defmodule Kadabra.Connection do
     socket: sock,
     stream_id: pos_integer,
     reconnect: boolean,
-    settings: pid,
     overflow: [...],
-    encoder_state: pid,
-    decoder_state: pid,
     flow_control: pid
   }
 
@@ -79,21 +73,21 @@ defmodule Kadabra.Connection do
   end
 
   defp initial_state(socket, uri, pid, opts) do
-   {:ok, encoder} = Hpack.start_link
-   {:ok, decoder} = Hpack.start_link
-   {:ok, settings} = ConnectionSettings.start_link
    {:ok, flow} = FlowControl.start_link
+
+   ref = :erlang.make_ref
+   Kadabra.Supervisor.start_settings(ref)
+   Kadabra.Supervisor.start_decoder(ref)
+   Kadabra.Supervisor.start_encoder(ref)
+
    %__MODULE__{
-      ref: :erlang.make_ref,
+      ref: ref,
       client: pid,
       uri: uri,
       scheme: opts[:scheme] || :https,
       opts: opts,
       socket: socket,
       reconnect: opts[:reconnect],
-      settings: settings,
-      encoder_state: encoder,
-      decoder_state: decoder,
       flow_control: flow
     }
   end
@@ -197,11 +191,13 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
   def recv(%Frame.Settings{ack: false, settings: settings},
-           %{flow_control: flow, decoder_state: decoder} = state) do
+           %{flow_control: flow, ref: ref} = state) do
 
-    ConnectionSettings.update(state.settings, settings)
+    ConnectionSettings.update(ref, settings)
     FlowControl.set_max_stream_count(flow, settings.max_concurrent_streams)
-    Hpack.update_max_table_size(decoder, settings.max_header_list_size)
+
+    pid = {:via, Registry, {Registry.Kadabra, {state.ref, :encoder}}}
+    Hpack.update_max_table_size(pid, settings.max_header_list_size)
 
     bin = Frame.Settings.ack |> Encodable.to_bin
     :ssl.send(state.socket, bin)
@@ -217,9 +213,8 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  def recv(%Frame.WindowUpdate{stream_id: _id,
-                               window_size_increment: inc}, state) do
-    # IO.puts("--> Window Update, Stream ID: #{id}, Increment: #{inc} bytes")
+  def recv(%Frame.WindowUpdate{window_size_increment: inc}, state) do
+    #IO.puts("--> Window Update, Stream ID: 0, Increment: #{inc} bytes")
     FlowControl.add_bytes(state.flow_control, inc)
     {:noreply, state}
   end
@@ -234,28 +229,12 @@ defmodule Kadabra.Connection do
                                            overflow: overflow,
                                            flow_control: flow} = state) do
 
-    # {:ok, settings} = Kadabra.ConnectionSettings.fetch(settings_pid)
     if FlowControl.can_send?(flow) do
-      stream = Stream.new(state)
-      {:ok, pid} = Stream.start_link(stream)
-      Registry.register(Registry.Kadabra, {ref, stream.id}, pid)
+      {:ok, settings} = Kadabra.ConnectionSettings.fetch(ref)
+      {:ok, pid} = Kadabra.Supervisor.start_stream(state, settings)
+      Registry.register(Registry.Kadabra, {ref, state.stream_id}, pid)
 
       :gen_statem.call(pid, {:send_headers, headers, payload})
-
-      # headers = Stream.add_headers(headers, stream)
-
-      # {:ok, encoded} = Hpack.encode(stream.encoder, headers)
-      # headers_payload = :erlang.iolist_to_binary(encoded)
-
-      # h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
-      # :ssl.send(stream.socket, h)
-      # # IO.puts("Sending, Stream ID: #{stream.id}")
-
-      # if payload do
-      #   {:ok, settings} = Kadabra.ConnectionSettings.fetch(stream.settings)
-      #   chunks = Stream.chunk(settings.max_frame_size, payload) |> IO.inspect
-      #   Stream.send_chunks(stream.socket, stream.id, chunks) |> IO.inspect
-      # end
 
       FlowControl.increment_active_stream_count(flow)
 
@@ -366,14 +345,19 @@ defmodule Kadabra.Connection do
   end
 
   @spec process(frame, t) :: :ok
-  def process(%Frame.Data{} = frame, state) do
-    pid = pid_for_stream(state.ref, frame.stream_id) || self()
+  def process(%Frame.Data{stream_id: 0}, _state) do
+    # TODO: This is an error
+    :ok
+  end
+  def process(%Frame.Data{stream_id: stream_id} = frame, state) do
+    pid = pid_for_stream(state.ref, stream_id) || self()
     send_window_update(state.socket, frame)
     Stream.cast_recv(pid, frame)
   end
 
   def process(%Frame.Headers{} = frame, state) do
     pid = pid_for_stream(state.ref, frame.stream_id) || self()
+    #name = Stream.via_tuple(state.ref, frame.stream_id)
     Stream.cast_recv(pid, frame)
   end
 
@@ -386,10 +370,11 @@ defmodule Kadabra.Connection do
     recv(frame, state)
   end
 
-  def process(%Frame.PushPromise{stream_id: stream_id} = frame, state) do
+  def process(%Frame.PushPromise{stream_id: stream_id} = frame, %{ref: ref} = state) do
+    {:ok, settings} = Kadabra.ConnectionSettings.fetch(ref)
     {:ok, pid} =
       state
-      |> Stream.new(stream_id)
+      |> Stream.new(settings, stream_id)
       |> Stream.start_link
 
     Registry.register(Registry.Kadabra, {state.ref, stream_id}, pid)
@@ -404,8 +389,11 @@ defmodule Kadabra.Connection do
     GenServer.cast(self(), {:recv, frame})
   end
 
-  def process(%Frame.WindowUpdate{} = frame, state) do
-    pid = pid_for_stream(state.ref, frame.stream_id) || self()
+  def process(%Frame.WindowUpdate{stream_id: 0} = frame, _state) do
+    Stream.cast_recv(self(), frame)
+  end
+  def process(%Frame.WindowUpdate{stream_id: stream_id} = frame, state) do
+    pid = pid_for_stream(state.ref, stream_id) || self()
     Stream.cast_recv(pid, frame)
   end
 
@@ -434,7 +422,9 @@ defmodule Kadabra.Connection do
   def pid_for_stream(ref, stream_id) do
     case Registry.lookup(Registry.Kadabra, {ref, stream_id}) do
       [{_self, pid}] -> pid
-      [] -> nil
+      [] ->
+        IO.puts("found nothing...")
+        nil
     end
   end
 
@@ -460,8 +450,9 @@ defmodule Kadabra.Connection do
   end
 
   defp reset_state(state, socket) do
-    {:ok, enc} = Hpack.start_link
-    {:ok, dec} = Hpack.start_link
-    %{state | encoder_state: enc, decoder_state: dec, socket: socket}
+    #{:ok, enc} = Hpack.start_link
+    #{:ok, dec} = Hpack.start_link
+    #%{state | encoder_state: enc, decoder_state: dec, socket: socket}
+    %{state | socket: socket}
   end
 end

@@ -20,18 +20,48 @@ defmodule Kadabra.Stream.FlowControl do
 
   @data 0x0
 
-  def new(stream_id) do
+  @doc ~S"""
+  Returns new `Kadabra.Stream.FlowControl` with given opts.
+
+  ## Examples
+
+      iex> new(stream_id: 1)
+      %Kadabra.Stream.FlowControl{stream_id: 1}
+  """
+  def new(opts) do
     %__MODULE__{
-      stream_id: stream_id
+      stream_id: opts[:stream_id],
+      window: opts[:window] || 56_536
     }
   end
 
-  @spec add(t, frame) :: t
+  @doc ~S"""
+  Enqueues a sendable payload.
+
+  ## Examples
+
+      iex> add(%Kadabra.Stream.FlowControl{}, "test")
+      %Kadabra.Stream.FlowControl{queue: [{:send, "test"}]}
+  """
+  @spec add(t, binary) :: t
   def add(flow_control, bin) do
     queue = flow_control.queue ++ [{:send, bin}]
     %{flow_control | queue: queue}
   end
 
+  @doc ~S"""
+  Processes sendable data in queue, if any present and window
+  is positive.
+
+  ## Examples
+
+      iex> process(%Kadabra.Stream.FlowControl{queue: []}, self())
+      %Kadabra.Stream.FlowControl{queue: []}
+
+      iex> process(%Kadabra.Stream.FlowControl{queue: [{:send, "test"}],
+      ...> window: -20}, self())
+      %Kadabra.Stream.FlowControl{queue: [{:send, "test"}], window: -20}
+  """
   @spec process(t, sock) :: t
   def process(%{queue: []} = flow_control, _sock) do
     flow_control
@@ -64,6 +94,14 @@ defmodule Kadabra.Stream.FlowControl do
     end
   end
 
+  @doc ~S"""
+  Increments stream window by given increment.
+
+  ## Examples
+
+      iex> increment_window(%Kadabra.Stream.FlowControl{window: 0}, 736)
+      %Kadabra.Stream.FlowControl{window: 736}
+  """
   def increment_window(flow_control, amount) do
     %{flow_control | window: flow_control.window + amount}
   end

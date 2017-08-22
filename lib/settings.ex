@@ -5,20 +5,26 @@ defmodule Kadabra.ConnectionSettings do
 
   alias Kadabra.Connection
 
-  def start_link do
-    GenServer.start_link(__MODULE__, :ok)
+  def start_link(ref) do
+    GenServer.start_link(__MODULE__, :ok, name: via_tuple(ref))
   end
 
   def init(:ok) do
     {:ok, %Kadabra.Connection.Settings{}}
   end
 
-  def update(pid, settings) do
-    GenServer.call(pid, {:put, settings})
+  def via_tuple(ref) do
+    {:via, Registry, {Registry.Kadabra, {ref, :settings}}}
   end
 
-  def fetch(pid) do
-    GenServer.call(pid, :fetch)
+  def update(ref, settings) do
+    name = via_tuple(ref)
+    GenServer.call(name, {:put, settings})
+  end
+
+  def fetch(ref) do
+    name = via_tuple(ref)
+    GenServer.call(name, :fetch)
   end
 
   def handle_call({:put, settings}, _pid, old_settings) do
