@@ -115,17 +115,6 @@ defmodule Kadabra.Connection.Settings do
       end
     end)
   end
-
-  def int_key(key) do
-    case key do
-      :table_header_size -> 0x1
-      :enable_push -> 0x2
-      :max_concurrent_streams -> 0x3
-      :initial_window_size -> 0x4
-      :max_frame_size -> 0x5
-      :max_header_list_size -> 0x6
-    end
-  end
 end
 
 defimpl Kadabra.Encodable, for: Kadabra.Connection.Settings do

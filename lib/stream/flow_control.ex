@@ -6,7 +6,7 @@ defmodule Kadabra.Stream.FlowControl do
             max_frame_size: 16_536,
             stream_id: nil
 
-  alias Kadabra.Http2
+  alias Kadabra.{Encodable, Frame}
 
   @type t :: %__MODULE__{
     max_frame_size: non_neg_integer,
@@ -17,8 +17,6 @@ defmodule Kadabra.Stream.FlowControl do
   @type sock :: {:sslsocket, any, pid | {any, any}}
 
   @type frame :: {:send, binary}
-
-  @data 0x0
 
   @doc ~S"""
   Returns new `Kadabra.Stream.FlowControl` with given opts.
@@ -77,8 +75,11 @@ defmodule Kadabra.Stream.FlowControl do
 
     if size > window do
       {chunk, rem_bin} = :erlang.split_binary(bin, window)
-      p = Http2.build_frame(@data, 0x0, stream_id, chunk)
-      :ssl.send(socket, p)
+
+      bin =
+        %Frame.Data{stream_id: stream_id, end_stream: false, data: chunk}
+        |> Encodable.to_bin
+      :ssl.send(socket, bin)
 
       flow_control = %{flow_control |
         queue: [{:send, rem_bin} | rest],
@@ -86,8 +87,10 @@ defmodule Kadabra.Stream.FlowControl do
       }
       process(flow_control, socket)
     else
-      p = Http2.build_frame(@data, 0x1, stream_id, bin)
-      :ssl.send(socket, p)
+      bin =
+        %Frame.Data{stream_id: stream_id, end_stream: true, data: bin}
+        |> Encodable.to_bin
+      :ssl.send(socket, bin)
 
       flow_control = %{flow_control | queue: rest, window: window - size}
       process(flow_control, socket)
