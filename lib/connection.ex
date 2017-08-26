@@ -15,7 +15,7 @@ defmodule Kadabra.Connection do
   use GenServer
   require Logger
 
-  alias Kadabra.{Connection, ConnectionSettings, Encodable, Error,
+  alias Kadabra.{Connection, Encodable, Error,
     Frame, Hpack, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Goaway, Headers, Ping,
     PushPromise, RstStream, WindowUpdate}
@@ -62,7 +62,7 @@ defmodule Kadabra.Connection do
   def init({:ok, uri, pid, opts}) do
     case Connection.Ssl.connect(uri, opts) do
       {:ok, socket} ->
-        send_preface_and_settings(socket)
+        send_preface_and_settings(socket, opts[:settings])
         state = initial_state(socket, uri, pid, opts)
         {:ok, state}
       {:error, error} ->
@@ -73,7 +73,6 @@ defmodule Kadabra.Connection do
 
   defp initial_state(socket, uri, pid, opts) do
    ref = :erlang.make_ref
-   Kadabra.Supervisor.start_settings(ref)
    Kadabra.Supervisor.start_decoder(ref)
    Kadabra.Supervisor.start_encoder(ref)
 
@@ -85,14 +84,16 @@ defmodule Kadabra.Connection do
       opts: opts,
       socket: socket,
       reconnect: opts[:reconnect],
-      flow_control: %Kadabra.Connection.FlowControl{}
+      flow_control: %Kadabra.Connection.FlowControl{
+        settings: opts[:settings] || Connection.Settings.default
+      }
     }
   end
 
-  defp send_preface_and_settings(socket) do
+  defp send_preface_and_settings(socket, settings \\ nil) do
     :ssl.send(socket, Http2.connection_preface)
     bin =
-      %Frame.Settings{settings: Connection.Settings.default}
+      %Frame.Settings{settings: settings || Connection.Settings.default}
       |> Encodable.to_bin
     :ssl.send(socket, bin)
   end
@@ -163,22 +164,14 @@ defmodule Kadabra.Connection do
   def recv(%Frame.Settings{ack: false, settings: settings},
            %{flow_control: flow, ref: ref} = state) do
 
-    {:ok, old_settings} = ConnectionSettings.fetch(ref)
-    {:ok, settings} = ConnectionSettings.update(ref, settings)
-    flow = Connection.FlowControl.put_settings(flow, settings)
+    old_settings = flow.settings
+    flow = Connection.FlowControl.update_settings(flow, settings)
+
+    notify_initial_window_change(ref, old_settings, flow)
 
     pid = Hpack.via_tuple(ref, :encoder)
     Hpack.update_max_table_size(pid, settings.max_header_list_size)
 
-    old_window = old_settings.initial_window_size
-    new_window = settings.initial_window_size
-    IO.puts("Initial Window Change: #{old_window} -> #{new_window}")
-    window_diff = new_window - old_window
-
-    for stream_id <- flow.active_streams do
-      pid = Stream.via_tuple(ref, stream_id)
-      Stream.cast_recv(pid, {:window_change, window_diff})
-    end
 
     bin = Frame.Settings.ack |> Encodable.to_bin
     :ssl.send(state.socket, bin)
@@ -200,6 +193,18 @@ defmodule Kadabra.Connection do
   end
 
   def recv(_else, state), do: {:noreply, state}
+
+  def notify_initial_window_change(ref,
+                                   %{initial_window_size: old_window},
+                                   %{settings: settings} = flow) do
+    new_window = settings.initial_window_size
+    window_diff = new_window - old_window
+
+    for stream_id <- flow.active_streams do
+      pid = Stream.via_tuple(ref, stream_id)
+      Stream.cast_recv(pid, {:window_change, window_diff})
+    end
+  end
 
   defp do_send_headers(headers, payload, %{flow_control: flow} = state) do
     flow =
@@ -327,8 +332,7 @@ defmodule Kadabra.Connection do
   end
 
   def process(%Frame.PushPromise{stream_id: stream_id} = frame, state) do
-    {:ok, settings} = Kadabra.ConnectionSettings.fetch(state.ref)
-    {:ok, pid} = Kadabra.Supervisor.start_stream(state, settings, stream_id)
+    {:ok, pid} = Kadabra.Supervisor.start_stream(state, stream_id)
 
     flow = Connection.FlowControl.add_active(state.flow_control, stream_id)
 

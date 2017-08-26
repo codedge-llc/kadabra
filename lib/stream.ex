@@ -78,10 +78,10 @@ defmodule Kadabra.Stream do
     :gen_statem.cast(pid, {:send, frame})
   end
 
+  # For SETTINGS initial_window_size changes
   def recv({:window_change, amount}, _state, stream) do
-    IO.puts("got window change on stream #{stream.id}, amount: #{amount}")
-    stream = %{window: stream.window + amount}
-    {:keep_state, stream}
+    flow = Stream.FlowControl.increment_window(stream.flow, amount)
+    {:keep_state, %{stream | flow: flow}}
   end
 
   def recv(%Data{end_stream: true, data: data}, _state, stream) do

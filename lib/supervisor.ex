@@ -18,14 +18,9 @@ defmodule Kadabra.Supervisor do
     [id: :erlang.make_ref, restart: :transient]
   end
 
-  def start_stream(%{flow_control: flow} = conn, settings, stream_id \\ nil) do
-    stream = Stream.new(conn, settings, stream_id || flow.stream_id)
+  def start_stream(%{flow_control: flow} = conn, stream_id \\ nil) do
+    stream = Stream.new(conn, flow.settings, stream_id || flow.stream_id)
     spec = worker(Stream, [stream], start_opts())
-    Supervisor.start_child(__MODULE__, spec)
-  end
-
-  def start_settings(ref) do
-    spec = worker(Kadabra.ConnectionSettings, [ref], start_opts())
     Supervisor.start_child(__MODULE__, spec)
   end
 
