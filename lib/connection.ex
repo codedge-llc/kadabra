@@ -8,7 +8,6 @@ defmodule Kadabra.Connection do
             scheme: :https,
             opts: [],
             socket: nil,
-            streams: MapSet.new,
             reconnect: true,
             flow_control: nil
 
@@ -28,7 +27,6 @@ defmodule Kadabra.Connection do
     reconnect: boolean,
     ref: nil,
     scheme: :https,
-    streams: MapSet.new,
     socket: sock,
     uri: charlist
   }
