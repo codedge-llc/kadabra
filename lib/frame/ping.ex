@@ -8,7 +8,7 @@ defmodule Kadabra.Frame.Ping do
 
   @type t :: %__MODULE__{
     ack: boolean,
-    data: <<_::32>>
+    data: <<_::64>>
   }
 
   @doc ~S"""
@@ -20,6 +20,7 @@ defmodule Kadabra.Frame.Ping do
       %Kadabra.Frame.Ping{data: <<0, 0, 0, 0, 0, 0, 0, 0>>,
       ack: false}
   """
+  @spec new() :: t
   def new do
     %__MODULE__{
       data: <<0, 0, 0, 0, 0, 0, 0, 0>>,
@@ -38,15 +39,13 @@ defmodule Kadabra.Frame.Ping do
       iex> Kadabra.Frame.Ping.new(frame)
       %Kadabra.Frame.Ping{data: <<0, 0, 0, 0, 0, 0, 0, 0>>, ack: true}
   """
+  @spec new(Frame.t) :: t
   def new(%Frame{type: 0x6, payload: data, flags: flags}) do
     %__MODULE__{
       data: data,
       ack: Flags.ack?(flags)
     }
   end
-
-  def ack_flag(%{ack: true}), do: 0x1
-  def ack_flag(%{ack: false}), do: 0x0
 end
 
 defimpl Kadabra.Encodable, for: Kadabra.Frame.Ping do

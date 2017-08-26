@@ -53,7 +53,6 @@ defmodule Kadabra do
   @spec close(pid) :: :ok
   def close(pid), do: GenServer.cast(pid, {:send, :goaway})
 
-
   @doc ~S"""
   Pings an existing connection.
 

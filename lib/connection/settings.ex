@@ -26,6 +26,16 @@ defmodule Kadabra.Connection.Settings do
   @max_frame_size 0x5
   @max_header_list_size 0x6
 
+  def default do
+    %__MODULE__{
+      initial_window_size: 1_048_576,
+      max_frame_size: 1_048_576,
+      enable_push: true,
+      max_header_list_size: 4_096,
+      max_concurrent_streams: 1_000
+    }
+  end
+
   @doc ~S"""
   Puts setting value, returning an error if present.
 
@@ -105,4 +115,31 @@ defmodule Kadabra.Connection.Settings do
       end
     end)
   end
+end
+
+defimpl Kadabra.Encodable, for: Kadabra.Connection.Settings do
+  def to_bin(settings) do
+    settings
+    |> Map.from_struct
+    |> to_encoded_list()
+    |> Enum.join
+  end
+
+  def to_encoded_list(settings) do
+    Enum.reduce(settings, [], fn({k, v}, acc) ->
+      case v do
+        nil -> acc
+        :infinite -> acc
+        v -> [encode_setting(k, v)] ++ acc
+      end
+    end)
+  end
+
+  def encode_setting(:header_table_size, v), do:      <<0x1::16, v::32>>
+  def encode_setting(:enable_push, true), do:         <<0x2::16, 1::32>>
+  def encode_setting(:enable_push, false), do:        <<0x2::16, 0::32>>
+  def encode_setting(:max_concurrent_streams, v), do: <<0x3::16, v::32>>
+  def encode_setting(:initial_window_size, v), do:    <<0x4::16, v::32>>
+  def encode_setting(:max_frame_size, v), do:         <<0x5::16, v::32>>
+  def encode_setting(:max_header_list_size, v), do:   <<0x6::16, v::32>>
 end

@@ -5,7 +5,6 @@ defmodule Kadabra.Frame.Headers do
             end_stream: false,
             exclusive: nil,
             header_block_fragment: nil,
-            headers: [],
             priority: false,
             stream_dependency: nil,
             stream_id: nil,
@@ -16,13 +15,13 @@ defmodule Kadabra.Frame.Headers do
     end_stream: boolean,
     exclusive: boolean,
     header_block_fragment: binary,
-    headers: [...],
     priority: boolean,
     stream_dependency: pos_integer,
     stream_id: pos_integer,
     weight: non_neg_integer
   }
 
+  alias Kadabra.Frame
   alias Kadabra.Frame.Flags
 
   @doc ~S"""
@@ -43,7 +42,8 @@ defmodule Kadabra.Frame.Headers do
       end_headers: true, priority: true, header_block_fragment: <<136>>,
       weight: 3, exclusive: true, stream_dependency: 1}
   """
-  def new(%{stream_id: stream_id, flags: flags, payload: p}) do
+  @spec new(Frame.t) :: t
+  def new(%Frame{stream_id: stream_id, flags: flags, payload: p}) do
     frame =
       %__MODULE__{
         end_stream: Flags.end_stream?(flags),

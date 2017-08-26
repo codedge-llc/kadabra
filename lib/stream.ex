@@ -1,28 +1,39 @@
 defmodule Kadabra.Stream do
   @moduledoc false
 
-  defstruct [:id, :uri, :connection, :encoder, :decoder, :settings,
-             :socket, :flow_control, headers: [], body: "", scheme: :https]
+  defstruct id: nil,
+            ref: nil,
+            uri: nil,
+            connection: nil,
+            settings: nil,
+            socket: nil,
+            flow: nil,
+            headers: [],
+            body: "",
+            buffer: "",
+            scheme: :https
+
+  require Logger
 
   alias Kadabra.{Connection, Encodable, Hpack, Http2, Stream}
-  alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream}
+  alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream,
+    WindowUpdate}
 
   @type t :: %__MODULE__{
     id: pos_integer,
+    ref: term,
     uri: charlist,
     connection: pid,
-    encoder: pid,
-    decoder: pid,
     settings: pid,
     socket: pid,
-    flow_control: pid,
+    flow: Kadabra.Stream.FlowControl.t,
     headers: [...],
     body: binary,
     scheme: :https
   }
 
-  @data 0x0
-  # @headers 0x1
+  # @data 0x0
+  @headers 0x1
 
   @closed :closed
   @half_closed_local :half_closed_local
@@ -32,26 +43,31 @@ defmodule Kadabra.Stream do
   # @reserved_local :reserved_local
   @reserved_remote :reserved_remote
 
-  def new(%Connection{} = conn) do
+  def new(%Connection{} = conn,
+          %Connection.Settings{} = settings,
+          stream_id) do
+    flow_opts = [
+      stream_id: stream_id,
+      window: settings.initial_window_size
+    ]
+
     %__MODULE__{
-      id: conn.stream_id,
+      id: stream_id,
+      ref: conn.ref,
       uri: conn.uri,
       connection: self(),
       socket: conn.socket,
-      settings: conn.settings,
-      encoder: conn.encoder_state,
-      decoder: conn.decoder_state,
-      flow_control: conn.flow_control
+      buffer: "",
+      flow: Stream.FlowControl.new(flow_opts)
     }
   end
-  def new(%Connection{} = conn, stream_id) do
-    conn
-    |> new()
-    |> Map.put(:id, stream_id)
+
+  def start_link(%{id: id, ref: ref} = stream) do
+    :gen_statem.start_link(via_tuple(ref, id), __MODULE__, stream, [])
   end
 
-  def start_link(stream) do
-    :gen_statem.start_link(__MODULE__, stream, [])
+  def via_tuple(ref, stream_id) do
+    {:via, Registry, {Registry.Kadabra, {ref, stream_id}}}
   end
 
   def cast_recv(pid, frame) do
@@ -62,30 +78,49 @@ defmodule Kadabra.Stream do
     :gen_statem.cast(pid, {:send, frame})
   end
 
-  def recv(%Data{end_stream: end_stream?, data: data}, _state, stream) do
-    stream = %Stream{stream | body: stream.body <> data}
-
-    cond do
-      end_stream? -> {:next_state, @half_closed_remote, stream}
-      true -> {:keep_state, stream}
-    end
+  # For SETTINGS initial_window_size changes
+  def recv({:window_change, amount}, _state, stream) do
+    flow = Stream.FlowControl.increment_window(stream.flow, amount)
+    {:keep_state, %{stream | flow: flow}}
   end
 
-  def recv(%Headers{header_block_fragment: fragment} = frame, _state, stream) do
-    {:ok, headers} = Hpack.decode(stream.decoder, fragment)
-    stream = %Stream{stream | headers: stream.headers ++ headers}
+  def recv(%Data{end_stream: true, data: data}, _state, stream) do
+    stream = %Stream{stream | body: stream.body <> data}
+    {:next_state, @half_closed_remote, stream}
+  end
+  def recv(%Data{end_stream: false, data: data}, _state, stream) do
+    stream = %Stream{stream | body: stream.body <> data}
+    {:keep_state, stream}
+  end
 
-    if frame.end_stream do
-      {:next_state, @half_closed_remote, stream}
-    else
-      {:keep_state, stream}
-    end
+  def recv(%Headers{header_block_fragment: fragment,
+                    end_stream: true}, _state, stream) do
+
+    {:ok, headers} = Hpack.decode(stream.ref, fragment)
+    stream = %Stream{stream | headers: stream.headers ++ headers}
+    {:next_state, @half_closed_remote, stream}
+  end
+  def recv(%Headers{header_block_fragment: fragment,
+                    end_stream: false}, _state, stream) do
+
+    {:ok, headers} = Hpack.decode(stream.ref, fragment)
+    stream = %Stream{stream | headers: stream.headers ++ headers}
+    {:keep_state, stream}
+  end
+
+  def recv(%WindowUpdate{window_size_increment: inc}, _state, stream) do
+    flow =
+      stream.flow
+      |> Stream.FlowControl.increment_window(inc)
+      |> Stream.FlowControl.process(stream.socket)
+
+    {:keep_state, %{stream | flow: flow}}
   end
 
   def recv(%PushPromise{header_block_fragment: fragment}, state, stream)
     when state in [@idle] do
 
-    {:ok, headers} = Hpack.decode(stream.decoder, fragment)
+    {:ok, headers} = Hpack.decode(stream.ref, fragment)
     stream = %Stream{stream | headers: stream.headers ++ headers}
 
     send(stream.connection, {:push_promise, Stream.Response.new(stream)})
@@ -94,12 +129,11 @@ defmodule Kadabra.Stream do
 
   def recv(%RstStream{}, state, stream)
     when state in [@open, @half_closed_local, @half_closed_remote, @closed] do
+    # IO.inspect(frame, label: "Got RST_STREAM")
     {:next_state, :closed, stream}
   end
 
-  def recv(%Continuation{header_block_fragment: fragment}, state, stream)
-    when state in [@idle] do
-
+  def recv(%Continuation{header_block_fragment: fragment}, _state, stream) do
     {:ok, headers} = Hpack.decode(stream.decoder, fragment)
     stream = %Stream{stream | headers: stream.headers ++ headers}
 
@@ -107,8 +141,11 @@ defmodule Kadabra.Stream do
   end
 
   def recv(frame, state, stream) do
-    IO.puts("Unknown RECV: #{inspect(frame)}, #{inspect(state)},
-    #{inspect(stream)}")
+    Logger.info("""
+    Unknown RECV on stream #{stream.id}
+    Frame: #{inspect(frame)}
+    State: #{inspect(state)}
+    """)
     {:keep_state, stream}
   end
 
@@ -137,27 +174,6 @@ defmodule Kadabra.Stream do
     recv(frame, state, stream)
   end
 
-  def handle_event(:cast, {:send_headers, _h, _p}, _state, stream) do
-    # headers = add_headers(headers, stream)
-
-    # {:ok, encoded} = Hpack.encode(stream.encoder, headers)
-    # headers_payload = :erlang.iolist_to_binary(encoded)
-
-    # h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
-    # :ssl.send(stream.socket, h)
-    # IO.puts("Sending, Stream ID: #{stream.id}")
-
-    # #send(stream.connection, {:registered, stream.id, self()})
-
-    # if payload do
-    #   {:ok, settings} = Kadabra.ConnectionSettings.fetch(stream.settings)
-    #   chunks = chunk(settings.max_frame_size, payload)
-    #   send_chunks(stream.socket, stream.id, chunks)
-    # end
-
-    {:next_state, @open, stream}
-  end
-
   def handle_event(:cast, msg, state, stream) do
     IO.inspect("""
     === Unknown cast ===
@@ -168,24 +184,35 @@ defmodule Kadabra.Stream do
     {:keep_state, stream}
   end
 
-  def send_chunks(_socket, _stream_id, []), do: :ok
-  def send_chunks(socket, stream_id, [chunk | []]) do
-    h_p = Http2.build_frame(@data, 0x1, stream_id, chunk)
-    :ssl.send(socket, h_p)
-  end
-  def send_chunks(socket, stream_id, [chunk | rest]) do
-    h_p = Http2.build_frame(@data, 0x0, stream_id, chunk)
-    :ssl.send(socket, h_p)
+  # Calls
 
-    send_chunks(socket, stream_id, rest)
-  end
+  def handle_event({:call, from},
+                   {:send_headers, headers, payload},
+                   _state,
+                   stream) do
 
-  def chunk(size, bin) when byte_size(bin) >= size do
-    {chunk, rest} = :erlang.split_binary(bin, size)
-    [chunk | chunk(size, rest)]
+    headers = add_headers(headers, stream)
+
+    {:ok, encoded} = Hpack.encode(stream.ref, headers)
+    headers_payload = :erlang.iolist_to_binary(encoded)
+
+    h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
+    :ssl.send(stream.socket, h)
+    # IO.puts("Sending, Stream ID: #{stream.id}")
+
+    flow =
+      if payload do
+        stream.flow
+        |> Stream.FlowControl.add(payload)
+        |> Stream.FlowControl.process(stream.socket)
+      else
+        stream.flow
+      end
+
+    stream = %{stream | flow: flow}
+
+    {:next_state, @open, stream, [{:reply, from, :ok}]}
   end
-  def chunk(_size, <<>>), do: []
-  def chunk(_size, bin), do: [bin]
 
   def add_headers(headers, stream) do
     h = headers ++
@@ -196,6 +223,8 @@ defmodule Kadabra.Stream do
     # sorting headers to have pseudo headers first.
     Enum.sort(h, fn({a, _b}, {c, _d}) -> a < c end)
   end
+
+  # Other Callbacks
 
   def init(stream), do: {:ok, @idle, stream}
 

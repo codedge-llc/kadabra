@@ -3,7 +3,6 @@ defmodule Kadabra.Frame.PushPromise do
 
   defstruct end_headers: false,
             header_block_fragment: nil,
-            headers: [],
             stream_id: nil
 
   alias Kadabra.Frame
@@ -12,7 +11,6 @@ defmodule Kadabra.Frame.PushPromise do
   @type t :: %__MODULE__{
     end_headers: boolean,
     header_block_fragment: bitstring,
-    headers: [] | [...],
     stream_id: non_neg_integer
   }
 

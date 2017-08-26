@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.1
+- Fixed: Sending payloads larger than the stream window
+
 ## v0.3.0
 - Minimum requirements are now Elixir 1.4/OTP 19
 - Performance improvements for individual streams
