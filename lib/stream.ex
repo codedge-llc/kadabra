@@ -43,22 +43,9 @@ defmodule Kadabra.Stream do
   # @reserved_local :reserved_local
   @reserved_remote :reserved_remote
 
-  def new(%Connection{} = conn) do
-    flow_opts = [
-      stream_id: conn.stream_id,
-    ]
-
-    %__MODULE__{
-      id: conn.stream_id,
-      ref: conn.ref,
-      uri: conn.uri,
-      connection: self(),
-      socket: conn.socket,
-      buffer: "",
-      flow: Stream.FlowControl.new(flow_opts)
-    }
-  end
-  def new(%Connection{} = conn, %Connection.Settings{} = settings, stream_id) do
+  def new(%Connection{} = conn,
+          %Connection.Settings{} = settings,
+          stream_id) do
     flow_opts = [
       stream_id: stream_id,
       window: settings.initial_window_size
@@ -75,8 +62,12 @@ defmodule Kadabra.Stream do
     }
   end
 
-  def start_link(stream) do
-    :gen_statem.start_link(__MODULE__, stream, [])
+  def start_link(%{id: id, ref: ref} = stream) do
+    :gen_statem.start_link(via_tuple(ref, id), __MODULE__, stream, [])
+  end
+
+  def via_tuple(ref, stream_id) do
+    {:via, Registry, {Registry.Kadabra, {ref, stream_id}}}
   end
 
   def cast_recv(pid, frame) do
@@ -87,13 +78,18 @@ defmodule Kadabra.Stream do
     :gen_statem.cast(pid, {:send, frame})
   end
 
+  def recv({:window_change, amount}, _state, stream) do
+    IO.puts("got window change on stream #{stream.id}, amount: #{amount}")
+    stream = %{window: stream.window + amount}
+    {:keep_state, stream}
+  end
+
   def recv(%Data{end_stream: true, data: data}, _state, stream) do
     stream = %Stream{stream | body: stream.body <> data}
     {:next_state, @half_closed_remote, stream}
   end
   def recv(%Data{end_stream: false, data: data}, _state, stream) do
     stream = %Stream{stream | body: stream.body <> data}
-    # IO.puts("got data frame")
     {:keep_state, stream}
   end
 

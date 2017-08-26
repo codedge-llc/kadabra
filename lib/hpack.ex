@@ -8,7 +8,7 @@ defmodule Kadabra.Hpack do
     GenServer.start_link(__MODULE__, :ok, name: id)
   end
 
-  defp via_tuple(ref, name) do
+  def via_tuple(ref, name) do
     {:via, Registry, {Registry.Kadabra, {ref, name}}}
   end
 
