@@ -3,8 +3,10 @@ defmodule Kadabra.Http2 do
 
   require Logger
 
+  @spec connection_preface() :: String.t
   def connection_preface, do: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
+  @spec build_frame(integer, integer, integer, binary) :: binary
   def build_frame(frame_type, flags, stream_id, payload) do
     header = <<byte_size(payload)::24,
               frame_type::8,

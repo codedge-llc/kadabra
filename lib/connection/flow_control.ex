@@ -17,6 +17,7 @@ defmodule Kadabra.Connection.FlowControl do
     settings: Connection.Settings.t
   }
 
+  @spec put_settings(t, Connection.Settings.t) :: t
   def put_settings(flow_control, settings) do
     %{flow_control | settings: settings}
   end
@@ -30,6 +31,7 @@ defmodule Kadabra.Connection.FlowControl do
       iex> increment_stream_id(flow)
       %Kadabra.Connection.FlowControl{stream_id: 7}
   """
+  @spec increment_stream_id(t) :: t
   def increment_stream_id(flow_control) do
     %{flow_control | stream_id: flow_control.stream_id + 2}
   end
@@ -43,6 +45,7 @@ defmodule Kadabra.Connection.FlowControl do
       iex> increment_active_stream_count(flow)
       %Kadabra.Connection.FlowControl{active_streams: 3}
   """
+  @spec increment_active_stream_count(t) :: t
   def increment_active_stream_count(flow_control) do
     %{flow_control | active_streams: flow_control.active_streams + 1}
   end
@@ -56,6 +59,7 @@ defmodule Kadabra.Connection.FlowControl do
       iex> decrement_active_stream_count(flow)
       %Kadabra.Connection.FlowControl{active_streams: 1}
   """
+  @spec decrement_active_stream_count(t) :: t
   def decrement_active_stream_count(flow_control) do
     %{flow_control | active_streams: flow_control.active_streams - 1}
   end
@@ -69,6 +73,7 @@ defmodule Kadabra.Connection.FlowControl do
       iex> increment_window(flow, 500)
       %Kadabra.Connection.FlowControl{window: 1_500}
   """
+  @spec increment_window(t, pos_integer) :: t
   def increment_window(%{window: window} = flow_control, amount) do
     %{flow_control | window: window + amount}
   end
@@ -82,6 +87,7 @@ defmodule Kadabra.Connection.FlowControl do
       iex> decrement_window(flow, 500)
       %Kadabra.Connection.FlowControl{window: 500}
   """
+  @spec decrement_window(t, pos_integer) :: t
   def decrement_window(%{window: window} = flow_control, amount) do
     %{flow_control | window: window - amount}
   end
@@ -95,10 +101,12 @@ defmodule Kadabra.Connection.FlowControl do
       iex> add(flow, "test", "payload")
       %Kadabra.Connection.FlowControl{queue: [{:send, "test", "payload"}]}
   """
+  @spec add(t, [...], binary | nil) :: t
   def add(%{queue: queue} = flow_control, headers, payload \\ nil) do
     %{flow_control | queue: queue ++ [{:send, headers, payload}]}
   end
 
+  @spec process(t, Connection.t) :: t
   def process(%{queue: []} = flow_control, _connection) do
     flow_control
   end
@@ -147,6 +155,7 @@ defmodule Kadabra.Connection.FlowControl do
       iex> can_send?(flow)
       false
   """
+  @spec can_send?(t) :: boolean
   def can_send?(%{active_streams: count, settings: settings, window: bytes}) do
     count < settings.max_concurrent_streams and bytes > 0
   end

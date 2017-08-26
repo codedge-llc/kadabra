@@ -10,7 +10,7 @@ defmodule Kadabra.Stream.FlowControl do
 
   @type t :: %__MODULE__{
     max_frame_size: non_neg_integer,
-    queue: [...],
+    queue: [] | [...],
     window: integer
   }
 
@@ -26,7 +26,8 @@ defmodule Kadabra.Stream.FlowControl do
       iex> new(stream_id: 1)
       %Kadabra.Stream.FlowControl{stream_id: 1}
   """
-  def new(opts) do
+  @spec new(Keyword.t) :: t
+  def new(opts \\ []) do
     %__MODULE__{
       stream_id: opts[:stream_id],
       window: opts[:window] || 56_536
@@ -105,6 +106,7 @@ defmodule Kadabra.Stream.FlowControl do
       iex> increment_window(%Kadabra.Stream.FlowControl{window: 0}, 736)
       %Kadabra.Stream.FlowControl{window: 736}
   """
+  @spec increment_window(t, pos_integer) :: t
   def increment_window(flow_control, amount) do
     %{flow_control | window: flow_control.window + amount}
   end

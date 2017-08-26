@@ -105,6 +105,22 @@ defmodule KadabraTest do
     end
 
     @tag :golang
+    test "https://http2.golang.org/file/go.src.tar.gz" do
+      uri = 'http2.golang.org'
+      {:ok, pid} = Kadabra.open(uri, :https)
+      Kadabra.get(pid, "/file/go.src.tar.gz")
+
+      receive do
+        {:end_stream, response} ->
+          assert response.id == 1
+          assert response.status == 200
+          assert byte_size(response.body) == 10921353
+      after 15_000 ->
+        flunk "No stream response received."
+      end
+    end
+
+    @tag :golang
     test "https://http2.golang.org/serverpush" do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)

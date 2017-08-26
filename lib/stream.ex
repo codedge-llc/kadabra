@@ -79,10 +79,6 @@ defmodule Kadabra.Stream do
     :gen_statem.start_link(__MODULE__, stream, [])
   end
 
-  # def via_tuple(ref, stream_id) do
-  #   {:via, Registry, {Registry.Kadabra, {ref, stream_id}}}
-  # end
-
   def cast_recv(pid, frame) do
     :gen_statem.cast(pid, {:recv, frame})
   end
@@ -221,25 +217,6 @@ defmodule Kadabra.Stream do
 
     {:next_state, @open, stream, [{:reply, from, :ok}]}
   end
-
-  # def send_chunks(_socket, _stream_id, []), do: :ok
-  # def send_chunks(socket, stream_id, [chunk | []]) do
-  #   h_p = Http2.build_frame(@data, 0x1, stream_id, chunk)
-  #   :ssl.send(socket, h_p)
-  # end
-  # def send_chunks(socket, stream_id, [chunk | rest]) do
-  #   h_p = Http2.build_frame(@data, 0x0, stream_id, chunk)
-  #   :ssl.send(socket, h_p)
-
-  #   send_chunks(socket, stream_id, rest)
-  # end
-
-  # def chunk(size, bin) when byte_size(bin) >= size do
-  #   {chunk, rest} = :erlang.split_binary(bin, size)
-  #   [chunk | chunk(size, rest)]
-  # end
-  # def chunk(_size, <<>>), do: []
-  # def chunk(_size, bin), do: [bin]
 
   def add_headers(headers, stream) do
     h = headers ++

@@ -62,8 +62,9 @@ defmodule Kadabra.Connection do
   end
 
   def init({:ok, uri, pid, opts}) do
-    case do_connect(uri, opts) do
+    case Connection.Ssl.connect(uri, opts) do
       {:ok, socket} ->
+        send_preface_and_settings(socket)
         state = initial_state(socket, uri, pid, opts)
         {:ok, state}
       {:error, error} ->
@@ -90,43 +91,12 @@ defmodule Kadabra.Connection do
     }
   end
 
-  def do_connect(uri, opts) do
-    case opts[:scheme] do
-      :http -> {:error, :not_implemented}
-      :https -> do_connect_ssl(uri, opts)
-      _ -> {:error, :bad_scheme}
-    end
-  end
-
-  def do_connect_ssl(uri, opts) do
-    :ssl.start()
-    ssl_opts = ssl_options(opts[:ssl])
-    case :ssl.connect(uri, opts[:port], ssl_opts) do
-      {:ok, ssl} ->
-        send_preface_and_settings(ssl)
-        {:ok, ssl}
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
   defp send_preface_and_settings(socket) do
     :ssl.send(socket, Http2.connection_preface)
     bin =
       %Frame.Settings{settings: Connection.Settings.default}
       |> Encodable.to_bin
     :ssl.send(socket, bin)
-  end
-
-  defp ssl_options(nil), do: ssl_options([])
-  defp ssl_options(opts) do
-    opts ++ [
-      {:active, :once},
-      {:packet, :raw},
-      {:reuseaddr, false},
-      {:alpn_advertised_protocols, [<<"h2">>]},
-      :binary
-    ]
   end
 
   # handle_cast
@@ -178,9 +148,12 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  def recv(%Frame.Ping{ack: ack}, %{client: pid} = state) do
-    resp = if ack, do: :pong, else: :ping
-    send(pid, {resp, self()})
+  def recv(%Frame.Ping{ack: true}, %{client: pid} = state) do
+    send(pid, {:pong, self()})
+    {:noreply, state}
+  end
+  def recv(%Frame.Ping{ack: false}, %{client: pid} = state) do
+    send(pid, {:ping, self()})
     {:noreply, state}
   end
 
@@ -340,6 +313,7 @@ defmodule Kadabra.Connection do
   end
 
   def process(%Frame.Settings{} = frame, state) do
+    # Process immediately
     recv(frame, state)
   end
 
@@ -351,8 +325,9 @@ defmodule Kadabra.Connection do
     Stream.cast_recv(pid, frame)
   end
 
-  def process(%Frame.Ping{} = frame, _state) do
-    GenServer.cast(self(), {:recv, frame})
+  def process(%Frame.Ping{} = frame, state) do
+    # Process immediately
+    recv(frame, state)
   end
 
   def process(%Frame.Goaway{} = frame, _state) do
@@ -392,9 +367,7 @@ defmodule Kadabra.Connection do
   def pid_for_stream(ref, stream_id) do
     case Registry.lookup(Registry.Kadabra, {ref, stream_id}) do
       [{_self, pid}] -> pid
-      [] ->
-        IO.puts("found nothing...")
-        nil
+      [] -> nil
     end
   end
 
@@ -403,13 +376,13 @@ defmodule Kadabra.Connection do
     send(pid, {:closed, self()})
     {:noreply, reset_state(state, nil)}
   end
-
   def maybe_reconnect(%{reconnect: true,
                         uri: uri,
                         opts: opts,
                         client: pid} = state) do
-    case do_connect(uri, opts) do
+    case Connection.Ssl.connect(uri, opts) do
       {:ok, socket} ->
+        send_preface_and_settings(socket)
         Logger.debug "Socket closed, reopened automatically"
         {:noreply, reset_state(state, socket)}
       {:error, error} ->
