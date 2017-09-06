@@ -15,8 +15,8 @@ defmodule Kadabra do
   """
   @spec open(charlist, :https, Keyword.t) :: {:ok, pid} | {:error, term}
   def open(uri, scheme, opts \\ []) do
-    port = opts[:port] || 443
-    reconnect = fetch_reconnect_option(opts)
+    port = Keyword.get(opts, :port, 443)
+    reconnect = Keyword.get(opts, :reconnect, true)
 
     nopts =
       opts
@@ -27,14 +27,6 @@ defmodule Kadabra do
     case Connection.start_link(uri, self(), start_opts) do
       {:ok, pid} -> {:ok, pid}
       {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp fetch_reconnect_option(opts) do
-    if List.keymember?(opts, :reconnect, 0) do
-      opts[:reconnect]
-    else
-      true
     end
   end
 
