@@ -91,11 +91,10 @@ defmodule Kadabra.Connection.Settings do
   end
 
   def put(settings, @max_frame_size, value) do
-    cond do
-      value < 16_384 or value > 16_777_215 ->
-        {:error, Error.protocol_error, settings}
-      true ->
-        {:ok, %{settings | max_frame_size: value}}
+    if value < 16_384 or value > 16_777_215 do
+      {:error, Error.protocol_error, settings}
+    else
+      {:ok, %{settings | max_frame_size: value}}
     end
   end
 
