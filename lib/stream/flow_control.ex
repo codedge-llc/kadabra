@@ -25,12 +25,17 @@ defmodule Kadabra.Stream.FlowControl do
 
       iex> new(stream_id: 1)
       %Kadabra.Stream.FlowControl{stream_id: 1}
+
+      iex> new(stream_id: 1, window: 20_000, max_frame_size: 18_000)
+      %Kadabra.Stream.FlowControl{stream_id: 1, window: 20_000,
+      max_frame_size: 18_000}
   """
   @spec new(Keyword.t) :: t
   def new(opts \\ []) do
     %__MODULE__{
       stream_id: opts[:stream_id],
-      window: opts[:window] || 56_536
+      window: Keyword.get(opts, :window, 56_536),
+      max_frame_size: Keyword.get(opts, :max_frame_size, 16_384)
     }
   end
 
@@ -69,9 +74,9 @@ defmodule Kadabra.Stream.FlowControl do
     flow_control
   end
   def process(%{queue: [{:send, bin} | rest],
-								max_frame_size: max_size,
-                window: window,
-                stream_id: stream_id} = flow_control, socket) do
+              max_frame_size: max_size,
+              window: window,
+              stream_id: stream_id} = flow_control, socket) do
 
     size = byte_size(bin)
 
@@ -140,5 +145,19 @@ defmodule Kadabra.Stream.FlowControl do
   @spec increment_window(t, pos_integer) :: t
   def increment_window(flow_control, amount) do
     %{flow_control | window: flow_control.window + amount}
+  end
+
+  @doc ~S"""
+  Sets stream max_frame_size to given size.
+
+  ## Examples
+
+      iex> set_max_frame_size(%Kadabra.Stream.FlowControl{
+      ...> max_frame_size: 16_384}, 1_040_200)
+      %Kadabra.Stream.FlowControl{max_frame_size: 1_040_200}
+  """
+  @spec set_max_frame_size(t, pos_integer) :: t
+  def set_max_frame_size(flow_control, size) do
+    %{flow_control | max_frame_size: size}
   end
 end

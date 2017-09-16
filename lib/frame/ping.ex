@@ -31,7 +31,6 @@ defmodule Kadabra.Frame.Ping do
   @doc ~S"""
   Initializes a new `Frame.Ping` given a `Frame`.
 
-
   ## Examples
 
       iex> frame = %Kadabra.Frame{payload: <<0, 0, 0, 0, 0, 0, 0, 0>>,

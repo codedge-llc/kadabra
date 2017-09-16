@@ -65,25 +65,21 @@ defmodule Kadabra.Error do
       0xfff
   """
   @spec string(integer) :: String.t | integer
-  def string(code) do
-    case code do
-      0x0 -> "NO_ERROR"
-      0x1 -> "PROTOCOL_ERROR"
-      0x2 -> "INTERNAL_ERROR"
-      0x3 -> "FLOW_CONTROL_ERROR"
-      0x4 -> "SETTINGS_TIMEOUT"
-      0x5 -> "STREAM_CLOSED"
-      0x6 -> "FRAME_SIZE_ERROR"
-      0x7 -> "REFUSED_STREAM"
-      0x8 -> "CANCEL"
-      0x9 -> "COMPRESSION_ERROR"
-      0xa -> "CONNECT_ERROR"
-      0xb -> "ENHANCE_YOUR_CALM"
-      0xc -> "INADEQUATE_SECURITY"
-      0xd -> "HTTP_1_1_REQUIRED"
-      error -> error
-    end
-  end
+  def string(0x0), do: "NO_ERROR"
+  def string(0x1), do: "PROTOCOL_ERROR"
+  def string(0x2), do: "INTERNAL_ERROR"
+  def string(0x3), do: "FLOW_CONTROL_ERROR"
+  def string(0x4), do: "SETTINGS_TIMEOUT"
+  def string(0x5), do: "STREAM_CLOSED"
+  def string(0x6), do: "FRAME_SIZE_ERROR"
+  def string(0x7), do: "REFUSED_STREAM"
+  def string(0x8), do: "CANCEL"
+  def string(0x9), do: "COMPRESSION_ERROR"
+  def string(0xa), do: "CONNECT_ERROR"
+  def string(0xb), do: "ENHANCE_YOUR_CALM"
+  def string(0xc), do: "INADEQUATE_SECURITY"
+  def string(0xd), do: "HTTP_1_1_REQUIRED"
+  def string(error), do: error
 
   @doc ~S"""
   Returns integer error code given string error.
@@ -95,23 +91,19 @@ defmodule Kadabra.Error do
       iex> Kadabra.Error.code("NOT_AN_ERROR")
       "NOT_AN_ERROR"
   """
-  def code(string) do
-    case string do
-      "NO_ERROR"            -> 0x0
-      "PROTOCOL_ERROR"      -> 0x1
-      "INTERNAL_ERROR"      -> 0x2
-      "FLOW_CONTROL_ERROR"  -> 0x3
-      "SETTINGS_TIMEOUT"    -> 0x4
-      "STREAM_CLOSED"       -> 0x5
-      "FRAME_SIZE_ERROR"    -> 0x6
-      "REFUSED_STREAM"      -> 0x7
-      "CANCEL"              -> 0x8
-      "COMPRESSION_ERROR"   -> 0x9
-      "CONNECT_ERROR"       -> 0xa
-      "ENHANCE_YOUR_CALM"   -> 0xb
-      "INADEQUATE_SECURITY" -> 0xc
-      "HTTP_1_1_REQUIRED"   -> 0xd
-      error                 -> error
-    end
-  end
+  def code("NO_ERROR"), do: 0x0
+  def code("PROTOCOL_ERROR"), do: 0x1
+  def code("INTERNAL_ERROR"), do: 0x2
+  def code("FLOW_CONTROL_ERROR"), do: 0x3
+  def code("SETTINGS_TIMEOUT"), do: 0x4
+  def code("STREAM_CLOSED"), do: 0x5
+  def code("FRAME_SIZE_ERROR"), do: 0x6
+  def code("REFUSED_STREAM"), do: 0x7
+  def code("CANCEL"), do: 0x8
+  def code("COMPRESSION_ERROR"), do: 0x9
+  def code("CONNECT_ERROR"), do: 0xa
+  def code("ENHANCE_YOUR_CALM"), do: 0xb
+  def code("INADEQUATE_SECURITY"), do: 0xc
+  def code("HTTP_1_1_REQUIRED"), do: 0xd
+  def code(error), do: error
 end

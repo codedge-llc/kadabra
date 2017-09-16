@@ -48,7 +48,8 @@ defmodule Kadabra.Stream do
           stream_id) do
     flow_opts = [
       stream_id: stream_id,
-      window: settings.initial_window_size
+      window: settings.initial_window_size,
+      max_frame_size: settings.max_frame_size
     ]
 
     %__MODULE__{
@@ -78,9 +79,12 @@ defmodule Kadabra.Stream do
     :gen_statem.cast(pid, {:send, frame})
   end
 
-  # For SETTINGS initial_window_size changes
-  def recv({:window_change, amount}, _state, stream) do
-    flow = Stream.FlowControl.increment_window(stream.flow, amount)
+  # For SETTINGS initial_window_size and max_frame_size changes
+  def recv({:settings_change, window_amount, new_max_frame}, _state, stream) do
+    flow =
+      stream.flow
+      |> Stream.FlowControl.increment_window(window_amount)
+      |> Stream.FlowControl.set_max_frame_size(new_max_frame)
     {:keep_state, %{stream | flow: flow}}
   end
 
@@ -175,7 +179,7 @@ defmodule Kadabra.Stream do
   end
 
   def handle_event(:cast, msg, state, stream) do
-    IO.inspect("""
+    IO.puts("""
     === Unknown cast ===
     #{inspect(msg)}
     State: #{inspect(state)}
