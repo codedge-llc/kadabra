@@ -3,7 +3,7 @@ defmodule Kadabra.Stream.FlowControl do
 
   defstruct queue: [],
             window: 56_536,
-            max_frame_size: 16_536,
+            max_frame_size: 16_384,
             stream_id: nil
 
   alias Kadabra.{Encodable, Frame}
