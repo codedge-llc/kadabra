@@ -69,6 +69,7 @@ defmodule Kadabra.Stream.FlowControl do
     flow_control
   end
   def process(%{queue: [{:send, bin} | rest],
+								max_frame_size: max_size,
                 window: window,
                 stream_id: stream_id} = flow_control, socket) do
 
@@ -77,10 +78,7 @@ defmodule Kadabra.Stream.FlowControl do
     if size > window do
       {chunk, rem_bin} = :erlang.split_binary(bin, window)
 
-      bin =
-        %Frame.Data{stream_id: stream_id, end_stream: false, data: chunk}
-        |> Encodable.to_bin
-      :ssl.send(socket, bin)
+      send_data(socket, stream_id, chunk, max_size)
 
       flow_control = %{flow_control |
         queue: [{:send, rem_bin} | rest],
@@ -88,15 +86,27 @@ defmodule Kadabra.Stream.FlowControl do
       }
       process(flow_control, socket)
     else
-      bin =
-        %Frame.Data{stream_id: stream_id, end_stream: true, data: bin}
-        |> Encodable.to_bin
-      :ssl.send(socket, bin)
-
+      send_data(socket, stream_id, bin, max_size)
       flow_control = %{flow_control | queue: rest, window: window - size}
       process(flow_control, socket)
     end
   end
+
+  def send_data(socket, stream_id, bin, max_frame_size) do
+    for packet <- split_packet(max_frame_size, bin) do
+      bin =
+        %Frame.Data{stream_id: stream_id, end_stream: true, data: packet}
+        |> Encodable.to_bin
+      :ssl.send(socket, bin)
+    end
+  end
+
+  def split_packet(size, p) when byte_size(p) >= size do
+    {chunk, rest} = :erlang.split_binary(p, size)
+    [chunk | split_packet(size, rest)]
+  end
+  def split_packet(_size, <<>>), do: []
+  def split_packet(_size, p), do: [p]
 
   @doc ~S"""
   Increments stream window by given increment.
