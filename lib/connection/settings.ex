@@ -27,13 +27,7 @@ defmodule Kadabra.Connection.Settings do
   @max_header_list_size 0x6
 
   def default do
-    %__MODULE__{
-      initial_window_size: 1_048_576,
-      max_frame_size: 1_048_576,
-      enable_push: true,
-      max_header_list_size: 4_096,
-      max_concurrent_streams: 1_000
-    }
+    %__MODULE__{}
   end
 
   @doc ~S"""
