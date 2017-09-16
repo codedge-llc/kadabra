@@ -78,7 +78,9 @@ defmodule Kadabra.Stream.FlowControl do
     if size > window do
       {chunk, rem_bin} = :erlang.split_binary(bin, window)
 
-      send_data(socket, stream_id, chunk, max_size)
+      max_size
+      |> split_packet(chunk)
+      |> send_partial_data(socket, stream_id)
 
       flow_control = %{flow_control |
         queue: [{:send, rem_bin} | rest],
@@ -86,19 +88,38 @@ defmodule Kadabra.Stream.FlowControl do
       }
       process(flow_control, socket)
     else
-      send_data(socket, stream_id, bin, max_size)
+      max_size
+      |> split_packet(bin)
+      |> send_data(socket, stream_id)
+
       flow_control = %{flow_control | queue: rest, window: window - size}
       process(flow_control, socket)
     end
   end
 
-  def send_data(socket, stream_id, bin, max_frame_size) do
-    for packet <- split_packet(max_frame_size, bin) do
-      bin =
-        %Frame.Data{stream_id: stream_id, end_stream: true, data: packet}
-        |> Encodable.to_bin
-      :ssl.send(socket, bin)
-    end
+  def send_partial_data([], _socket, _stream_id), do: :ok
+  def send_partial_data([bin | rest], socket, stream_id) do
+    p =
+      %Frame.Data{stream_id: stream_id, end_stream: false, data: bin}
+      |> Encodable.to_bin
+    :ssl.send(socket, p)
+    send_partial_data(rest, socket, stream_id)
+  end
+
+  def send_data([], _socket, _stream_id), do: :ok
+  def send_data([bin | []], socket, stream_id) do
+    p =
+      %Frame.Data{stream_id: stream_id, end_stream: true, data: bin}
+      |> Encodable.to_bin
+    :ssl.send(socket, p)
+    send_data([], socket, stream_id)
+  end
+  def send_data([bin | rest], socket, stream_id) do
+    p =
+      %Frame.Data{stream_id: stream_id, end_stream: false, data: bin}
+      |> Encodable.to_bin
+    :ssl.send(socket, p)
+    send_data(rest, socket, stream_id)
   end
 
   def split_packet(size, p) when byte_size(p) >= size do
