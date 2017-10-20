@@ -129,13 +129,25 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
   def sendf(:goaway, %Connection{socket: socket,
+                                 client: pid,
                                  flow_control: flow} = state) do
     bin = flow.stream_id |> Goaway.new |> Encodable.to_bin
     :ssl.send(socket, bin)
-    {:noreply, state}
+
+    close(state)
+    send(pid, {:closed, self()})
+
+    {:stop, :normal, state}
   end
   def sendf(_else, state) do
     {:noreply, state}
+  end
+
+  def close(state) do
+    Kadabra.Hpack.close(state.ref)
+    for stream <- state.flow_control.active_streams do
+      Kadabra.Stream.close(state.ref, stream)
+    end
   end
 
   # recv
@@ -384,6 +396,7 @@ defmodule Kadabra.Connection do
   def maybe_reconnect(%{reconnect: false, client: pid} = state) do
     Logger.debug "Socket closed, not reopening, informing client"
     send(pid, {:closed, self()})
+    close(state)
     {:noreply, reset_state(state, nil)}
   end
   def maybe_reconnect(%{reconnect: true,
@@ -397,7 +410,8 @@ defmodule Kadabra.Connection do
         {:noreply, reset_state(state, socket)}
       {:error, error} ->
         Logger.error "Socket closed, reopening failed with #{error}"
-        send(pid, :closed)
+        close(state)
+        send(pid, {:closed, self()})
         {:stop, :normal, state}
     end
   end

@@ -70,6 +70,11 @@ defmodule Kadabra.Stream do
     {:via, Registry, {Registry.Kadabra, {ref, stream_id}}}
   end
 
+  def close(ref, stream_id) do
+    IO.inspect("stopping stream #{stream_id}")
+    :gen_statem.stop(via_tuple(ref, stream_id))
+  end
+
   def cast_recv(pid, frame) do
     :gen_statem.cast(pid, {:recv, frame})
   end

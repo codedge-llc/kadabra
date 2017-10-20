@@ -28,6 +28,11 @@ defmodule Kadabra.Hpack do
     GenServer.call(pid, {:new_max_table_size, size})
   end
 
+  def close(ref) do
+    GenServer.stop(via_tuple(ref, :encoder), :normal, 5_000)
+    GenServer.stop(via_tuple(ref, :decoder), :normal, 5_000)
+  end
+
   def handle_call({:encode, headers}, _pid, state) do
     {:ok, {bin, new_state}} = :hpack.encode(headers, state)
     {:reply, {:ok, bin}, new_state}
