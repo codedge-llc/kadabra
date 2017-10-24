@@ -4,7 +4,7 @@ defmodule KadabraTest do
 
   @moduletag report: [:pid]
 
-  alias Kadabra.Stream
+  alias Kadabra.{Encodable, Frame, Stream}
 
   describe "open/2" do
     @tag :golang
@@ -115,7 +115,10 @@ defmodule KadabraTest do
           assert response.id == 1
           assert response.status == 200
           assert byte_size(response.body) == 10921353
-      after 15_000 ->
+        other ->
+          IO.inspect(other)
+          flunk "Unexpected response"
+      after 25_000 ->
         flunk "No stream response received."
       end
     end
@@ -188,5 +191,15 @@ defmodule KadabraTest do
         status: 200
       }}, 5_000
     end
+  end
+
+  test "GOAWAY frame closes connection" do
+    uri = 'http2.golang.org'
+    {:ok, pid} = Kadabra.open(uri, :https)
+
+    bin = Frame.Goaway.new(1) |> Encodable.to_bin
+    send(pid, {:ssl, nil, bin})
+
+    assert_receive {:closed, ^pid}, 5_000
   end
 end
