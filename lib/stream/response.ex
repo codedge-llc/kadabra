@@ -51,7 +51,6 @@ defmodule Kadabra.Stream.Response do
   @doc ~S"""
   Fetches header with given name.
 
-
   ## Examples
 
       iex> stream = %Kadabra.Stream.Response{headers: [{":status", "200"}]}

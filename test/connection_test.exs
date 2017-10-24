@@ -24,8 +24,14 @@ defmodule Kadabra.ConnectionTest do
     old_window_size = Connection.Settings.default.initial_window_size
     new_window_size = 20_000
 
+    old_max_frame = Connection.Settings.default.max_frame_size
+    new_max_frame = 18_000
+
     old_settings = conn.flow_control.settings
-    new_settings = %Connection.Settings{initial_window_size: new_window_size}
+    new_settings = %Connection.Settings{
+      initial_window_size: new_window_size,
+      max_frame_size: new_max_frame
+    }
     new_flow =
       conn.flow_control
       |> Connection.FlowControl.add_active(1)
@@ -34,10 +40,12 @@ defmodule Kadabra.ConnectionTest do
     {:ok, spid} = Kadabra.Supervisor.start_stream(conn, 1)
     {_state, stream} = :sys.get_state(spid)
     assert stream.flow.window == old_window_size
+    assert stream.flow.max_frame_size == old_max_frame
 
-    Connection.notify_initial_window_change(conn.ref, old_settings, new_flow)
+    Connection.notify_settings_change(conn.ref, old_settings, new_flow)
 
     {_state, stream} = :sys.get_state(spid)
     assert stream.flow.window == new_window_size
+    assert stream.flow.max_frame_size == new_max_frame
   end
 end

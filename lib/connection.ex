@@ -14,8 +14,8 @@ defmodule Kadabra.Connection do
   use GenServer
   require Logger
 
-  alias Kadabra.{Connection, Encodable, Error,
-    Frame, Hpack, Http2, Stream}
+  alias Kadabra.{Connection, Encodable, Error, Frame, Hpack, Http2, Stream}
+  alias Kadabra.Connection.Ssl
   alias Kadabra.Frame.{Continuation, Data, Goaway, Headers, Ping,
     PushPromise, RstStream, WindowUpdate}
 
@@ -58,7 +58,7 @@ defmodule Kadabra.Connection do
   end
 
   def init({:ok, uri, pid, opts}) do
-    case Connection.Ssl.connect(uri, opts) do
+    case Ssl.connect(uri, opts) do
       {:ok, socket} ->
         send_preface_and_settings(socket, opts[:settings])
         state = initial_state(socket, uri, pid, opts)
@@ -177,11 +177,10 @@ defmodule Kadabra.Connection do
     old_settings = flow.settings
     flow = Connection.FlowControl.update_settings(flow, settings)
 
-    notify_initial_window_change(ref, old_settings, flow)
+    notify_settings_change(ref, old_settings, flow)
 
     pid = Hpack.via_tuple(ref, :encoder)
     Hpack.update_max_table_size(pid, settings.max_header_list_size)
-
 
     bin = Frame.Settings.ack |> Encodable.to_bin
     :ssl.send(state.socket, bin)
@@ -206,15 +205,16 @@ defmodule Kadabra.Connection do
 
   def recv(_else, state), do: {:noreply, state}
 
-  def notify_initial_window_change(ref,
-                                   %{initial_window_size: old_window},
-                                   %{settings: settings} = flow) do
+  def notify_settings_change(ref,
+                             %{initial_window_size: old_window},
+                             %{settings: settings} = flow) do
+    max_frame_size = settings.max_frame_size
     new_window = settings.initial_window_size
     window_diff = new_window - old_window
 
     for stream_id <- flow.active_streams do
       pid = Stream.via_tuple(ref, stream_id)
-      Stream.cast_recv(pid, {:window_change, window_diff})
+      Stream.cast_recv(pid, {:settings_change, window_diff, max_frame_size})
     end
   end
 
@@ -277,7 +277,7 @@ defmodule Kadabra.Connection do
   end
 
   def parse_ssl(socket, bin, state) do
-    case Kadabra.Frame.new(bin) do
+    case Frame.new(bin) do
       {:ok, frame, rest} ->
         state = handle_response(frame, state)
         parse_ssl(socket, rest, state)
@@ -315,7 +315,7 @@ defmodule Kadabra.Connection do
 
   @spec process(frame, t) :: :ok
   def process(%Frame.Data{stream_id: 0}, state) do
-    # TODO: This is an error
+    # This is an error
     state
   end
   def process(%Frame.Data{stream_id: stream_id} = frame, state) do

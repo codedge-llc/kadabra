@@ -14,7 +14,6 @@ defmodule Kadabra.Frame.Continuation do
   @doc ~S"""
   Initializes a new `Frame.Continuation` given a `Frame`.
 
-
   ## Examples
 
       iex> frame = %Kadabra.Frame{payload: <<136>>, flags: 0x4}

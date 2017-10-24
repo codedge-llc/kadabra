@@ -27,13 +27,7 @@ defmodule Kadabra.Connection.Settings do
   @max_header_list_size 0x6
 
   def default do
-    %__MODULE__{
-      initial_window_size: 1_048_576,
-      max_frame_size: 1_048_576,
-      enable_push: true,
-      max_header_list_size: 4_096,
-      max_concurrent_streams: 1_000
-    }
+    %__MODULE__{}
   end
 
   @doc ~S"""
@@ -91,11 +85,10 @@ defmodule Kadabra.Connection.Settings do
   end
 
   def put(settings, @max_frame_size, value) do
-    cond do
-      value < 16_384 or value > 16_777_215 ->
-        {:error, Error.protocol_error, settings}
-      true ->
-        {:ok, %{settings | max_frame_size: value}}
+    if value < 16_384 or value > 16_777_215 do
+      {:error, Error.protocol_error, settings}
+    else
+      {:ok, %{settings | max_frame_size: value}}
     end
   end
 
