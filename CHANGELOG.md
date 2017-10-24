@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.3
+- Fixed: hpack memory leak on connection close
+
+## v0.3.2
+- Fixed: Connection settings defaults are now actually default
+
 ## v0.3.1
 - Fixed: Sending payloads larger than the stream window
 
