@@ -118,7 +118,7 @@ defmodule KadabraTest do
         other ->
           IO.inspect(other)
           flunk "Unexpected response"
-      after 25_000 ->
+      after 45_000 ->
         flunk "No stream response received."
       end
     end
