@@ -72,7 +72,6 @@ defmodule Kadabra.Stream do
   end
 
   def close(ref, stream_id) do
-    IO.inspect("stopping stream #{stream_id}")
     :gen_statem.stop(via_tuple(ref, stream_id))
   end
 
@@ -136,7 +135,7 @@ defmodule Kadabra.Stream do
     {:next_state, @reserved_remote, stream}
   end
 
-  def recv(%RstStream{}, state, stream)
+  def recv(%RstStream{} = _frame, state, stream)
     when state in [@open, @half_closed_local, @half_closed_remote, @closed] do
     # IO.inspect(frame, label: "Got RST_STREAM")
     {:next_state, :closed, stream}
