@@ -1,4 +1,6 @@
 defmodule Kadabra.ConnectionSupervisor do
+  @moduledoc false
+
   use Supervisor
   import Supervisor.Spec
 
@@ -15,8 +17,8 @@ defmodule Kadabra.ConnectionSupervisor do
     {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
   end
 
-  def start_opts do
-    [id: :erlang.make_ref, restart: :transient]
+  def start_opts(id \\ :erlang.make_ref) do
+    [id: id, restart: :transient]
   end
 
   def start_connection(uri, pid, ref, opts) do
@@ -30,23 +32,10 @@ defmodule Kadabra.ConnectionSupervisor do
     Supervisor.start_child(via_tuple(ref), spec)
   end
 
-  def start_encoder(ref) do
-    start_hpack(ref, :encoder)
-  end
-
-  def start_decoder(ref) do
-    start_hpack(ref, :decoder)
-  end
-
-  def start_hpack(ref, name) do
-    spec = worker(Hpack, [{ref, name}], start_opts())
-    Supervisor.start_child(via_tuple(ref), spec)
-  end
-
   def init({_uri, _pid, ref, _opts}) do
     children = [
-      worker(Hpack, [{ref, :encoder}], start_opts()),
-      worker(Hpack, [{ref, :decoder}], start_opts())
+      worker(Hpack, [{ref, :encoder}], start_opts(:encoder)),
+      worker(Hpack, [{ref, :decoder}], start_opts(:decoder))
     ]
 
     supervise(children, strategy: :one_for_one)

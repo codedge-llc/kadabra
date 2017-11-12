@@ -130,6 +130,17 @@ defmodule Kadabra do
 
   @doc ~S"""
   Makes a POST request.
+
+  ## Examples
+
+      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> Kadabra.post(pid, "/", "test=123")
+      :ok
+      iex> response = receive do
+      ...>   {:end_stream, response} -> response
+      ...> end
+      iex> {response.id, response.status}
+      {1, 200}
   """
   def post(pid, path, payload) do
     headers = [
