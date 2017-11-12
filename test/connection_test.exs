@@ -37,7 +37,7 @@ defmodule Kadabra.ConnectionTest do
       |> Connection.FlowControl.add_active(1)
       |> Connection.FlowControl.update_settings(new_settings)
 
-    {:ok, spid} = Kadabra.Supervisor.start_stream(conn, 1)
+    {:ok, spid} = Kadabra.ConnectionSupervisor.start_stream(conn, 1)
     {_state, stream} = :sys.get_state(spid)
     assert stream.flow.window == old_window_size
     assert stream.flow.max_frame_size == old_max_frame

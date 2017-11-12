@@ -2,7 +2,7 @@ defmodule Kadabra do
   @moduledoc """
   HTTP/2 client for Elixir.
   """
-  alias Kadabra.{Connection}
+  alias Kadabra.{Connection, ConnectionSupervisor}
 
   @doc ~S"""
   Opens a new connection.
@@ -24,7 +24,7 @@ defmodule Kadabra do
       |> List.keydelete(:reconnect, 0)
     start_opts = [scheme: scheme, ssl: nopts, port: port, reconnect: reconnect]
 
-    case Connection.start_link(uri, self(), start_opts) do
+    case ConnectionSupervisor.start_link(uri, self(), start_opts) do
       {:ok, pid} -> {:ok, pid}
       {:error, reason} -> {:error, reason}
     end

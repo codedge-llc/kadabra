@@ -1,12 +1,11 @@
 defmodule Kadabra.Mixfile do
   use Mix.Project
 
-  @version "0.3.3"
+  @version "0.3.4"
 
   def project do
     [
       app: :kadabra,
-      version: "0.3.2",
       version: @version,
       elixir: "~> 1.4",
       build_embedded: Mix.env == :prod,

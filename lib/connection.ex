@@ -53,15 +53,19 @@ defmodule Kadabra.Connection do
   @window_update 0x8
   @continuation 0x9
 
-  def start_link(uri, pid, opts \\ []) do
-    GenServer.start_link(__MODULE__, {:ok, uri, pid, opts})
+  def start_link(uri, pid, ref, opts \\ []) do
+    GenServer.start_link(__MODULE__, {:ok, uri, pid, ref, opts}, name: via_tuple(ref))
   end
 
-  def init({:ok, uri, pid, opts}) do
+  def via_tuple(ref) do
+    {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
+  end
+
+  def init({:ok, uri, pid, ref, opts}) do
     case Ssl.connect(uri, opts) do
       {:ok, socket} ->
         send_preface_and_settings(socket, opts[:settings])
-        state = initial_state(socket, uri, pid, opts)
+        state = initial_state(socket, uri, pid, ref, opts)
         {:ok, state}
       {:error, error} ->
         Logger.error(inspect(error))
@@ -69,11 +73,7 @@ defmodule Kadabra.Connection do
     end
   end
 
-  defp initial_state(socket, uri, pid, opts) do
-   ref = :erlang.make_ref
-   Kadabra.Supervisor.start_decoder(ref)
-   Kadabra.Supervisor.start_encoder(ref)
-
+  defp initial_state(socket, uri, pid, ref, opts) do
    %__MODULE__{
       ref: ref,
       client: pid,
@@ -344,7 +344,7 @@ defmodule Kadabra.Connection do
   end
 
   def process(%Frame.PushPromise{stream_id: stream_id} = frame, state) do
-    {:ok, pid} = Kadabra.Supervisor.start_stream(state, stream_id)
+    {:ok, pid} = Kadabra.ConnectionSupervisor.start_stream(state, stream_id)
 
     flow = Connection.FlowControl.add_active(state.flow_control, stream_id)
 
