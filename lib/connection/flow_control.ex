@@ -188,6 +188,7 @@ defmodule Kadabra.Connection.FlowControl do
   def can_send?(%{active_stream_count: count,
                   settings: settings,
                   window: bytes}) do
-    count < settings.max_concurrent_streams and bytes > 0
+    result = count < settings.max_concurrent_streams and bytes > 0
+    result
   end
 end

@@ -118,7 +118,7 @@ defmodule KadabraTest do
         other ->
           IO.inspect(other)
           flunk "Unexpected response"
-      after 25_000 ->
+      after 45_000 ->
         flunk "No stream response received."
       end
     end
@@ -197,7 +197,7 @@ defmodule KadabraTest do
     uri = 'http2.golang.org'
     {:ok, pid} = Kadabra.open(uri, :https)
 
-    bin = Frame.Goaway.new(1) |> Encodable.to_bin
+    bin = 1 |> Frame.Goaway.new |> Encodable.to_bin
     send(pid, {:ssl, nil, bin})
 
     assert_receive {:closed, ^pid}, 5_000

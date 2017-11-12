@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.4
+- Fixed: connections properly respect settings updates
+
 ## v0.3.3
 - Fixed: hpack memory leak on connection close
 

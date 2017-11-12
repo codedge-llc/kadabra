@@ -339,7 +339,7 @@ defmodule Kadabra.Connection do
 
   def process(%Frame.Settings{} = frame, state) do
     # Process immediately
-    recv(frame, state)
+    {:noreply, state} = recv(frame, state)
     state
   end
 
