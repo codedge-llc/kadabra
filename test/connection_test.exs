@@ -5,9 +5,19 @@ defmodule Kadabra.ConnectionTest do
     uri = 'http2.golang.org'
     {:ok, pid} = Kadabra.open(uri, :https)
 
-    %{socket: socket} = :sys.get_state(pid)
+    {_, sup_pid, _, _} =
+      pid
+      |> Supervisor.which_children
+      |> Enum.find(fn({name, _, _, _}) -> name == :connection_sup end)
+
+    {_, conn_pid, _, _} =
+      sup_pid
+      |> Supervisor.which_children
+      |> Enum.find(fn({name, _, _, _}) -> name == :connection end)
+
+    %{socket: socket} = :sys.get_state(conn_pid)
     :ssl.close(socket)
-    send(pid, {:ssl_closed, socket}) # Why does close/1 not send this?
+    send(conn_pid, {:ssl_closed, socket}) # Why does close/1 not send this?
 
     Kadabra.ping(pid)
 

@@ -2,7 +2,7 @@ defmodule Kadabra do
   @moduledoc """
   HTTP/2 client for Elixir.
   """
-  alias Kadabra.{Connection, ConnectionSupervisor}
+  alias Kadabra.{Connection, Supervisor}
 
   @doc ~S"""
   Opens a new connection.
@@ -24,10 +24,7 @@ defmodule Kadabra do
       |> List.keydelete(:reconnect, 0)
     start_opts = [scheme: scheme, ssl: nopts, port: port, reconnect: reconnect]
 
-    case ConnectionSupervisor.start_link(uri, self(), start_opts) do
-      {:ok, pid} -> {:ok, pid}
-      {:error, reason} -> {:error, reason}
-    end
+    Supervisor.start_link(uri, self(), start_opts)
   end
 
   @doc ~S"""
@@ -38,12 +35,12 @@ defmodule Kadabra do
       iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
       iex> Kadabra.close(pid)
       iex> receive do
-      ...>   {:closed, ^pid} -> "connection closed!"
+      ...>   {:closed, _pid} -> "connection closed!"
       ...> end
       "connection closed!"
   """
   @spec close(pid) :: :ok
-  def close(pid), do: GenServer.cast(pid, {:send, :goaway})
+  def close(pid), do: GenServer.cast(Connection.via_tuple(pid), {:send, :goaway})
 
   @doc ~S"""
   Pings an existing connection.
@@ -53,11 +50,11 @@ defmodule Kadabra do
       iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
       iex> Kadabra.ping(pid)
       iex> receive do
-      ...>   {:pong, ^pid} -> "got pong!"
+      ...>   {:pong, _pid} -> "got pong!"
       ...> end
       "got pong!"
   """
-  def ping(pid), do: GenServer.cast(pid, {:send, :ping})
+  def ping(pid), do: GenServer.cast(Connection.via_tuple(pid), {:send, :ping})
 
   @doc ~S"""
   Makes a request with given headers.
@@ -79,7 +76,7 @@ defmodule Kadabra do
       {1, 200}
   """
   def request(pid, headers) do
-    GenServer.cast(pid, {:send, :headers, headers})
+    GenServer.cast(Connection.via_tuple(pid), {:send, :headers, headers})
   end
 
   @doc ~S"""
@@ -103,7 +100,7 @@ defmodule Kadabra do
       {1, 200, "SAMPLE ECHO REQUEST"}
   """
   def request(pid, headers, body) do
-    GenServer.cast(pid, {:send, :headers, headers, body})
+    GenServer.cast(Connection.via_tuple(pid), {:send, :headers, headers, body})
   end
 
   @doc ~S"""
