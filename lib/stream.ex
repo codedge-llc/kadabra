@@ -18,6 +18,7 @@ defmodule Kadabra.Stream do
   alias Kadabra.{Connection, Encodable, Hpack, Http2, Stream}
   alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream,
     WindowUpdate}
+  alias Kadabra.Stream.Response
 
   @type t :: %__MODULE__{
     id: pos_integer,
@@ -167,7 +168,7 @@ defmodule Kadabra.Stream do
     {:keep_state, stream}
   end
   def handle_event(:enter, _old, @closed, stream) do
-    send(stream.connection, {:finished, Stream.Response.new(stream)})
+    send(stream.connection, {:finished, Response.new(stream)})
     {:stop, :normal}
   end
   def handle_event(:enter, _old, _new, stream), do: {:keep_state, stream}

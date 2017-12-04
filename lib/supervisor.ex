@@ -4,36 +4,23 @@ defmodule Kadabra.Supervisor do
   use Supervisor
   import Supervisor.Spec
 
-  alias Kadabra.Stream
+  alias Kadabra.{ConnectionSupervisor, StreamSupervisor}
 
-  def start_link do
-    Supervisor.start_link(__MODULE__, [], name: __MODULE__)
+  def start_link(uri, pid, opts) do
+    ref = :erlang.make_ref
+    Supervisor.start_link(__MODULE__, {uri, pid, ref, opts})
   end
 
-  def init(_) do
-    supervise([], strategy: :one_for_one)
+  def via_tuple(ref) do
+    {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
   end
 
-  def start_opts do
-    [id: :erlang.make_ref, restart: :transient]
-  end
+  def init({uri, pid, ref, opts}) do
+    children = [
+      supervisor(StreamSupervisor, [ref], id: :stream_sup),
+      supervisor(ConnectionSupervisor, [uri, pid, self(), ref, opts], id: :connection_sup)
+    ]
 
-  def start_stream(%{flow_control: flow} = conn, stream_id \\ nil) do
-    stream = Stream.new(conn, flow.settings, stream_id || flow.stream_id)
-    spec = worker(Stream, [stream], start_opts())
-    Supervisor.start_child(__MODULE__, spec)
-  end
-
-  def start_encoder(ref) do
-    start_hpack(ref, :encoder)
-  end
-
-  def start_decoder(ref) do
-    start_hpack(ref, :decoder)
-  end
-
-  def start_hpack(ref, name) do
-    spec = worker(Kadabra.Hpack, [{ref, name}], start_opts())
-    Supervisor.start_child(__MODULE__, spec)
+    supervise(children, strategy: :one_for_one)
   end
 end

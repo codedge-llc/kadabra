@@ -18,12 +18,11 @@ defmodule Kadabra.Connection.Ssl do
 
   defp do_connect(uri, opts) do
     :ssl.start()
-    ssl_opts = options(opts[:ssl])
+    ssl_opts = options(Keyword.get(opts, :ssl, []))
     :ssl.connect(uri, opts[:port], ssl_opts)
   end
 
-  @spec options(Keyword.t | nil) :: [...]
-  def options(nil), do: options([])
+  @spec options(Keyword.t) :: [...]
   def options(opts) do
     opts ++ [
       {:active, :once},

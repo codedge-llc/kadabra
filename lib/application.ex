@@ -6,8 +6,7 @@ defmodule Kadabra.Application do
 
   def start(_type, _args) do
     children = [
-      supervisor(Registry, [:unique, Registry.Kadabra]),
-      supervisor(Kadabra.Supervisor, [])
+      supervisor(Registry, [:unique, Registry.Kadabra])
     ]
     Supervisor.start_link(children, [strategy: :one_for_one, name: :kadabra])
   end

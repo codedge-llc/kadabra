@@ -14,7 +14,8 @@ defmodule Kadabra.Connection do
   use GenServer
   require Logger
 
-  alias Kadabra.{Connection, Encodable, Error, Frame, Hpack, Http2, Stream}
+  alias Kadabra.{Connection, Encodable, Error, Frame,
+    Hpack, Http2, Stream, StreamSupervisor}
   alias Kadabra.Connection.Ssl
   alias Kadabra.Frame.{Continuation, Data, Goaway, Headers, Ping,
     PushPromise, RstStream, WindowUpdate}
@@ -53,15 +54,20 @@ defmodule Kadabra.Connection do
   @window_update 0x8
   @continuation 0x9
 
-  def start_link(uri, pid, opts \\ []) do
-    GenServer.start_link(__MODULE__, {:ok, uri, pid, opts})
+  def start_link(uri, pid, sup, ref, opts \\ []) do
+    name = via_tuple(sup)
+    GenServer.start_link(__MODULE__, {:ok, uri, pid, ref, opts}, name: name)
   end
 
-  def init({:ok, uri, pid, opts}) do
+  def via_tuple(ref) do
+    {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
+  end
+
+  def init({:ok, uri, pid, ref, opts}) do
     case Ssl.connect(uri, opts) do
       {:ok, socket} ->
         send_preface_and_settings(socket, opts[:settings])
-        state = initial_state(socket, uri, pid, opts)
+        state = initial_state(socket, uri, pid, ref, opts)
         {:ok, state}
       {:error, error} ->
         Logger.error(inspect(error))
@@ -69,11 +75,7 @@ defmodule Kadabra.Connection do
     end
   end
 
-  defp initial_state(socket, uri, pid, opts) do
-   ref = :erlang.make_ref
-   Kadabra.Supervisor.start_decoder(ref)
-   Kadabra.Supervisor.start_encoder(ref)
-
+  defp initial_state(socket, uri, pid, ref, opts) do
    %__MODULE__{
       ref: ref,
       client: pid,
@@ -144,9 +146,9 @@ defmodule Kadabra.Connection do
   end
 
   def close(state) do
-    Kadabra.Hpack.close(state.ref)
+    Hpack.close(state.ref)
     for stream <- state.flow_control.active_streams do
-      Kadabra.Stream.close(state.ref, stream)
+      Stream.close(state.ref, stream)
     end
   end
 
@@ -344,7 +346,7 @@ defmodule Kadabra.Connection do
   end
 
   def process(%Frame.PushPromise{stream_id: stream_id} = frame, state) do
-    {:ok, pid} = Kadabra.Supervisor.start_stream(state, stream_id)
+    {:ok, pid} = StreamSupervisor.start_stream(state, stream_id)
 
     flow = Connection.FlowControl.add_active(state.flow_control, stream_id)
 

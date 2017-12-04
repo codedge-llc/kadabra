@@ -4,7 +4,7 @@ defmodule KadabraTest do
 
   @moduletag report: [:pid]
 
-  alias Kadabra.{Encodable, Frame, Stream}
+  alias Kadabra.{Connection, Encodable, Frame, Stream}
 
   describe "open/2" do
     @tag :golang
@@ -12,7 +12,7 @@ defmodule KadabraTest do
       uri = 'http2.golang.org'
       opts = [{:active, :once}, {:reconnect, false}, {:port, 443}, :binary]
       {:ok, pid} = Kadabra.open(uri, :https, opts)
-      state = :sys.get_state(pid)
+      state = :sys.get_state(Connection.via_tuple(pid))
       refute state.reconnect
     end
 
@@ -21,7 +21,7 @@ defmodule KadabraTest do
       uri = 'http2.golang.org'
       opts = [{:active, :once}, {:port, 443}, :binary]
       {:ok, pid} = Kadabra.open(uri, :https, opts)
-      state = :sys.get_state(pid)
+      state = :sys.get_state(Connection.via_tuple(pid))
       assert state.reconnect
     end
 
@@ -30,7 +30,7 @@ defmodule KadabraTest do
       uri = 'http2.golang.org'
       opts = [{:active, :once}, {:reconnect, false}, {:port, 443}, :binary]
       {:ok, pid} = Kadabra.open(uri, :https, opts)
-      state = :sys.get_state(pid)
+      state = :sys.get_state(Connection.via_tuple(pid))
       assert state.opts[:port] == 443
     end
   end
@@ -197,9 +197,19 @@ defmodule KadabraTest do
     uri = 'http2.golang.org'
     {:ok, pid} = Kadabra.open(uri, :https)
 
-    bin = 1 |> Frame.Goaway.new |> Encodable.to_bin
-    send(pid, {:ssl, nil, bin})
+    {_, sup_pid, _, _} =
+      pid
+      |> Supervisor.which_children
+      |> Enum.find(fn({name, _, _, _}) -> name == :connection_sup end)
 
-    assert_receive {:closed, ^pid}, 5_000
+    {_, conn_pid, _, _} =
+      sup_pid
+      |> Supervisor.which_children
+      |> Enum.find(fn({name, _, _, _}) -> name == :connection end)
+
+    bin = 1 |> Frame.Goaway.new |> Encodable.to_bin
+    send(conn_pid, {:ssl, nil, bin})
+
+    assert_receive {:closed, _pid}, 5_000
   end
 end
