@@ -19,11 +19,6 @@ defmodule Kadabra.ConnectionSupervisor do
     [id: id, restart: :transient]
   end
 
-  def start_connection(uri, pid, ref, opts) do
-    spec = worker(Connection, [uri, pid, ref, opts], id: :connection)
-    Supervisor.start_child(via_tuple(ref), spec)
-  end
-
   def init({uri, pid, sup, ref, opts}) do
     children = [
       worker(Hpack, [{ref, :encoder}], start_opts(:encoder)),
