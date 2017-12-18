@@ -37,8 +37,8 @@ defmodule Kadabra.Stream do
   @headers 0x1
 
   @closed :closed
-  @half_closed_local :half_closed_local
-  @half_closed_remote :half_closed_remote
+  @hc_local :half_closed_local
+  @hc_remote :half_closed_remote
   @idle :idle
   @open :open
   # @reserved_local :reserved_local
@@ -93,9 +93,14 @@ defmodule Kadabra.Stream do
     {:keep_state, %{stream | flow: flow}}
   end
 
+  def recv(%Data{end_stream: true,
+                 data: data}, state, stream) when state in [@hc_local] do
+    stream = %Stream{stream | body: stream.body <> data}
+    {:next_state, @closed, stream}
+  end
   def recv(%Data{end_stream: true, data: data}, _state, stream) do
     stream = %Stream{stream | body: stream.body <> data}
-    {:next_state, @half_closed_remote, stream}
+    {:next_state, @hc_remote, stream}
   end
   def recv(%Data{end_stream: false, data: data}, _state, stream) do
     stream = %Stream{stream | body: stream.body <> data}
@@ -107,7 +112,7 @@ defmodule Kadabra.Stream do
 
     {:ok, headers} = Hpack.decode(stream.ref, fragment)
     stream = %Stream{stream | headers: stream.headers ++ headers}
-    {:next_state, @half_closed_remote, stream}
+    {:next_state, @hc_remote, stream}
   end
   def recv(%Headers{header_block_fragment: fragment,
                     end_stream: false}, _state, stream) do
@@ -137,7 +142,7 @@ defmodule Kadabra.Stream do
   end
 
   def recv(%RstStream{} = _frame, state, stream)
-    when state in [@open, @half_closed_local, @half_closed_remote, @closed] do
+    when state in [@open, @hc_local, @hc_remote, @closed] do
     # IO.inspect(frame, label: "Got RST_STREAM")
     {:next_state, :closed, stream}
   end
@@ -160,7 +165,7 @@ defmodule Kadabra.Stream do
 
   # Enter Events
 
-  def handle_event(:enter, _old, @half_closed_remote, stream) do
+  def handle_event(:enter, _old, @hc_remote, stream) do
     bin = stream.id |> RstStream.new |> Encodable.to_bin
     :ssl.send(stream.socket, bin)
 
@@ -205,9 +210,10 @@ defmodule Kadabra.Stream do
     {:ok, encoded} = Hpack.encode(stream.ref, headers)
     headers_payload = :erlang.iolist_to_binary(encoded)
 
-    h = Http2.build_frame(@headers, 0x4, stream.id, headers_payload)
+    flags = if payload, do: 0x4, else: 0x5
+    h = Http2.build_frame(@headers, flags, stream.id, headers_payload)
     :ssl.send(stream.socket, h)
-    # IO.puts("Sending, Stream ID: #{stream.id}")
+    # IO.puts("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
 
     flow =
       if payload do

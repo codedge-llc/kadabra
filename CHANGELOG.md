@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.6
+- Fixed: ES flag properly set on certain HEADERS frames
+
 ## v0.3.5
 - Fixed: Memory leak on connection crashes
 - New supervision structure. `Kadabra.open/2` now returns a supervisor pid,

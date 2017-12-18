@@ -15,6 +15,9 @@ defmodule Kadabra.Frame.Settings do
     %__MODULE__{ack: true, settings: nil}
   end
 
+  def new(%{payload: "", flags: flags}) do
+    {:ok, %__MODULE__{settings: nil, ack: Flags.ack?(flags)}}
+  end
   def new(%{payload: p, flags: flags}) do
     s_list = parse_settings(p)
     case put_settings(%Connection.Settings{}, s_list) do
