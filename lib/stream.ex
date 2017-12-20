@@ -213,7 +213,10 @@ defmodule Kadabra.Stream do
     flags = if payload, do: 0x4, else: 0x5
     h = Http2.build_frame(@headers, flags, stream.id, headers_payload)
     :ssl.send(stream.socket, h)
-    # IO.puts("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
+    # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
+
+    # Reply early for better performance
+    :gen_statem.reply(from, :ok)
 
     flow =
       if payload do
@@ -226,7 +229,8 @@ defmodule Kadabra.Stream do
 
     stream = %{stream | flow: flow}
 
-    {:next_state, @open, stream, [{:reply, from, :ok}]}
+    #{:next_state, @open, stream, [{:reply, from, :ok}]}
+    {:next_state, @open, stream, []}
   end
 
   def add_headers(headers, stream) do

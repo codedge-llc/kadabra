@@ -8,30 +8,12 @@ defmodule KadabraTest do
 
   describe "open/2" do
     @tag :golang
-    test "sets reconnect option if specified" do
-      uri = 'http2.golang.org'
-      opts = [{:active, :once}, {:reconnect, false}, {:port, 443}, :binary]
-      {:ok, pid} = Kadabra.open(uri, :https, opts)
-      state = :sys.get_state(Connection.via_tuple(pid))
-      refute state.reconnect
-    end
-
-    @tag :golang
-    test "reconnect option defaults to true if not specified" do
+    test "sets port if specified" do
       uri = 'http2.golang.org'
       opts = [{:active, :once}, {:port, 443}, :binary]
       {:ok, pid} = Kadabra.open(uri, :https, opts)
-      state = :sys.get_state(Connection.via_tuple(pid))
-      assert state.reconnect
-    end
-
-    @tag :golang
-    test "sets port if specified" do
-      uri = 'http2.golang.org'
-      opts = [{:active, :once}, {:reconnect, false}, {:port, 443}, :binary]
-      {:ok, pid} = Kadabra.open(uri, :https, opts)
-      state = :sys.get_state(Connection.via_tuple(pid))
-      assert state.opts[:port] == 443
+      consumer = :sys.get_state(Connection.via_tuple(pid))
+      assert consumer.state.opts[:port] == 443
     end
   end
 
@@ -53,7 +35,7 @@ defmodule KadabraTest do
     @tag :golang
     test "https://http2.golang.org/reqinfo a lot" do
       uri = 'http2.golang.org'
-      {:ok, pid} = Kadabra.open(uri, :https, reconnect: false)
+      {:ok, pid} = Kadabra.open(uri, :https)
 
       count = 5_000
       for _x <- 1..count do

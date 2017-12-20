@@ -2,7 +2,7 @@ defmodule Kadabra do
   @moduledoc """
   HTTP/2 client for Elixir.
   """
-  alias Kadabra.{Connection, Supervisor}
+  alias Kadabra.{Connection, ConnectionQueue, Supervisor}
 
   @doc ~S"""
   Opens a new connection.
@@ -16,13 +16,12 @@ defmodule Kadabra do
   @spec open(charlist, :https, Keyword.t) :: {:ok, pid} | {:error, term}
   def open(uri, scheme, opts \\ []) do
     port = Keyword.get(opts, :port, 443)
-    reconnect = Keyword.get(opts, :reconnect, true)
 
     nopts =
       opts
       |> List.keydelete(:port, 0)
-      |> List.keydelete(:reconnect, 0)
-    start_opts = [scheme: scheme, ssl: nopts, port: port, reconnect: reconnect]
+
+    start_opts = [scheme: scheme, ssl: nopts, port: port]
 
     Supervisor.start_link(uri, self(), start_opts)
   end
@@ -54,6 +53,7 @@ defmodule Kadabra do
       ...> end
       "got pong!"
   """
+  @spec ping(pid) :: no_return
   def ping(pid), do: GenServer.cast(Connection.via_tuple(pid), {:send, :ping})
 
   @doc ~S"""
@@ -76,7 +76,7 @@ defmodule Kadabra do
       {1, 200}
   """
   def request(pid, headers) do
-    GenServer.cast(Connection.via_tuple(pid), {:send, :headers, headers})
+    GenStage.call(ConnectionQueue.via_tuple(pid), {:send, :headers, headers})
   end
 
   @doc ~S"""
@@ -100,7 +100,7 @@ defmodule Kadabra do
       {1, 200, "SAMPLE ECHO REQUEST"}
   """
   def request(pid, headers, body) do
-    GenServer.cast(Connection.via_tuple(pid), {:send, :headers, headers, body})
+    GenStage.call(ConnectionQueue.via_tuple(pid), {:send, :headers, headers, body})
   end
 
   @doc ~S"""
@@ -120,6 +120,28 @@ defmodule Kadabra do
   def get(pid, path) do
     headers = [
       {":method", "GET"},
+      {":path", path},
+    ]
+    request(pid, headers)
+  end
+
+  @doc ~S"""
+  Makes a HEAD request.
+
+  ## Examples
+
+      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> Kadabra.head(pid, "/")
+      :ok
+      iex> response = receive do
+      ...>   {:end_stream, response} -> response
+      ...> end
+      iex> {response.id, response.status, response.body}
+      {1, 200, ""}
+  """
+  def head(pid, path) do
+    headers = [
+      {":method", "HEAD"},
       {":path", path},
     ]
     request(pid, headers)

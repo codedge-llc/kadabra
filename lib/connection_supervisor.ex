@@ -4,7 +4,7 @@ defmodule Kadabra.ConnectionSupervisor do
   use Supervisor
   import Supervisor.Spec
 
-  alias Kadabra.{Connection, Hpack}
+  alias Kadabra.{Connection, ConnectionQueue, Hpack}
 
   def start_link(uri, pid, sup, ref, opts) do
     name = via_tuple(ref)
@@ -23,6 +23,7 @@ defmodule Kadabra.ConnectionSupervisor do
     children = [
       worker(Hpack, [{ref, :encoder}], start_opts(:encoder)),
       worker(Hpack, [{ref, :decoder}], start_opts(:decoder)),
+      worker(ConnectionQueue, [sup], start_opts(:connection_queue)),
       worker(Connection, [uri, pid, sup, ref, opts], start_opts(:connection))
     ]
 

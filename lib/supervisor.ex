@@ -11,10 +11,6 @@ defmodule Kadabra.Supervisor do
     Supervisor.start_link(__MODULE__, {uri, pid, ref, opts})
   end
 
-  def via_tuple(ref) do
-    {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
-  end
-
   def init({uri, pid, ref, opts}) do
     children = [
       supervisor(StreamSupervisor, [ref], id: :stream_sup),
