@@ -21,7 +21,10 @@ defmodule Kadabra.Connection.Ssl do
 
   defp do_connect(uri, opts) do
     :ssl.start()
-    ssl_opts = options(Keyword.get(opts, :ssl, []))
+    ssl_opts =
+      opts
+      |> Keyword.get(:ssl, [])
+      |> options()
     :ssl.connect(uri, opts[:port], ssl_opts)
   end
 

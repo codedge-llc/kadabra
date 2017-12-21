@@ -20,6 +20,7 @@ defmodule Kadabra.Connection.FlowControl do
   }
 
   @spec update_settings(t, Connection.Settings.t) :: t
+  def update_settings(flow_control, nil), do: flow_control
   def update_settings(%{settings: old_settings} = flow_control, settings) do
     settings = Connection.Settings.merge(old_settings, settings)
     %{flow_control | settings: settings}

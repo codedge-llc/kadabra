@@ -17,15 +17,7 @@ defmodule Kadabra do
   """
   @spec open(uri, :https, Keyword.t) :: {:ok, pid} | {:error, term}
   def open(uri, scheme, opts \\ []) do
-    port = Keyword.get(opts, :port, 443)
-
-    nopts =
-      opts
-      |> List.keydelete(:port, 0)
-
-    start_opts = [scheme: scheme, ssl: nopts, port: port]
-
-    Supervisor.start_link(uri, self(), start_opts)
+    Supervisor.start_link(uri, self(), [scheme: scheme] ++ opts)
   end
 
   @doc ~S"""

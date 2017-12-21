@@ -235,8 +235,8 @@ defmodule Kadabra.Stream do
   def add_headers(headers, stream) do
     h = headers ++
     [
-      {":scheme", Atom.to_string(stream.scheme)},
-      {":authority", List.to_string(stream.uri)}
+      {":scheme", to_string(stream.scheme)},
+      {":authority", to_string(stream.uri)}
     ]
     # sorting headers to have pseudo headers first.
     Enum.sort(h, fn({a, _b}, {c, _d}) -> a < c end)

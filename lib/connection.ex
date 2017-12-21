@@ -69,11 +69,11 @@ defmodule Kadabra.Connection do
       ref: ref,
       client: pid,
       uri: uri,
-      scheme: opts[:scheme] || :https,
+      scheme: Keyword.get(opts, :scheme, :https),
       opts: opts,
       socket: socket,
       flow_control: %Kadabra.Connection.FlowControl{
-        settings: opts[:settings] || Connection.Settings.default
+        settings: Keyword.get(opts, :settings, Connection.Settings.default)
       }
     }
   end
@@ -156,8 +156,21 @@ defmodule Kadabra.Connection do
     {:noreply, [], state}
   end
 
-  def recv(%Frame.Settings{ack: true}, state) do
-    # Do nothing on ACK. Might change in the future.
+  # nil settings means use default
+  def recv(%Frame.Settings{ack: false, settings: nil},
+           %{flow_control: flow} = state) do
+
+    bin = Frame.Settings.ack |> Encodable.to_bin
+    :ssl.send(state.socket, bin)
+
+    case flow.settings.max_concurrent_streams do
+      :infinite ->
+        GenStage.ask(state.queue, 2_000_000_000)
+      max ->
+        to_ask = max - flow.active_stream_count
+        GenStage.ask(state.queue, to_ask)
+    end
+
     {:noreply, [], state}
   end
   def recv(%Frame.Settings{ack: false, settings: settings},
@@ -178,6 +191,10 @@ defmodule Kadabra.Connection do
     GenStage.ask(state.queue, to_ask)
 
     {:noreply, [], %{state | flow_control: flow}}
+  end
+  def recv(%Frame.Settings{ack: true}, state) do
+    # Do nothing on ACK. Might change in the future.
+    {:noreply, [], state}
   end
 
   def recv(%Goaway{last_stream_id: id,
