@@ -8,6 +8,9 @@ defmodule Kadabra.Connection.Ssl do
                            | {:error, :bad_scheme}
 
   @spec connect(charlist, Keyword.t) :: connection_result
+  def connect(uri, opts) when is_binary(uri) do
+    uri |> String.to_charlist |> connect(opts)
+  end
   def connect(uri, opts) do
     case opts[:scheme] do
       :http -> {:error, :not_implemented}

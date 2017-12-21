@@ -28,7 +28,7 @@ defmodule Kadabra.Connection do
     ref: nil,
     scheme: :https,
     socket: sock,
-    uri: charlist
+    uri: charlist | String.t
   }
 
   @type sock :: {:sslsocket, any, pid | {any, any}}

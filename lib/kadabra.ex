@@ -4,16 +4,18 @@ defmodule Kadabra do
   """
   alias Kadabra.{Connection, ConnectionQueue, Supervisor}
 
+  @type uri :: charlist | String.t
+
   @doc ~S"""
   Opens a new connection.
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> {:ok, pid} = Kadabra.open("http2.golang.org", :https)
       iex> is_pid(pid)
       true
   """
-  @spec open(charlist, :https, Keyword.t) :: {:ok, pid} | {:error, term}
+  @spec open(uri, :https, Keyword.t) :: {:ok, pid} | {:error, term}
   def open(uri, scheme, opts \\ []) do
     port = Keyword.get(opts, :port, 443)
 
@@ -31,7 +33,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> {:ok, pid} = Kadabra.open("http2.golang.org", :https)
       iex> Kadabra.close(pid)
       iex> receive do
       ...>   {:closed, _pid} -> "connection closed!"
@@ -39,7 +41,11 @@ defmodule Kadabra do
       "connection closed!"
   """
   @spec close(pid) :: :ok
-  def close(pid), do: GenServer.cast(Connection.via_tuple(pid), {:send, :goaway})
+  def close(pid) do
+    pid
+    |> Connection.via_tuple
+    |> GenServer.cast({:send, :goaway})
+  end
 
   @doc ~S"""
   Pings an existing connection.
@@ -54,7 +60,11 @@ defmodule Kadabra do
       "got pong!"
   """
   @spec ping(pid) :: no_return
-  def ping(pid), do: GenServer.cast(Connection.via_tuple(pid), {:send, :ping})
+  def ping(pid) do
+    pid
+    |> Connection.via_tuple
+    |> GenServer.cast({:send, :ping})
+  end
 
   @doc ~S"""
   Makes a request with given headers.
@@ -76,7 +86,9 @@ defmodule Kadabra do
       {1, 200}
   """
   def request(pid, headers) do
-    GenStage.call(ConnectionQueue.via_tuple(pid), {:send, :headers, headers})
+    pid
+    |> ConnectionQueue.via_tuple
+    |> GenStage.call({:send, :headers, headers})
   end
 
   @doc ~S"""
@@ -100,7 +112,9 @@ defmodule Kadabra do
       {1, 200, "SAMPLE ECHO REQUEST"}
   """
   def request(pid, headers, body) do
-    GenStage.call(ConnectionQueue.via_tuple(pid), {:send, :headers, headers, body})
+    pid
+    |> ConnectionQueue.via_tuple
+    |> GenStage.call({:send, :headers, headers, body})
   end
 
   @doc ~S"""
@@ -117,12 +131,9 @@ defmodule Kadabra do
       iex> {response.id, response.status}
       {1, 200}
   """
+  @spec get(pid, String.t) :: no_return
   def get(pid, path) do
-    headers = [
-      {":method", "GET"},
-      {":path", path},
-    ]
-    request(pid, headers)
+    request(pid, headers("GET", path))
   end
 
   @doc ~S"""
@@ -139,12 +150,9 @@ defmodule Kadabra do
       iex> {response.id, response.status, response.body}
       {1, 200, ""}
   """
+  @spec head(pid, String.t) :: no_return
   def head(pid, path) do
-    headers = [
-      {":method", "HEAD"},
-      {":path", path},
-    ]
-    request(pid, headers)
+    request(pid, headers("HEAD", path))
   end
 
   @doc ~S"""
@@ -161,12 +169,9 @@ defmodule Kadabra do
       iex> {response.id, response.status}
       {1, 200}
   """
+  @spec post(pid, String.t, any) :: no_return
   def post(pid, path, payload) do
-    headers = [
-      {":method", "POST"},
-      {":path", path},
-    ]
-    request(pid, headers, payload)
+    request(pid, headers("POST", path), payload)
   end
 
   @doc ~S"""
@@ -185,11 +190,34 @@ defmodule Kadabra do
       iex> stream.body
       "bytes=4, CRC32=d87f7e0c"
   """
+  @spec put(pid, String.t, any) :: no_return
   def put(pid, path, payload) do
-    headers = [
-      {":method", "PUT"},
+    request(pid, headers("PUT", path), payload)
+  end
+
+  @doc ~S"""
+  Makes a DELETE request.
+
+  ## Examples
+
+      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> Kadabra.delete(pid, "/")
+      :ok
+      iex> stream = receive do
+      ...>   {:end_stream, stream} -> stream
+      ...> end
+      iex> stream.status
+      200
+  """
+  @spec delete(pid, String.t) :: no_return
+  def delete(pid, path) do
+    request(pid, headers("DELETE", path))
+  end
+
+  defp headers(method, path) do
+    [
+      {":method", method},
       {":path", path},
     ]
-    request(pid, headers, payload)
   end
 end
