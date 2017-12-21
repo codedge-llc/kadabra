@@ -17,7 +17,8 @@ defmodule Kadabra do
   """
   @spec open(uri, :https, Keyword.t) :: {:ok, pid} | {:error, term}
   def open(uri, scheme, opts \\ []) do
-    Supervisor.start_link(uri, self(), [scheme: scheme] ++ opts)
+    opts = Keyword.merge([scheme: scheme, port: 443], opts)
+    Supervisor.start_link(uri, self(), opts)
   end
 
   @doc ~S"""

@@ -10,7 +10,7 @@ defmodule KadabraTest do
     @tag :golang
     test "sets port if specified" do
       uri = 'http2.golang.org'
-      opts = [{:active, :once}, {:port, 443}, :binary]
+      opts = [port: 443]
       {:ok, pid} = Kadabra.open(uri, :https, opts)
       consumer = :sys.get_state(Connection.via_tuple(pid))
       assert consumer.state.opts[:port] == 443
