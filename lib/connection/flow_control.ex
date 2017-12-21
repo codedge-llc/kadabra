@@ -1,7 +1,7 @@
 defmodule Kadabra.Connection.FlowControl do
   @moduledoc false
 
-  defstruct queue: [],
+  defstruct queue: :queue.new,
             stream_id: 1,
             active_stream_count: 0,
             active_streams: MapSet.new,
@@ -11,7 +11,7 @@ defmodule Kadabra.Connection.FlowControl do
   alias Kadabra.{Connection, StreamSupervisor}
 
   @type t :: %__MODULE__{
-    queue: [...],
+    queue: :queue.t,
     stream_id: pos_integer,
     active_stream_count: non_neg_integer,
     active_streams: MapSet.t,
@@ -127,36 +127,39 @@ defmodule Kadabra.Connection.FlowControl do
 
   ## Examples
 
-      iex> flow = %Kadabra.Connection.FlowControl{queue: []}
-      iex> add(flow, "test", "payload")
-      %Kadabra.Connection.FlowControl{queue: [{:send, "test", "payload"}]}
+      iex> flow = add(%Kadabra.Connection.FlowControl{}, %Kadabra.Request{})
+      iex> :queue.len(flow.queue)
+      1
   """
-  @spec add(t, [...], binary | nil) :: t
-  def add(%{queue: queue} = flow_control, headers, payload \\ nil) do
-    %{flow_control | queue: queue ++ [{:send, headers, payload}]}
+  @spec add(t, Kadabra.Request.t) :: t
+  def add(%{queue: queue} = flow_control, request) do
+    queue = :queue.in(request, queue)
+    %{flow_control | queue: queue}
   end
 
   @spec process(t, Connection.t) :: t
   def process(%{queue: []} = flow_control, _connection) do
     flow_control
   end
-  def process(%{queue: [{:send, headers, payload} | rest]} = flow, conn) do
+  def process(%{queue: queue} = flow, conn) do
+    with {{:value, request}, queue} <- :queue.out(queue),
+      {:can_send, true} <- {:can_send, can_send?(flow)} do
 
-    if can_send?(flow) do
-      {:ok, pid} = StreamSupervisor.start_stream(conn)
+        {:ok, pid} = StreamSupervisor.start_stream(conn)
 
-      size = byte_size(payload || <<>>)
-      :gen_statem.call(pid, {:send_headers, headers, payload})
+        size = byte_size(request.body || <<>>)
+        :gen_statem.call(pid, {:send_headers, request})
 
-      flow_control = %{flow | queue: rest}
+        flow_control = %{flow | queue: queue}
 
-      flow_control
-      |> decrement_window(size)
-      |> add_active(flow.stream_id)
-      |> increment_active_stream_count()
-      |> increment_stream_id()
+        flow_control
+        |> decrement_window(size)
+        |> add_active(flow.stream_id)
+        |> increment_active_stream_count()
+        |> increment_stream_id()
     else
-      flow
+      {:empty, _queue} -> flow
+      {:can_send, false} -> flow
     end
   end
 

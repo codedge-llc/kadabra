@@ -72,38 +72,13 @@ defmodule Kadabra do
   ## Examples
 
       iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
-      iex> path = "/reqinfo" # Route echoes PUT body in uppercase
-      iex> headers = [
-      ...>   {":method", "GET"},
-      ...>   {":path", path},
-      ...> ]
-      iex> Kadabra.request(pid, headers)
-      iex> response = receive do
-      ...>   {:end_stream, %Kadabra.Stream.Response{} = response} -> response
-      ...> after 5_000 -> :timed_out
-      ...> end
-      iex> {response.id, response.status}
-      {1, 200}
-  """
-  def request(pid, headers) do
-    pid
-    |> ConnectionQueue.via_tuple
-    |> GenStage.call({:send, :headers, headers})
-  end
-
-  @doc ~S"""
-  Makes a request with given headers and body.
-
-  ## Examples
-
-      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
       iex> path = "/ECHO" # Route echoes PUT body in uppercase
       iex> body = "sample echo request"
       iex> headers = [
       ...>   {":method", "PUT"},
       ...>   {":path", path},
       ...> ]
-      iex> Kadabra.request(pid, headers, body)
+      iex> Kadabra.request(pid, headers: headers, body: body)
       iex> response = receive do
       ...>   {:end_stream, %Kadabra.Stream.Response{} = response} -> response
       ...> after 5_000 -> :timed_out
@@ -111,10 +86,9 @@ defmodule Kadabra do
       iex> {response.id, response.status, response.body}
       {1, 200, "SAMPLE ECHO REQUEST"}
   """
-  def request(pid, headers, body) do
-    pid
-    |> ConnectionQueue.via_tuple
-    |> GenStage.call({:send, :headers, headers, body})
+  def request(pid, opts \\ []) do
+    request = Kadabra.Request.new(opts)
+    ConnectionQueue.queue_request(pid, request)
   end
 
   @doc ~S"""
@@ -133,7 +107,7 @@ defmodule Kadabra do
   """
   @spec get(pid, String.t) :: no_return
   def get(pid, path) do
-    request(pid, headers("GET", path))
+    request(pid, headers: headers("GET", path))
   end
 
   @doc ~S"""
@@ -152,7 +126,7 @@ defmodule Kadabra do
   """
   @spec head(pid, String.t) :: no_return
   def head(pid, path) do
-    request(pid, headers("HEAD", path))
+    request(pid, headers: headers("HEAD", path))
   end
 
   @doc ~S"""
@@ -171,7 +145,7 @@ defmodule Kadabra do
   """
   @spec post(pid, String.t, any) :: no_return
   def post(pid, path, payload) do
-    request(pid, headers("POST", path), payload)
+    request(pid, headers: headers("POST", path), body: payload)
   end
 
   @doc ~S"""
@@ -192,7 +166,7 @@ defmodule Kadabra do
   """
   @spec put(pid, String.t, any) :: no_return
   def put(pid, path, payload) do
-    request(pid, headers("PUT", path), payload)
+    request(pid, headers: headers("PUT", path), body: payload)
   end
 
   @doc ~S"""
@@ -211,7 +185,7 @@ defmodule Kadabra do
   """
   @spec delete(pid, String.t) :: no_return
   def delete(pid, path) do
-    request(pid, headers("DELETE", path))
+    request(pid, headers: headers("DELETE", path))
   end
 
   defp headers(method, path) do

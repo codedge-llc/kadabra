@@ -101,11 +101,7 @@ defmodule Kadabra.Connection do
   end
 
   def handle_events(events, _from, state) do
-    new_state =
-      events
-      |> Enum.reduce(state, fn({:send, :headers, headers, payload}, acc) ->
-        do_send_headers(headers, payload, acc)
-      end)
+    new_state = Enum.reduce(events, state, & do_send_headers(&1, &2))
     {:noreply, [], new_state}
   end
 
@@ -214,10 +210,10 @@ defmodule Kadabra.Connection do
     end
   end
 
-  defp do_send_headers(headers, payload, %{flow_control: flow} = state) do
+  defp do_send_headers(request, %{flow_control: flow} = state) do
     flow =
       flow
-      |> Connection.FlowControl.add(headers, payload)
+      |> Connection.FlowControl.add(request)
       |> Connection.FlowControl.process(state)
 
     %{state | flow_control: flow}

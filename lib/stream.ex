@@ -201,7 +201,7 @@ defmodule Kadabra.Stream do
   # Calls
 
   def handle_event({:call, from},
-                   {:send_headers, headers, payload},
+                   {:send_headers, %{headers: headers, body: payload}},
                    _state,
                    stream) do
 
@@ -229,7 +229,6 @@ defmodule Kadabra.Stream do
 
     stream = %{stream | flow: flow}
 
-    #{:next_state, @open, stream, [{:reply, from, :ok}]}
     {:next_state, @open, stream, []}
   end
 

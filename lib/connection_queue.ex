@@ -16,14 +16,18 @@ defmodule Kadabra.ConnectionQueue do
     {:producer, {:queue.new, 0}, dispatcher: GenStage.BroadcastDispatcher}
   end
 
-  def handle_call({:send, :headers, headers}, from, {queue, pending_demand}) do
-    GenStage.reply(from, :ok)
-    queue = :queue.in({:send, :headers, headers, nil}, queue)
-    dispatch_events(queue, pending_demand, [])
+  def queue_request(pid, %{on_response: nil} = request) do
+    queue_request(pid, %{request | on_response: &IO.inspect/1})
   end
-  def handle_call({:send, :headers, headers, payload}, from, {queue, pending_demand}) do
+  def queue_request(pid, request) do
+    pid
+    |> via_tuple()
+    |> GenStage.call({:request, request})
+  end
+
+  def handle_call({:request, request}, from, {queue, pending_demand}) do
     GenStage.reply(from, :ok)
-    queue = :queue.in({:send, :headers, headers, payload}, queue)
+    queue = :queue.in(request, queue)
     dispatch_events(queue, pending_demand, [])
   end
 
