@@ -7,6 +7,10 @@ defmodule Kadabra.Connection.Socket do
                            | {:error, :not_implmenented}
                            | {:error, :bad_scheme}
 
+  def default_port(:http), do: 80
+  def default_port(:https), do: 443
+  def default_port(_), do: 443
+
   @spec connect(charlist, Keyword.t) :: connection_result
   def connect(uri, opts) when is_binary(uri) do
     uri |> String.to_charlist |> connect(opts)

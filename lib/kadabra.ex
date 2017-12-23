@@ -1,8 +1,99 @@
 defmodule Kadabra do
-  @moduledoc """
+  @moduledoc ~S"""
   HTTP/2 client for Elixir.
+
+  Written to manage HTTP/2 connections for
+  [pigeon](https://github.com/codedge-llc/pigeon).
+
+  *Requires Elixir 1.4/OTP 19.2 or later.*
+
+  ## Usage
+
+  ```elixir
+  {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+  Kadabra.get(pid, "/")
+  receive do
+    {:end_stream, %Kadabra.Stream.Response{} = stream} ->
+    IO.inspect stream
+  after 5_000 ->
+    IO.puts "Connection timed out."
+  end
+
+  %Kadabra.Stream.Response{
+    body: "<html>\\n<body>\\n<h1>Go + HTTP/2</h1>\\n\\n<p>Welcome to..."
+    headers: [
+      {":status", "200"},
+      {"content-type", "text/html; charset=utf-8"},
+      {"content-length", "1708"},
+      {"date", "Sun, 16 Oct 2016 21:20:47 GMT"}
+    ],
+    id: 1,
+    status: 200
+  }
+  ```
+
+  ## Making Requests Manually
+
+  ```elixir
+  {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+
+  path = "/ECHO" # Route echoes PUT body in uppercase
+  body = "sample echo request"
+  headers = [
+    {":method", "PUT"},
+    {":path", path},
+  ]
+
+  Kadabra.request(pid, headers, body)
+
+  receive do
+    {:end_stream, %Kadabra.Stream.Response{} = stream} ->
+    IO.inspect stream
+  after 5_000 ->
+    IO.puts "Connection timed out."
+  end
+
+  %Kadabra.Stream.Response{
+    body: "SAMPLE ECHO REQUEST",
+    headers: [
+      {":status", "200"},
+      {"content-type", "text/plain; charset=utf-8"},
+      {"date", "Sun, 16 Oct 2016 21:28:15 GMT"}
+    ],
+    id: 1,
+    status: 200
+  }
+  ```
   """
+
   alias Kadabra.{Connection, ConnectionQueue, Supervisor}
+  alias Kadabra.Connection.Socket
+
+  @typedoc ~S"""
+  Options for connections.
+
+  - `:port` - Override default port (80/443).
+  - `:ssl` - Specify custom options for `:ssl.connect/3`
+    when used with `:https` scheme.
+  - `:tcp` - Specify custom options for `:gen_tcp.connect/3`
+    when used with `:http` scheme.
+  """
+  @type conn_opts :: [
+    port: pos_integer,
+    ssl: [...],
+    tcp: [...]
+  ]
+
+  @typedoc ~S"""
+  Options for making requests.
+
+  - `:headers` - (Required) Headers for request.
+  - `:body` - (Optional) Used for requests that can have a body, such as POST.
+  """
+  @type request_opts :: [
+    headers: [{String.t, String.t}, ...],
+    body: String.t
+  ]
 
   @type scheme :: :http | :https
 
@@ -21,9 +112,10 @@ defmodule Kadabra do
       iex> is_pid(pid)
       true
   """
-  @spec open(uri, scheme, Keyword.t) :: {:ok, pid} | {:error, term}
+  @spec open(uri, scheme, conn_opts) :: {:ok, pid} | {:error, term}
   def open(uri, scheme, opts \\ []) do
-    opts = Keyword.merge([scheme: scheme, port: 443], opts)
+    port = Socket.default_port(scheme)
+    opts = Keyword.merge([scheme: scheme, port: port], opts)
     Supervisor.start_link(uri, self(), opts)
   end
 
@@ -66,7 +158,7 @@ defmodule Kadabra do
   end
 
   @doc ~S"""
-  Makes a request with given headers.
+  Makes a request with given headers and optional body.
 
   ## Examples
 
@@ -85,6 +177,7 @@ defmodule Kadabra do
       iex> {response.id, response.status, response.body}
       {1, 200, "SAMPLE ECHO REQUEST"}
   """
+  @spec request(pid, request_opts) :: no_return
   def request(pid, opts \\ []) do
     request = Kadabra.Request.new(opts)
     ConnectionQueue.queue_request(pid, request)
@@ -143,7 +236,7 @@ defmodule Kadabra do
       {1, 200}
   """
   @spec post(pid, String.t, any) :: no_return
-  def post(pid, path, payload) do
+  def post(pid, path, payload \\ nil) do
     request(pid, headers: headers("POST", path), body: payload)
   end
 
@@ -164,7 +257,7 @@ defmodule Kadabra do
       "bytes=4, CRC32=d87f7e0c"
   """
   @spec put(pid, String.t, any) :: no_return
-  def put(pid, path, payload) do
+  def put(pid, path, payload \\ nil) do
     request(pid, headers: headers("PUT", path), body: payload)
   end
 

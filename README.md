@@ -6,7 +6,7 @@ HTTP/2 client for Elixir
 
 Written to manage HTTP/2 connections for [pigeon](https://github.com/codedge-llc/pigeon). Very much a work in progress.
 
-Requires Elixir 1.4/OTP 19 or later.
+*Requires Elixir 1.4/OTP 19.2 or later.*
 
 ## Usage
 ```elixir
