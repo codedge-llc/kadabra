@@ -4,6 +4,8 @@ defmodule Kadabra do
   """
   alias Kadabra.{Connection, ConnectionQueue, Supervisor}
 
+  @type scheme :: :http | :https
+
   @type uri :: charlist | String.t
 
   @doc ~S"""
@@ -11,11 +13,15 @@ defmodule Kadabra do
 
   ## Examples
 
+      iex> {:ok, pid} = Kadabra.open("http2.golang.org", :http)
+      iex> is_pid(pid)
+      true
+
       iex> {:ok, pid} = Kadabra.open("http2.golang.org", :https)
       iex> is_pid(pid)
       true
   """
-  @spec open(uri, :https, Keyword.t) :: {:ok, pid} | {:error, term}
+  @spec open(uri, scheme, Keyword.t) :: {:ok, pid} | {:error, term}
   def open(uri, scheme, opts \\ []) do
     opts = Keyword.merge([scheme: scheme, port: 443], opts)
     Supervisor.start_link(uri, self(), opts)

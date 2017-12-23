@@ -16,6 +16,7 @@ defmodule Kadabra.Stream do
   require Logger
 
   alias Kadabra.{Connection, Encodable, Hpack, Http2, Stream}
+  alias Kadabra.Connection.Socket
   alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream,
     WindowUpdate}
   alias Kadabra.Stream.Response
@@ -167,7 +168,7 @@ defmodule Kadabra.Stream do
 
   def handle_event(:enter, _old, @hc_remote, stream) do
     bin = stream.id |> RstStream.new |> Encodable.to_bin
-    :ssl.send(stream.socket, bin)
+    Socket.send(stream.socket, bin)
 
     :gen_statem.cast(self(), :close)
     {:keep_state, stream}
@@ -212,7 +213,7 @@ defmodule Kadabra.Stream do
 
     flags = if payload, do: 0x4, else: 0x5
     h = Http2.build_frame(@headers, flags, stream.id, headers_payload)
-    :ssl.send(stream.socket, h)
+    Socket.send(stream.socket, h)
     # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
 
     # Reply early for better performance

@@ -11,7 +11,7 @@ defmodule Kadabra.Connection.FlowControl do
   alias Kadabra.{Connection, StreamSupervisor}
 
   @type t :: %__MODULE__{
-    queue: :queue.t,
+    queue: :queue.queue,
     stream_id: pos_integer,
     active_stream_count: non_neg_integer,
     active_streams: MapSet.t,

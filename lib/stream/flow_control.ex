@@ -7,6 +7,7 @@ defmodule Kadabra.Stream.FlowControl do
             stream_id: nil
 
   alias Kadabra.{Encodable, Frame}
+  alias Kadabra.Connection.Socket
 
   @type t :: %__MODULE__{
     max_frame_size: non_neg_integer,
@@ -107,7 +108,7 @@ defmodule Kadabra.Stream.FlowControl do
     p =
       %Frame.Data{stream_id: stream_id, end_stream: false, data: bin}
       |> Encodable.to_bin
-    :ssl.send(socket, p)
+    Socket.send(socket, p)
     send_partial_data(rest, socket, stream_id)
   end
 
@@ -116,14 +117,14 @@ defmodule Kadabra.Stream.FlowControl do
     p =
       %Frame.Data{stream_id: stream_id, end_stream: true, data: bin}
       |> Encodable.to_bin
-    :ssl.send(socket, p)
+    Socket.send(socket, p)
     send_data([], socket, stream_id)
   end
   def send_data([bin | rest], socket, stream_id) do
     p =
       %Frame.Data{stream_id: stream_id, end_stream: false, data: bin}
       |> Encodable.to_bin
-    :ssl.send(socket, p)
+    Socket.send(socket, p)
     send_data(rest, socket, stream_id)
   end
 

@@ -16,7 +16,7 @@ defmodule Kadabra.Connection do
 
   alias Kadabra.{Connection, ConnectionQueue, Encodable, Error, Frame,
     FrameParser, Hpack, Http2, Stream, StreamSupervisor}
-  alias Kadabra.Connection.Ssl
+  alias Kadabra.Connection.Socket
   alias Kadabra.Frame.{Continuation, Data, Goaway, Headers, Ping,
     PushPromise, RstStream, WindowUpdate}
 
@@ -53,7 +53,7 @@ defmodule Kadabra.Connection do
   end
 
   def init({:ok, uri, pid, sup, ref, opts}) do
-    case Ssl.connect(uri, opts) do
+    case Socket.connect(uri, opts) do
       {:ok, socket} ->
         send_preface_and_settings(socket, opts[:settings])
         state = initial_state(socket, uri, pid, ref, opts)
@@ -79,11 +79,11 @@ defmodule Kadabra.Connection do
   end
 
   defp send_preface_and_settings(socket, settings) do
-    :ssl.send(socket, Http2.connection_preface)
+    Socket.send(socket, Http2.connection_preface)
     bin =
       %Frame.Settings{settings: settings || Connection.Settings.default}
       |> Encodable.to_bin
-    :ssl.send(socket, bin)
+    Socket.send(socket, bin)
   end
 
   # handle_cast
@@ -114,14 +114,14 @@ defmodule Kadabra.Connection do
   @spec sendf(:goaway | :ping, t) :: {:noreply, [], t}
   def sendf(:ping, %Connection{socket: socket} = state) do
     bin = Ping.new |> Encodable.to_bin
-    :ssl.send(socket, bin)
+    Socket.send(socket, bin)
     {:noreply, [], state}
   end
   def sendf(:goaway, %Connection{socket: socket,
                                  client: pid,
                                  flow_control: flow} = state) do
     bin = flow.stream_id |> Goaway.new |> Encodable.to_bin
-    :ssl.send(socket, bin)
+    Socket.send(socket, bin)
 
     close(state)
     send(pid, {:closed, self()})
@@ -161,7 +161,7 @@ defmodule Kadabra.Connection do
            %{flow_control: flow} = state) do
 
     bin = Frame.Settings.ack |> Encodable.to_bin
-    :ssl.send(state.socket, bin)
+    Socket.send(state.socket, bin)
 
     case flow.settings.max_concurrent_streams do
       :infinite ->
@@ -185,7 +185,7 @@ defmodule Kadabra.Connection do
     Hpack.update_max_table_size(pid, settings.max_header_list_size)
 
     bin = Frame.Settings.ack |> Encodable.to_bin
-    :ssl.send(state.socket, bin)
+    Socket.send(state.socket, bin)
 
     to_ask = settings.max_concurrent_streams - flow.active_stream_count
     GenStage.ask(state.queue, to_ask)
@@ -262,7 +262,8 @@ defmodule Kadabra.Connection do
     {:noreply, [], state}
   end
 
-  def handle_info({:tcp, _socket, _bin}, state) do
+  def handle_info({:tcp, _socket, bin}, state) do
+    do_recv_bin(bin, state)
     {:noreply, [], state}
   end
 
@@ -271,27 +272,27 @@ defmodule Kadabra.Connection do
   end
 
   def handle_info({:ssl, _socket, bin}, state) do
-    do_recv_ssl(bin, state)
+    do_recv_bin(bin, state)
   end
 
   def handle_info({:ssl_closed, _socket}, state) do
     handle_disconnect(state)
   end
 
-  defp do_recv_ssl(bin, %{socket: socket} = state) do
+  defp do_recv_bin(bin, %{socket: socket} = state) do
     bin = state.buffer <> bin
-    case parse_ssl(socket, bin, state) do
+    case parse_bin(socket, bin, state) do
       {:error, bin, state} ->
-        :ssl.setopts(socket, [{:active, :once}])
+        Socket.setopts(socket, [{:active, :once}])
         {:noreply, [], %{state | buffer: bin}}
     end
   end
 
-  def parse_ssl(socket, bin, state) do
+  def parse_bin(socket, bin, state) do
     case FrameParser.parse(bin) do
       {:ok, frame, rest} ->
         state = handle_response(frame, state)
-        parse_ssl(socket, rest, state)
+        parse_bin(socket, rest, state)
       {:error, bin} ->
         {:error, bin, state}
     end
@@ -396,13 +397,13 @@ defmodule Kadabra.Connection do
   def send_window_update(socket, %Data{stream_id: sid,
                                        data: data}) when byte_size(data) > 0 do
     bin = data |> WindowUpdate.new |> Encodable.to_bin
-    :ssl.send(socket, bin)
+    Socket.send(socket, bin)
 
     s_bin =
       sid
       |> WindowUpdate.new(byte_size(data))
       |> Encodable.to_bin
-    :ssl.send(socket, s_bin)
+    Socket.send(socket, s_bin)
   end
   def send_window_update(_socket, %Data{data: _data}), do: :ok
 
