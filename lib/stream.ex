@@ -16,7 +16,16 @@ defmodule Kadabra.Stream do
 
   alias Kadabra.{Connection, Encodable, Hpack, Http2, Stream}
   alias Kadabra.Connection.{Settings, Socket}
-  alias Kadabra.Frame.{Continuation, Data, Headers, PushPromise, RstStream, WindowUpdate}
+
+  alias Kadabra.Frame.{
+    Continuation,
+    Data,
+    Headers,
+    PushPromise,
+    RstStream,
+    WindowUpdate
+  }
+
   alias Kadabra.Stream.Response
 
   @type t :: %__MODULE__{
@@ -82,16 +91,17 @@ defmodule Kadabra.Stream do
   end
 
   # For SETTINGS initial_window_size and max_frame_size changes
-  def recv({:settings_change, window_amount, new_max_frame}, _state, stream) do
+  def recv({:settings_change, window, new_max_frame}, _state, stream) do
     flow =
       stream.flow
-      |> Stream.FlowControl.increment_window(window_amount)
+      |> Stream.FlowControl.increment_window(window)
       |> Stream.FlowControl.set_max_frame_size(new_max_frame)
 
     {:keep_state, %{stream | flow: flow}}
   end
 
-  def recv(%Data{end_stream: true, data: data}, state, stream) when state in [@hc_local] do
+  def recv(%Data{end_stream: true, data: data}, state, stream)
+      when state in [@hc_local] do
     stream = %Stream{stream | body: stream.body <> data}
     {:next_state, @closed, stream}
   end
@@ -106,14 +116,14 @@ defmodule Kadabra.Stream do
     {:keep_state, stream}
   end
 
-  def recv(%Headers{header_block_fragment: fragment, end_stream: true}, _state, stream) do
-    {:ok, headers} = Hpack.decode(stream.ref, fragment)
+  def recv(%Headers{end_stream: true} = frame, _state, stream) do
+    {:ok, headers} = Hpack.decode(stream.ref, frame.header_block_fragment)
     stream = %Stream{stream | headers: stream.headers ++ headers}
     {:next_state, @hc_remote, stream}
   end
 
-  def recv(%Headers{header_block_fragment: fragment, end_stream: false}, _state, stream) do
-    {:ok, headers} = Hpack.decode(stream.ref, fragment)
+  def recv(%Headers{end_stream: false} = frame, _state, stream) do
+    {:ok, headers} = Hpack.decode(stream.ref, frame.header_block_fragment)
     stream = %Stream{stream | headers: stream.headers ++ headers}
     {:keep_state, stream}
   end

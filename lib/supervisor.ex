@@ -13,6 +13,7 @@ defmodule Kadabra.Supervisor do
 
   def init({uri, pid, ref, opts}) do
     conn_opts = [uri, pid, self(), ref, opts]
+
     children = [
       supervisor(StreamSupervisor, [ref], id: :stream_sup),
       supervisor(ConnectionSupervisor, conn_opts, id: :connection_sup)
