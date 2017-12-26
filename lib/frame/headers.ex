@@ -11,15 +11,15 @@ defmodule Kadabra.Frame.Headers do
             weight: nil
 
   @type t :: %__MODULE__{
-    end_headers: boolean,
-    end_stream: boolean,
-    exclusive: boolean,
-    header_block_fragment: binary,
-    priority: boolean,
-    stream_dependency: pos_integer,
-    stream_id: pos_integer,
-    weight: non_neg_integer
-  }
+          end_headers: boolean,
+          end_stream: boolean,
+          exclusive: boolean,
+          header_block_fragment: binary,
+          priority: boolean,
+          stream_dependency: pos_integer,
+          stream_id: pos_integer,
+          weight: non_neg_integer
+        }
 
   alias Kadabra.Frame
   alias Kadabra.Frame.Flags
@@ -42,24 +42,23 @@ defmodule Kadabra.Frame.Headers do
       end_headers: true, priority: true, header_block_fragment: <<136>>,
       weight: 3, exclusive: true, stream_dependency: 1}
   """
-  @spec new(Frame.t) :: t
+  @spec new(Frame.t()) :: t
   def new(%Frame{stream_id: stream_id, flags: flags, payload: p}) do
     frame =
-      %__MODULE__{
-        end_stream: Flags.end_stream?(flags),
-        end_headers: Flags.end_headers?(flags),
-        priority: Flags.priority?(flags),
-        stream_id: stream_id
-      }
+      %__MODULE__{}
+      |> Map.put(:end_stream, Flags.end_stream?(flags))
+      |> Map.put(:end_headers, Flags.end_headers?(flags))
+      |> Map.put(:priority, Flags.priority?(flags))
+      |> Map.put(:stream_id, stream_id)
 
     if Flags.priority?(flags) do
       <<e::1, stream_dep::31, weight::8, headers::bitstring>> = p
-      %{frame |
-        stream_dependency: stream_dep,
-        exclusive: (e == 1),
-        weight: weight + 1,
-        header_block_fragment: headers
-      }
+
+      frame
+      |> Map.put(:stream_dependency, stream_dep)
+      |> Map.put(:exclusive, e == 1)
+      |> Map.put(:weight, weight + 1)
+      |> Map.put(:header_block_fragment, headers)
     else
       %{frame | header_block_fragment: p}
     end

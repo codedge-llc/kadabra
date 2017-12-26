@@ -12,24 +12,31 @@ defmodule KadabraTest do
       uri = 'http2.golang.org'
       opts = [port: 443]
       {:ok, pid} = Kadabra.open(uri, :https, opts)
-      consumer = :sys.get_state(Connection.via_tuple(pid))
+
+      consumer =
+        pid
+        |> Connection.via_tuple()
+        |> :sys.get_state()
+
       assert consumer.state.opts[:port] == 443
     end
   end
 
-  describe "GET"  do
+  describe "GET" do
     @tag :golang
     test "https://http2.golang.org/reqinfo" do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
       Kadabra.get(pid, "/reqinfo")
 
-      assert_receive {:end_stream, %Stream.Response{
-        id: 1,
-        headers: _headers,
-        body: _body,
-        status: 200
-      }}, 5_000
+      receive do
+        {:end_stream, response} ->
+          assert response.id == 1
+          assert response.status == 200
+      after
+        5_000 ->
+          flunk("No stream response received.")
+      end
     end
 
     @tag :golang
@@ -38,18 +45,15 @@ defmodule KadabraTest do
       {:ok, pid} = Kadabra.open(uri, :https)
 
       count = 5_000
+
       for _x <- 1..count do
         Kadabra.get(pid, "/reqinfo")
       end
 
-      streams = 1..(2 * count) |> Enum.filter(& rem(&1, 2) == 1)
+      streams = 1..(2 * count) |> Enum.filter(&(rem(&1, 2) == 1))
+
       for x <- streams do
-        assert_receive {:end_stream, %Stream.Response{
-          id: ^x,
-          headers: _headers,
-          body: _body,
-          status: _status
-        }}, 15_000
+        assert_receive {:end_stream, %Stream.Response{id: ^x}}, 15_000
       end
     end
 
@@ -62,12 +66,15 @@ defmodule KadabraTest do
       expected_body = "<a href=\"/\">Found</a>.\n\n"
       expected_status = 302
 
-      assert_receive {:end_stream, %Stream.Response{
-        id: 1,
-        headers: _headers,
-        body: ^expected_body,
-        status: ^expected_status
-      }}, 5_000
+      receive do
+        {:end_stream, response} ->
+          assert response.id == 1
+          assert response.status == expected_status
+          assert response.body == expected_body
+      after
+        5_000 ->
+          flunk("No stream response received.")
+      end
     end
 
     @tag :golang
@@ -81,8 +88,9 @@ defmodule KadabraTest do
           assert response.id == 1
           assert response.status == 200
           assert byte_size(response.body) == 17668
-      after 5_000 ->
-        flunk "No stream response received."
+      after
+        5_000 ->
+          flunk("No stream response received.")
       end
     end
 
@@ -96,12 +104,14 @@ defmodule KadabraTest do
         {:end_stream, response} ->
           assert response.id == 1
           assert response.status == 200
-          assert byte_size(response.body) == 10921353
+          assert byte_size(response.body) == 10_921_353
+
         other ->
           IO.inspect(other)
-          flunk "Unexpected response"
-      after 45_000 ->
-        flunk "No stream response received."
+          flunk("Unexpected response")
+      after
+        45_000 ->
+          flunk("No stream response received.")
       end
     end
 
@@ -116,8 +126,9 @@ defmodule KadabraTest do
           assert response.id == 2
           refute response.status
           assert Stream.Response.get_header(response.headers, ":path")
-      after 5_000 ->
-        flunk "No push promise received."
+      after
+        5_000 ->
+          flunk("No push promise received.")
       end
     end
   end
@@ -132,12 +143,15 @@ defmodule KadabraTest do
 
       expected_body = String.upcase(payload)
 
-      assert_receive {:end_stream, %Stream.Response{
-        id: 1,
-        headers: _headers,
-        body: ^expected_body,
-        status: 200
-      }}, 15_000
+      receive do
+        {:end_stream, response} ->
+          assert response.id == 1
+          assert response.status == 200
+          assert response.body == expected_body
+      after
+        15_000 ->
+          flunk("No stream response received.")
+      end
     end
 
     @tag :golang
@@ -149,12 +163,15 @@ defmodule KadabraTest do
 
       expected_body = String.upcase(payload)
 
-      assert_receive {:end_stream, %Stream.Response{
-        id: 1,
-        headers: _headers,
-        body: ^expected_body,
-        status: 200
-      }}, 45_000
+      receive do
+        {:end_stream, response} ->
+          assert response.id == 1
+          assert response.status == 200
+          assert response.body == expected_body
+      after
+        45_000 ->
+          flunk("No stream response received.")
+      end
     end
 
     @tag :golang
@@ -166,12 +183,15 @@ defmodule KadabraTest do
 
       expected_body = "bytes=4, CRC32=d87f7e0c"
 
-      assert_receive {:end_stream, %Stream.Response{
-        id: 1,
-        headers: _headers,
-        body: ^expected_body,
-        status: 200
-      }}, 5_000
+      receive do
+        {:end_stream, response} ->
+          assert response.id == 1
+          assert response.status == 200
+          assert response.body == expected_body
+      after
+        5_000 ->
+          flunk("No stream response received.")
+      end
     end
   end
 
@@ -179,19 +199,19 @@ defmodule KadabraTest do
     uri = 'http2.golang.org'
     {:ok, pid} = Kadabra.open(uri, :https)
 
-    {_, sup_pid, _, _} =
-      pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :connection_sup end)
+    sup_pid = find_child(pid, :connection_sup)
+    conn_pid = find_child(sup_pid, :connection)
 
-    {_, conn_pid, _, _} =
-      sup_pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :connection end)
-
-    bin = 1 |> Frame.Goaway.new |> Encodable.to_bin
+    bin = 1 |> Frame.Goaway.new() |> Encodable.to_bin()
     send(conn_pid, {:ssl, nil, bin})
 
     assert_receive {:closed, _pid}, 5_000
+  end
+
+  defp find_child(pid, name) do
+    pid
+    |> Supervisor.which_children()
+    |> Enum.find(fn {n, _, _, _} -> n == name end)
+    |> elem(1)
   end
 end

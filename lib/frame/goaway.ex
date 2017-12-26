@@ -6,10 +6,10 @@ defmodule Kadabra.Frame.Goaway do
   alias Kadabra.{Error, Frame}
 
   @type t :: %__MODULE__{
-    debug_data: bitstring,
-    error_code: <<_::32>>,
-    last_stream_id: non_neg_integer,
-  }
+          debug_data: bitstring,
+          error_code: <<_::32>>,
+          last_stream_id: non_neg_integer
+        }
 
   @doc ~S"""
   Initializes a new GOAWAY frame with no error.
@@ -24,15 +24,19 @@ defmodule Kadabra.Frame.Goaway do
   def new(stream_id) when is_integer(stream_id) do
     %__MODULE__{
       last_stream_id: stream_id,
-      error_code: Error.no_error
+      error_code: Error.no_error()
     }
   end
 
-  @spec new(Frame.t) :: t
-  def new(%Frame{payload: <<_r::1,
-                            last_stream_id::31,
-                            error_code::32,
-                            debug_data::bitstring>>}) do
+  @spec new(Frame.t()) :: t
+  def new(%Frame{payload: payload}) do
+    <<
+      _r::1,
+      last_stream_id::31,
+      error_code::32,
+      debug_data::bitstring
+    >> = payload
+
     %__MODULE__{
       last_stream_id: last_stream_id,
       error_code: error_code,

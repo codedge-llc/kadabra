@@ -4,10 +4,10 @@ defmodule Kadabra.Frame.Continuation do
   defstruct [:header_block_fragment, :stream_id, end_headers: false]
 
   @type t :: %__MODULE__{
-    end_headers: boolean,
-    header_block_fragment: bitstring,
-    stream_id: pos_integer
-  }
+          end_headers: boolean,
+          header_block_fragment: bitstring,
+          stream_id: pos_integer
+        }
 
   alias Kadabra.Frame.Flags
 
@@ -21,7 +21,7 @@ defmodule Kadabra.Frame.Continuation do
       %Kadabra.Frame.Continuation{header_block_fragment: <<136>>,
       end_headers: true}
   """
-  @spec new(Kadabra.Frame.t) :: t
+  @spec new(Kadabra.Frame.t()) :: t
   def new(%{stream_id: id, payload: payload, flags: flags}) do
     %__MODULE__{
       header_block_fragment: payload,

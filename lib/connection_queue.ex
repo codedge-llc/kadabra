@@ -13,12 +13,13 @@ defmodule Kadabra.ConnectionQueue do
   end
 
   def init(:ok) do
-    {:producer, {:queue.new, 0}, dispatcher: GenStage.BroadcastDispatcher}
+    {:producer, {:queue.new(), 0}, dispatcher: GenStage.BroadcastDispatcher}
   end
 
   def queue_request(pid, %{on_response: nil} = request) do
-    queue_request(pid, %{request | on_response: &IO.inspect/1})
+    queue_request(pid, %{request | on_response: & &1})
   end
+
   def queue_request(pid, request) do
     pid
     |> via_tuple()
@@ -38,10 +39,12 @@ defmodule Kadabra.ConnectionQueue do
   defp dispatch_events(queue, 0, events) do
     {:noreply, Enum.reverse(events), {queue, 0}}
   end
+
   defp dispatch_events(queue, demand, events) do
     case :queue.out(queue) do
       {{:value, event}, queue} ->
         dispatch_events(queue, demand - 1, [event | events])
+
       {:empty, queue} ->
         {:noreply, Enum.reverse(events), {queue, demand}}
     end

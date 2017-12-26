@@ -13,7 +13,7 @@ defmodule Kadabra.Hpack do
   end
 
   def init(:ok) do
-    {:ok, :hpack.new_context}
+    {:ok, :hpack.new_context()}
   end
 
   def encode(ref, headers) do

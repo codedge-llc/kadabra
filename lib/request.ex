@@ -1,13 +1,14 @@
 defmodule Kadabra.Request do
+  @moduledoc false
   defstruct headers: [], body: nil, on_response: nil
 
   alias Kadabra.Stream.Response
 
   @type t :: %__MODULE__{
-    headers: [],
-    body: binary,
-    on_response: (Response.t -> no_return)
-  }
+          headers: [],
+          body: binary,
+          on_response: (Response.t() -> no_return)
+        }
 
   @doc ~S"""
   Returns a new `Kadabra.Request` struct from given opts.

@@ -5,10 +5,10 @@ defmodule Kadabra.Frame.Priority do
   alias Kadabra.Frame
 
   @type t :: %__MODULE__{
-    exclusive: boolean,
-    stream_dependency: non_neg_integer,
-    weight: integer
-  }
+          exclusive: boolean,
+          stream_dependency: non_neg_integer,
+          weight: integer
+        }
 
   @doc ~S"""
   Initializes a new `Frame.Priority` from given `Frame`
@@ -23,15 +23,16 @@ defmodule Kadabra.Frame.Priority do
       iex> Kadabra.Frame.Priority.new(bad)
       {:error, %Kadabra.Frame{payload: <<>>}}
   """
-  @spec new(Frame.t) :: {:ok, t} | {:error, Frame.t}
+  @spec new(Frame.t()) :: {:ok, t} | {:error, Frame.t()}
   def new(%Frame{payload: payload} = frame) do
     case parse_payload(payload) do
       {:ok, e, dep, weight} ->
         %__MODULE__{
-          exclusive: (e == 0x1),
+          exclusive: e == 0x1,
           stream_dependency: dep,
           weight: weight
         }
+
       {:error, _payload} ->
         {:error, frame}
     end
@@ -40,6 +41,7 @@ defmodule Kadabra.Frame.Priority do
   defp parse_payload(<<e::1, dep::31, weight::8>>) do
     {:ok, e, dep, weight + 1}
   end
+
   defp parse_payload(payload) do
     {:error, payload}
   end

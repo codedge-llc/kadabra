@@ -1,26 +1,27 @@
 defmodule Kadabra.Connection.FlowControl do
   @moduledoc false
 
-  defstruct queue: :queue.new,
+  defstruct queue: :queue.new(),
             stream_id: 1,
             active_stream_count: 0,
-            active_streams: MapSet.new,
+            active_streams: MapSet.new(),
             window: 65_535,
             settings: %Kadabra.Connection.Settings{}
 
   alias Kadabra.{Connection, StreamSupervisor}
 
   @type t :: %__MODULE__{
-    queue: :queue.queue,
-    stream_id: pos_integer,
-    active_stream_count: non_neg_integer,
-    active_streams: MapSet.t,
-    window: integer,
-    settings: Connection.Settings.t
-  }
+          queue: :queue.queue(),
+          stream_id: pos_integer,
+          active_stream_count: non_neg_integer,
+          active_streams: MapSet.t(),
+          window: integer,
+          settings: Connection.Settings.t()
+        }
 
-  @spec update_settings(t, Connection.Settings.t) :: t
+  @spec update_settings(t, Connection.Settings.t()) :: t
   def update_settings(flow_control, nil), do: flow_control
+
   def update_settings(%{settings: old_settings} = flow_control, settings) do
     settings = Connection.Settings.merge(old_settings, settings)
     %{flow_control | settings: settings}
@@ -132,32 +133,27 @@ defmodule Kadabra.Connection.FlowControl do
       iex> :queue.len(flow.queue)
       1
   """
-  @spec add(t, Kadabra.Request.t) :: t
+  @spec add(t, Kadabra.Request.t()) :: t
   def add(%{queue: queue} = flow_control, request) do
     queue = :queue.in(request, queue)
     %{flow_control | queue: queue}
   end
 
-  @spec process(t, Connection.t) :: t
-  def process(%{queue: []} = flow_control, _connection) do
-    flow_control
-  end
+  @spec process(t, Connection.t()) :: t
   def process(%{queue: queue} = flow, conn) do
     with {{:value, request}, queue} <- :queue.out(queue),
-      {:can_send, true} <- {:can_send, can_send?(flow)} do
+         {:can_send, true} <- {:can_send, can_send?(flow)} do
+      {:ok, pid} = StreamSupervisor.start_stream(conn)
 
-        {:ok, pid} = StreamSupervisor.start_stream(conn)
+      size = byte_size(request.body || <<>>)
+      :gen_statem.call(pid, {:send_headers, request})
 
-        size = byte_size(request.body || <<>>)
-        :gen_statem.call(pid, {:send_headers, request})
-
-        flow_control = %{flow | queue: queue}
-
-        flow_control
-        |> decrement_window(size)
-        |> add_active(flow.stream_id)
-        |> increment_active_stream_count()
-        |> increment_stream_id()
+      flow
+      |> Map.put(:queue, queue)
+      |> decrement_window(size)
+      |> add_active(flow.stream_id)
+      |> increment_active_stream_count()
+      |> increment_stream_id()
     else
       {:empty, _queue} -> flow
       {:can_send, false} -> flow
@@ -189,10 +185,7 @@ defmodule Kadabra.Connection.FlowControl do
       false
   """
   @spec can_send?(t) :: boolean
-  def can_send?(%{active_stream_count: count,
-                  settings: settings,
-                  window: bytes}) do
-    result = count < settings.max_concurrent_streams and bytes > 0
-    result
+  def can_send?(%{active_stream_count: count, settings: s, window: bytes}) do
+    count < s.max_concurrent_streams and bytes > 0
   end
 end

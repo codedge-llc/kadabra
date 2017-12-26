@@ -15,7 +15,7 @@ defmodule Kadabra.ConnectionSupervisor do
     {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
   end
 
-  def start_opts(id \\ :erlang.make_ref) do
+  def start_opts(id \\ :erlang.make_ref()) do
     [id: id, restart: :transient]
   end
 

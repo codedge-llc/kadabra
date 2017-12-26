@@ -1,7 +1,7 @@
 defmodule Kadabra.Stream.FlowControl do
   @moduledoc false
 
-  defstruct queue: [],
+  defstruct queue: :queue.new(),
             window: 56_536,
             max_frame_size: 16_384,
             stream_id: nil
@@ -10,10 +10,10 @@ defmodule Kadabra.Stream.FlowControl do
   alias Kadabra.Connection.Socket
 
   @type t :: %__MODULE__{
-    max_frame_size: non_neg_integer,
-    queue: [] | [...],
-    window: integer
-  }
+          max_frame_size: non_neg_integer,
+          queue: :queue.queue(binary),
+          window: integer
+        }
 
   @type sock :: {:sslsocket, any, pid | {any, any}}
 
@@ -31,7 +31,7 @@ defmodule Kadabra.Stream.FlowControl do
       %Kadabra.Stream.FlowControl{stream_id: 1, window: 20_000,
       max_frame_size: 18_000}
   """
-  @spec new(Keyword.t) :: t
+  @spec new(Keyword.t()) :: t
   def new(opts \\ []) do
     %__MODULE__{
       stream_id: opts[:stream_id],
@@ -46,12 +46,12 @@ defmodule Kadabra.Stream.FlowControl do
   ## Examples
 
       iex> add(%Kadabra.Stream.FlowControl{}, "test")
-      %Kadabra.Stream.FlowControl{queue: [{:send, "test"}]}
+      %Kadabra.Stream.FlowControl{queue: {["test"], []}}
   """
   @spec add(t, binary) :: t
   def add(flow_control, bin) do
-    queue = flow_control.queue ++ [{:send, bin}]
-    %{flow_control | queue: queue}
+    queue = :queue.in(bin, flow_control.queue)
+    Map.put(flow_control, :queue, queue)
   end
 
   @doc ~S"""
@@ -60,24 +60,38 @@ defmodule Kadabra.Stream.FlowControl do
 
   ## Examples
 
-      iex> process(%Kadabra.Stream.FlowControl{queue: []}, self())
-      %Kadabra.Stream.FlowControl{queue: []}
+      iex> process(%Kadabra.Stream.FlowControl{queue: :queue.new()}, self())
+      %Kadabra.Stream.FlowControl{queue: {[], []}}
 
-      iex> process(%Kadabra.Stream.FlowControl{queue: [{:send, "test"}],
+      iex> queue = :queue.in({:send, "test"}, :queue.new())
+      iex> process(%Kadabra.Stream.FlowControl{queue: queue,
       ...> window: -20}, self())
-      %Kadabra.Stream.FlowControl{queue: [{:send, "test"}], window: -20}
+      %Kadabra.Stream.FlowControl{queue: {[send: "test"], []}, window: -20}
   """
   @spec process(t, sock) :: t
-  def process(%{queue: []} = flow_control, _sock) do
-    flow_control
-  end
   def process(%{window: window} = flow_control, _sock) when window <= 0 do
     flow_control
   end
-  def process(%{queue: [{:send, bin} | rest],
-              max_frame_size: max_size,
-              window: window,
-              stream_id: stream_id} = flow_control, socket) do
+
+  def process(%{queue: queue} = flow_control, socket) do
+    case :queue.out(queue) do
+      {{:value, bin}, queue} ->
+        flow_control
+        |> Map.put(:queue, queue)
+        |> do_process(socket, bin)
+
+      {:empty, _queue} ->
+        flow_control
+    end
+  end
+
+  def do_process(flow_control, socket, bin) do
+    %{
+      queue: queue,
+      max_frame_size: max_size,
+      window: window,
+      stream_id: stream_id
+    } = flow_control
 
     size = byte_size(bin)
 
@@ -88,42 +102,50 @@ defmodule Kadabra.Stream.FlowControl do
       |> split_packet(chunk)
       |> send_partial_data(socket, stream_id)
 
-      flow_control = %{flow_control |
-        queue: [{:send, rem_bin} | rest],
-        window: 0
-      }
-      process(flow_control, socket)
+      queue = :queue.in_r(rem_bin, queue)
+
+      flow_control
+      |> Map.put(:queue, queue)
+      |> Map.put(:window, 0)
+      |> process(socket)
     else
       max_size
       |> split_packet(bin)
       |> send_data(socket, stream_id)
 
-      flow_control = %{flow_control | queue: rest, window: window - size}
-      process(flow_control, socket)
+      flow_control
+      |> Map.put(:window, window - size)
+      |> process(socket)
     end
   end
 
   def send_partial_data([], _socket, _stream_id), do: :ok
+
   def send_partial_data([bin | rest], socket, stream_id) do
     p =
       %Frame.Data{stream_id: stream_id, end_stream: false, data: bin}
-      |> Encodable.to_bin
+      |> Encodable.to_bin()
+
     Socket.send(socket, p)
     send_partial_data(rest, socket, stream_id)
   end
 
   def send_data([], _socket, _stream_id), do: :ok
+
   def send_data([bin | []], socket, stream_id) do
     p =
       %Frame.Data{stream_id: stream_id, end_stream: true, data: bin}
-      |> Encodable.to_bin
+      |> Encodable.to_bin()
+
     Socket.send(socket, p)
     send_data([], socket, stream_id)
   end
+
   def send_data([bin | rest], socket, stream_id) do
     p =
       %Frame.Data{stream_id: stream_id, end_stream: false, data: bin}
-      |> Encodable.to_bin
+      |> Encodable.to_bin()
+
     Socket.send(socket, p)
     send_data(rest, socket, stream_id)
   end
@@ -132,6 +154,7 @@ defmodule Kadabra.Stream.FlowControl do
     {chunk, rest} = :erlang.split_binary(p, size)
     [chunk | split_packet(size, rest)]
   end
+
   def split_packet(_size, <<>>), do: []
   def split_packet(_size, p), do: [p]
 

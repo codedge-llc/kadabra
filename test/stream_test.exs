@@ -9,7 +9,7 @@ defmodule Kadabra.StreamTest do
       stream = Stream.new(%Connection{}, %Connection.Settings{}, 1)
 
       # Individual streams shouldn't get pings
-      ping = Frame.Ping.new
+      ping = Frame.Ping.new()
       assert {:keep_state, ^stream} = Stream.recv(ping, :idle, stream)
     end
   end

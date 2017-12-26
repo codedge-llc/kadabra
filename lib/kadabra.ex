@@ -79,10 +79,10 @@ defmodule Kadabra do
     when used with `:http` scheme.
   """
   @type conn_opts :: [
-    port: pos_integer,
-    ssl: [...],
-    tcp: [...]
-  ]
+          port: pos_integer,
+          ssl: [...],
+          tcp: [...]
+        ]
 
   @typedoc ~S"""
   Options for making requests.
@@ -91,13 +91,13 @@ defmodule Kadabra do
   - `:body` - (Optional) Used for requests that can have a body, such as POST.
   """
   @type request_opts :: [
-    headers: [{String.t, String.t}, ...],
-    body: String.t
-  ]
+          headers: [{String.t(), String.t()}, ...],
+          body: String.t()
+        ]
 
   @type scheme :: :http | :https
 
-  @type uri :: charlist | String.t
+  @type uri :: charlist | String.t()
 
   @doc ~S"""
   Opens a new connection.
@@ -134,7 +134,7 @@ defmodule Kadabra do
   @spec close(pid) :: :ok
   def close(pid) do
     pid
-    |> Connection.via_tuple
+    |> Connection.via_tuple()
     |> GenServer.cast({:send, :goaway})
   end
 
@@ -153,7 +153,7 @@ defmodule Kadabra do
   @spec ping(pid) :: no_return
   def ping(pid) do
     pid
-    |> Connection.via_tuple
+    |> Connection.via_tuple()
     |> GenServer.cast({:send, :ping})
   end
 
@@ -197,7 +197,7 @@ defmodule Kadabra do
       iex> {response.id, response.status}
       {1, 200}
   """
-  @spec get(pid, String.t) :: no_return
+  @spec get(pid, String.t()) :: no_return
   def get(pid, path) do
     request(pid, headers: headers("GET", path))
   end
@@ -216,7 +216,7 @@ defmodule Kadabra do
       iex> {response.id, response.status, response.body}
       {1, 200, ""}
   """
-  @spec head(pid, String.t) :: no_return
+  @spec head(pid, String.t()) :: no_return
   def head(pid, path) do
     request(pid, headers: headers("HEAD", path))
   end
@@ -235,7 +235,7 @@ defmodule Kadabra do
       iex> {response.id, response.status}
       {1, 200}
   """
-  @spec post(pid, String.t, any) :: no_return
+  @spec post(pid, String.t(), any) :: no_return
   def post(pid, path, payload \\ nil) do
     request(pid, headers: headers("POST", path), body: payload)
   end
@@ -256,7 +256,7 @@ defmodule Kadabra do
       iex> stream.body
       "bytes=4, CRC32=d87f7e0c"
   """
-  @spec put(pid, String.t, any) :: no_return
+  @spec put(pid, String.t(), any) :: no_return
   def put(pid, path, payload \\ nil) do
     request(pid, headers: headers("PUT", path), body: payload)
   end
@@ -275,7 +275,7 @@ defmodule Kadabra do
       iex> stream.status
       200
   """
-  @spec delete(pid, String.t) :: no_return
+  @spec delete(pid, String.t()) :: no_return
   def delete(pid, path) do
     request(pid, headers: headers("DELETE", path))
   end
@@ -283,7 +283,7 @@ defmodule Kadabra do
   defp headers(method, path) do
     [
       {":method", method},
-      {":path", path},
+      {":path", path}
     ]
   end
 end

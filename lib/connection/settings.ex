@@ -11,13 +11,13 @@ defmodule Kadabra.Connection.Settings do
   alias Kadabra.Error
 
   @type t :: %__MODULE__{
-    header_table_size: non_neg_integer,
-    enable_push: boolean,
-    max_concurrent_streams: non_neg_integer | :infinite,
-    initial_window_size: non_neg_integer,
-    max_frame_size: non_neg_integer,
-    max_header_list_size: non_neg_integer
-  }
+          header_table_size: non_neg_integer,
+          enable_push: boolean,
+          max_concurrent_streams: non_neg_integer | :infinite,
+          initial_window_size: non_neg_integer,
+          max_frame_size: non_neg_integer,
+          max_header_list_size: non_neg_integer
+        }
 
   @table_header_size 0x1
   @enable_push 0x2
@@ -66,11 +66,13 @@ defmodule Kadabra.Connection.Settings do
   def put(settings, @enable_push, 1) do
     {:ok, %{settings | enable_push: true}}
   end
+
   def put(settings, @enable_push, 0) do
     {:ok, %{settings | enable_push: false}}
   end
+
   def put(settings, @enable_push, _else) do
-    {:error, Error.protocol_error, settings}
+    {:error, Error.protocol_error(), settings}
   end
 
   def put(settings, @max_concurrent_streams, value) do
@@ -78,15 +80,16 @@ defmodule Kadabra.Connection.Settings do
   end
 
   def put(settings, @initial_window_size, value) when value > 4_294_967_295 do
-    {:error, Error.flow_control_error, settings}
+    {:error, Error.flow_control_error(), settings}
   end
+
   def put(settings, @initial_window_size, value) do
     {:ok, %{settings | initial_window_size: value}}
   end
 
   def put(settings, @max_frame_size, value) do
     if value < 16_384 or value > 16_777_215 do
-      {:error, Error.protocol_error, settings}
+      {:error, Error.protocol_error(), settings}
     else
       {:ok, %{settings | max_frame_size: value}}
     end
@@ -99,7 +102,7 @@ defmodule Kadabra.Connection.Settings do
   def put(settings, _else, _value), do: {:ok, settings}
 
   def merge(old_settings, new_settings) do
-    Map.merge(old_settings, new_settings, fn(k, v1, v2) ->
+    Map.merge(old_settings, new_settings, fn k, v1, v2 ->
       cond do
         k == :__struct__ -> v1
         v1 == nil -> v2
@@ -113,13 +116,13 @@ end
 defimpl Kadabra.Encodable, for: Kadabra.Connection.Settings do
   def to_bin(settings) do
     settings
-    |> Map.from_struct
+    |> Map.from_struct()
     |> to_encoded_list()
-    |> Enum.join
+    |> Enum.join()
   end
 
   def to_encoded_list(settings) do
-    Enum.reduce(settings, [], fn({k, v}, acc) ->
+    Enum.reduce(settings, [], fn {k, v}, acc ->
       case v do
         nil -> acc
         :infinite -> acc
@@ -128,11 +131,11 @@ defimpl Kadabra.Encodable, for: Kadabra.Connection.Settings do
     end)
   end
 
-  def encode_setting(:header_table_size, v), do:      <<0x1::16, v::32>>
-  def encode_setting(:enable_push, true), do:         <<0x2::16, 1::32>>
-  def encode_setting(:enable_push, false), do:        <<0x2::16, 0::32>>
+  def encode_setting(:header_table_size, v), do: <<0x1::16, v::32>>
+  def encode_setting(:enable_push, true), do: <<0x2::16, 1::32>>
+  def encode_setting(:enable_push, false), do: <<0x2::16, 0::32>>
   def encode_setting(:max_concurrent_streams, v), do: <<0x3::16, v::32>>
-  def encode_setting(:initial_window_size, v), do:    <<0x4::16, v::32>>
-  def encode_setting(:max_frame_size, v), do:         <<0x5::16, v::32>>
-  def encode_setting(:max_header_list_size, v), do:   <<0x6::16, v::32>>
+  def encode_setting(:initial_window_size, v), do: <<0x4::16, v::32>>
+  def encode_setting(:max_frame_size, v), do: <<0x5::16, v::32>>
+  def encode_setting(:max_header_list_size, v), do: <<0x6::16, v::32>>
 end

@@ -2,8 +2,18 @@ defmodule Kadabra.FrameParser do
   @moduledoc false
 
   alias Kadabra.Frame
-  alias Kadabra.Frame.{Data, Headers, RstStream, Settings, PushPromise,
-    Ping, Goaway, WindowUpdate, Continuation}
+
+  alias Kadabra.Frame.{
+    Data,
+    Headers,
+    RstStream,
+    Settings,
+    PushPromise,
+    Ping,
+    Goaway,
+    WindowUpdate,
+    Continuation
+  }
 
   def parse(bin) do
     case Frame.new(bin) do
@@ -11,6 +21,7 @@ defmodule Kadabra.FrameParser do
         mod = to_module(type)
         f = mod.new(frame)
         {:ok, f, rest}
+
       {:error, bin} ->
         {:error, bin}
     end

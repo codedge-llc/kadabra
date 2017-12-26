@@ -8,9 +8,9 @@ defmodule Kadabra.Mixfile do
       app: :kadabra,
       version: @version,
       elixir: "~> 1.4",
-      build_embedded: Mix.env == :prod,
-      start_permanent: Mix.env == :prod,
-      consolidate_protocols: Mix.env != :test,
+      build_embedded: Mix.env() == :prod,
+      start_permanent: Mix.env() == :prod,
+      consolidate_protocols: Mix.env() != :test,
       deps: deps(),
       package: package(),
       name: "Kadabra",
@@ -19,7 +19,7 @@ defmodule Kadabra.Mixfile do
       docs: [main: "kadabra"],
       test_coverage: [tool: ExCoveralls],
       preferred_cli_env: [
-        "coveralls": :test,
+        coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.post": :test,
         "coveralls.html": :test
@@ -60,10 +60,10 @@ defmodule Kadabra.Mixfile do
 
   defp package do
     [
-       files: ["lib", "mix.exs", "README*", "LICENSE*"],
-       maintainers: ["Henry Popp"],
-       licenses: ["MIT"],
-       links: %{"GitHub" => "https://github.com/codedge-llc/kadabra"}
+      files: ["lib", "mix.exs", "README*", "LICENSE*"],
+      maintainers: ["Henry Popp"],
+      licenses: ["MIT"],
+      links: %{"GitHub" => "https://github.com/codedge-llc/kadabra"}
     ]
   end
 end
