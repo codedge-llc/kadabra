@@ -1,5 +1,10 @@
 defmodule Kadabra.Request do
-  @moduledoc false
+  @moduledoc ~S"""
+  Struct to encapsulate Kadabra requests.
+
+  Useful when queueing multiple requests at once through
+  `Kadabra.request/2`
+  """
   defstruct headers: [], body: nil, on_response: nil
 
   alias Kadabra.Stream.Response

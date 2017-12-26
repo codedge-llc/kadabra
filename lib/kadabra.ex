@@ -66,7 +66,7 @@ defmodule Kadabra do
   ```
   """
 
-  alias Kadabra.{Connection, ConnectionQueue, Supervisor}
+  alias Kadabra.{Connection, ConnectionQueue, Request, Supervisor}
   alias Kadabra.Connection.Socket
 
   @typedoc ~S"""
@@ -177,8 +177,16 @@ defmodule Kadabra do
       iex> {response.id, response.status, response.body}
       {1, 200, "SAMPLE ECHO REQUEST"}
   """
-  @spec request(pid, request_opts) :: no_return
-  def request(pid, opts \\ []) do
+  @spec request(pid, Request.t() | [Request.t()] | request_opts) :: no_return
+  def request(pid, %Kadabra.Request{} = request) do
+    ConnectionQueue.queue_request(pid, request)
+  end
+
+  def request(pid, [%Kadabra.Request{} | _rest] = requests) do
+    ConnectionQueue.queue_request(pid, requests)
+  end
+
+  def request(pid, opts) when is_list(opts) do
     request = Kadabra.Request.new(opts)
     ConnectionQueue.queue_request(pid, request)
   end

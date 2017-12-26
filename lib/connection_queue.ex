@@ -16,10 +16,6 @@ defmodule Kadabra.ConnectionQueue do
     {:producer, {:queue.new(), 0}, dispatcher: GenStage.BroadcastDispatcher}
   end
 
-  def queue_request(pid, %{on_response: nil} = request) do
-    queue_request(pid, %{request | on_response: & &1})
-  end
-
   def queue_request(pid, request) do
     pid
     |> via_tuple()
@@ -28,8 +24,18 @@ defmodule Kadabra.ConnectionQueue do
 
   def handle_call({:request, request}, from, {queue, pending_demand}) do
     GenStage.reply(from, :ok)
-    queue = :queue.in(request, queue)
-    dispatch_events(queue, pending_demand, [])
+
+    queue
+    |> enqueue(request)
+    |> dispatch_events(pending_demand, [])
+  end
+
+  def enqueue(queue, requests) when is_list(requests) do
+    Enum.reduce(requests, queue, &enqueue(&2, &1))
+  end
+
+  def enqueue(queue, %Kadabra.Request{} = request) do
+    :queue.in(request, queue)
   end
 
   def handle_demand(incoming_demand, {queue, pending_demand}) do

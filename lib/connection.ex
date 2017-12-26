@@ -128,8 +128,8 @@ defmodule Kadabra.Connection do
   end
 
   def handle_events(events, _from, state) do
-    new_state = Enum.reduce(events, state, &do_send_headers(&1, &2))
-    {:noreply, [], new_state}
+    state = do_send_headers(events, state)
+    {:noreply, [], state}
   end
 
   def handle_subscribe(:producer, _opts, from, state) do
@@ -266,6 +266,15 @@ defmodule Kadabra.Connection do
     end
   end
 
+  defp do_send_headers(requests, state) when is_list(requests) do
+    flow =
+      requests
+      |> Enum.reduce(state.flow_control, &Connection.FlowControl.add(&2, &1))
+      |> Connection.FlowControl.process(state)
+
+    %{state | flow_control: flow}
+  end
+
   defp do_send_headers(request, %{flow_control: flow} = state) do
     flow =
       flow
@@ -350,15 +359,20 @@ defmodule Kadabra.Connection do
   end
 
   def process(%Data{stream_id: stream_id} = frame, state) do
-    pid = Stream.via_tuple(state.ref, stream_id)
     send_window_update(state.socket, frame)
-    Stream.cast_recv(pid, frame)
+
+    state.ref
+    |> Stream.via_tuple(stream_id)
+    |> Stream.cast_recv(frame)
+
     state
   end
 
-  def process(%Headers{} = frame, state) do
-    pid = Stream.via_tuple(state.ref, frame.stream_id)
-    Stream.cast_recv(pid, frame)
+  def process(%Headers{stream_id: stream_id} = frame, state) do
+    state.ref
+    |> Stream.via_tuple(stream_id)
+    |> Stream.cast_recv(frame)
+
     state
   end
 
