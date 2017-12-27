@@ -20,7 +20,6 @@ defmodule Kadabra.Connection do
     Encodable,
     Error,
     Frame,
-    FrameParser,
     Hpack,
     Http2,
     Stream,
@@ -75,16 +74,9 @@ defmodule Kadabra.Connection do
   end
 
   def init({:ok, uri, pid, sup, ref, opts}) do
-    case Socket.connect(uri, opts) do
-      {:ok, socket} ->
-        send_preface_and_settings(socket, opts[:settings])
-        state = initial_state(socket, uri, pid, ref, opts)
-        {:consumer, state, subscribe_to: [ConnectionQueue.via_tuple(sup)]}
-
-      {:error, error} ->
-        Logger.error(inspect(error))
-        {:error, error}
-    end
+    socket = Socket.via_tuple(sup)
+    state = initial_state(socket, uri, pid, ref, opts)
+    {:consumer, state, subscribe_to: [ConnectionQueue.via_tuple(sup)]}
   end
 
   defp initial_state(socket, uri, pid, ref, opts) do
@@ -104,13 +96,18 @@ defmodule Kadabra.Connection do
   end
 
   defp send_preface_and_settings(socket, settings) do
-    Socket.send(socket, Http2.connection_preface())
+    Socket.sendf(socket, Http2.connection_preface())
 
     bin =
       %Frame.Settings{settings: settings || Connection.Settings.default()}
       |> Encodable.to_bin()
 
-    Socket.send(socket, bin)
+    Socket.sendf(socket, bin)
+  end
+
+  def handle_call({:recv, frame}, from, state) do
+    GenStage.reply(from, :ok)
+    recv(frame, state)
   end
 
   # handle_cast
@@ -133,6 +130,7 @@ defmodule Kadabra.Connection do
   end
 
   def handle_subscribe(:producer, _opts, from, state) do
+    send_preface_and_settings(state.socket, state.flow_control.settings)
     {:manual, %{state | queue: from}}
   end
 
@@ -141,14 +139,14 @@ defmodule Kadabra.Connection do
   @spec sendf(:goaway | :ping, t) :: {:noreply, [], t}
   def sendf(:ping, %Connection{socket: socket} = state) do
     bin = Ping.new() |> Encodable.to_bin()
-    Socket.send(socket, bin)
+    Socket.sendf(socket, bin)
     {:noreply, [], state}
   end
 
   def sendf(:goaway, state) do
     %Connection{socket: socket, client: pid, flow_control: flow} = state
     bin = flow.stream_id |> Goaway.new() |> Encodable.to_bin()
-    Socket.send(socket, bin)
+    Socket.sendf(socket, bin)
 
     close(state)
     send(pid, {:closed, self()})
@@ -170,10 +168,45 @@ defmodule Kadabra.Connection do
 
   # recv
 
-  @spec recv(frame, t) :: {:noreply, [], t}
-  def recv(%Frame.RstStream{}, state) do
-    Logger.error("recv unstarted stream rst")
+  def recv(%Data{stream_id: 0}, state) do
+    # This is an error
     {:noreply, [], state}
+  end
+
+  def recv(%Data{stream_id: stream_id} = frame, state) do
+    send_window_update(state.socket, frame)
+
+    state.ref
+    |> Stream.via_tuple(stream_id)
+    |> Stream.cast_recv(frame)
+
+    {:noreply, [], state}
+  end
+
+  def recv(%Headers{stream_id: stream_id} = frame, state) do
+    state.ref
+    |> Stream.via_tuple(stream_id)
+    |> Stream.cast_recv(frame)
+
+    {:noreply, [], state}
+  end
+
+  @spec recv(frame, t) :: {:noreply, [], t}
+  def recv(%RstStream{} = frame, state) do
+    state.ref
+    |> Stream.via_tuple(frame.stream_id)
+    |> Stream.cast_recv(frame)
+
+    {:noreply, [], state}
+  end
+
+  def recv(%PushPromise{stream_id: stream_id} = frame, state) do
+    {:ok, pid} = StreamSupervisor.start_stream(state, stream_id)
+
+    flow = Connection.FlowControl.add_active(state.flow_control, stream_id)
+
+    Stream.cast_recv(pid, frame)
+    {:noreply, [], %{state | flow_control: flow}}
   end
 
   def recv(%Frame.Ping{ack: true}, %{client: pid} = state) do
@@ -190,7 +223,7 @@ defmodule Kadabra.Connection do
   def recv(%Frame.Settings{ack: false, settings: nil}, state) do
     %{flow_control: flow} = state
     bin = Frame.Settings.ack() |> Encodable.to_bin()
-    Socket.send(state.socket, bin)
+    Socket.sendf(state.socket, bin)
 
     case flow.settings.max_concurrent_streams do
       :infinite ->
@@ -215,7 +248,7 @@ defmodule Kadabra.Connection do
     Hpack.update_max_table_size(pid, settings.max_header_list_size)
 
     bin = Frame.Settings.ack() |> Encodable.to_bin()
-    Socket.send(state.socket, bin)
+    Socket.sendf(state.socket, bin)
 
     to_ask = settings.max_concurrent_streams - flow.active_stream_count
     GenStage.ask(state.queue, to_ask)
@@ -236,9 +269,21 @@ defmodule Kadabra.Connection do
     {:stop, :normal, state}
   end
 
-  def recv(%WindowUpdate{window_size_increment: inc}, state) do
+  def recv(%WindowUpdate{stream_id: 0, window_size_increment: inc}, state) do
     flow = Connection.FlowControl.increment_window(state.flow_control, inc)
     {:noreply, [], %{state | flow_control: flow}}
+  end
+
+  def recv(%WindowUpdate{stream_id: stream_id} = frame, state) do
+    pid = Stream.via_tuple(state.ref, stream_id)
+    Stream.cast_recv(pid, frame)
+    {:noreply, [], state}
+  end
+
+  def recv(%Continuation{stream_id: stream_id} = frame, state) do
+    pid = Stream.via_tuple(state.ref, stream_id)
+    Stream.cast_recv(pid, frame)
+    {:noreply, [], state}
   end
 
   def recv(frame, state) do
@@ -289,6 +334,13 @@ defmodule Kadabra.Connection do
     Logger.error("Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{b}")
   end
 
+  def handle_info({:closed, _pid}, state) do
+    Logger.debug("Socket closed, informing client")
+    send(state.client, {:closed, self()})
+    close(state)
+    {:noreply, %{state | socket: nil}}
+  end
+
   def handle_info({:finished, response}, state) do
     %{client: pid, flow_control: flow} = state
     send(pid, {:end_stream, response})
@@ -309,144 +361,19 @@ defmodule Kadabra.Connection do
     {:noreply, [], state}
   end
 
-  def handle_info({:tcp, _socket, bin}, state) do
-    do_recv_bin(bin, state)
-    {:noreply, [], state}
-  end
-
-  def handle_info({:tcp_closed, _socket}, state) do
-    handle_disconnect(state)
-  end
-
-  def handle_info({:ssl, _socket, bin}, state) do
-    do_recv_bin(bin, state)
-  end
-
-  def handle_info({:ssl_closed, _socket}, state) do
-    handle_disconnect(state)
-  end
-
-  defp do_recv_bin(bin, %{socket: socket} = state) do
-    bin = state.buffer <> bin
-
-    case parse_bin(socket, bin, state) do
-      {:error, bin, state} ->
-        Socket.setopts(socket, [{:active, :once}])
-        {:noreply, [], %{state | buffer: bin}}
-    end
-  end
-
-  def parse_bin(socket, bin, state) do
-    case FrameParser.parse(bin) do
-      {:ok, frame, rest} ->
-        state = process(frame, state)
-        parse_bin(socket, rest, state)
-
-      {:error, bin} ->
-        {:error, bin, state}
-    end
-  end
-
-  @spec process(frame, t) :: :ok
-  def process(bin, state) when is_binary(bin) do
-    Logger.info("Got binary: #{inspect(bin)}")
-    state
-  end
-
-  def process(%Data{stream_id: 0}, state) do
-    # This is an error
-    state
-  end
-
-  def process(%Data{stream_id: stream_id} = frame, state) do
-    send_window_update(state.socket, frame)
-
-    state.ref
-    |> Stream.via_tuple(stream_id)
-    |> Stream.cast_recv(frame)
-
-    state
-  end
-
-  def process(%Headers{stream_id: stream_id} = frame, state) do
-    state.ref
-    |> Stream.via_tuple(stream_id)
-    |> Stream.cast_recv(frame)
-
-    state
-  end
-
-  def process(%RstStream{} = frame, state) do
-    pid = Stream.via_tuple(state.ref, frame.stream_id)
-    Stream.cast_recv(pid, frame)
-    state
-  end
-
-  def process(%Frame.Settings{} = frame, state) do
-    # Process immediately
-    {:noreply, [], state} = recv(frame, state)
-    state
-  end
-
-  def process(%PushPromise{stream_id: stream_id} = frame, state) do
-    {:ok, pid} = StreamSupervisor.start_stream(state, stream_id)
-
-    flow = Connection.FlowControl.add_active(state.flow_control, stream_id)
-
-    Stream.cast_recv(pid, frame)
-    %{state | flow_control: flow}
-  end
-
-  def process(%Ping{} = frame, state) do
-    # Process immediately
-    recv(frame, state)
-    state
-  end
-
-  def process(%Goaway{} = frame, state) do
-    GenServer.cast(self(), {:recv, frame})
-    state
-  end
-
-  def process(%WindowUpdate{stream_id: 0} = frame, state) do
-    Stream.cast_recv(self(), frame)
-    state
-  end
-
-  def process(%WindowUpdate{stream_id: stream_id} = frame, state) do
-    pid = Stream.via_tuple(state.ref, stream_id)
-    Stream.cast_recv(pid, frame)
-    state
-  end
-
-  def process(%Continuation{stream_id: stream_id} = frame, state) do
-    pid = Stream.via_tuple(state.ref, stream_id)
-    Stream.cast_recv(pid, frame)
-    state
-  end
-
-  def process(_error, state), do: state
-
   def send_window_update(_socket, %Data{data: nil}), do: :ok
 
   def send_window_update(_socket, %Data{data: ""}), do: :ok
 
   def send_window_update(socket, %Data{stream_id: sid, data: data}) do
     bin = data |> WindowUpdate.new() |> Encodable.to_bin()
-    Socket.send(socket, bin)
+    Socket.sendf(socket, bin)
 
     s_bin =
       sid
       |> WindowUpdate.new(byte_size(data))
       |> Encodable.to_bin()
 
-    Socket.send(socket, s_bin)
-  end
-
-  def handle_disconnect(%{client: pid} = state) do
-    Logger.debug("Socket closed, informing client")
-    send(pid, {:closed, self()})
-    close(state)
-    {:noreply, [], %{state | socket: nil}}
+    Socket.sendf(socket, s_bin)
   end
 end

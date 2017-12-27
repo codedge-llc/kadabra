@@ -174,7 +174,7 @@ defmodule Kadabra.Stream do
 
   def handle_event(:enter, _old, @hc_remote, stream) do
     bin = stream.id |> RstStream.new() |> Encodable.to_bin()
-    Socket.send(stream.socket, bin)
+    Socket.sendf(stream.socket, bin)
 
     :gen_statem.cast(self(), :close)
     {:keep_state, stream}
@@ -220,7 +220,7 @@ defmodule Kadabra.Stream do
 
     flags = if payload, do: 0x4, else: 0x5
     h = Http2.build_frame(@headers, flags, stream.id, headers_payload)
-    Socket.send(stream.socket, h)
+    Socket.sendf(stream.socket, h)
     # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
 
     # Reply early for better performance

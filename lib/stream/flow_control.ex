@@ -126,7 +126,7 @@ defmodule Kadabra.Stream.FlowControl do
       %Frame.Data{stream_id: stream_id, end_stream: false, data: bin}
       |> Encodable.to_bin()
 
-    Socket.send(socket, p)
+    Socket.sendf(socket, p)
     send_partial_data(rest, socket, stream_id)
   end
 
@@ -137,7 +137,7 @@ defmodule Kadabra.Stream.FlowControl do
       %Frame.Data{stream_id: stream_id, end_stream: true, data: bin}
       |> Encodable.to_bin()
 
-    Socket.send(socket, p)
+    Socket.sendf(socket, p)
     send_data([], socket, stream_id)
   end
 
@@ -146,7 +146,7 @@ defmodule Kadabra.Stream.FlowControl do
       %Frame.Data{stream_id: stream_id, end_stream: false, data: bin}
       |> Encodable.to_bin()
 
-    Socket.send(socket, p)
+    Socket.sendf(socket, p)
     send_data(rest, socket, stream_id)
   end
 

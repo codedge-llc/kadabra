@@ -5,6 +5,7 @@ defmodule KadabraTest do
   @moduletag report: [:pid]
 
   alias Kadabra.{Connection, Encodable, Frame, Stream}
+  alias Kadabra.Connection.Socket
 
   describe "open/2" do
     @tag :golang
@@ -123,7 +124,7 @@ defmodule KadabraTest do
 
       receive do
         {:push_promise, response} ->
-          assert response.id == 2
+          assert response.id in [2, 4]
           refute response.status
           assert Stream.Response.get_header(response.headers, ":path")
       after
@@ -198,12 +199,13 @@ defmodule KadabraTest do
   test "GOAWAY frame closes connection" do
     uri = 'http2.golang.org'
     {:ok, pid} = Kadabra.open(uri, :https)
-
     sup_pid = find_child(pid, :connection_sup)
-    conn_pid = find_child(sup_pid, :connection)
 
-    bin = 1 |> Frame.Goaway.new() |> Encodable.to_bin()
-    send(conn_pid, {:ssl, nil, bin})
+    frame = Frame.Goaway.new(1)
+
+    pid
+    |> Connection.via_tuple()
+    |> GenServer.cast({:recv, frame})
 
     assert_receive {:closed, _pid}, 5_000
   end

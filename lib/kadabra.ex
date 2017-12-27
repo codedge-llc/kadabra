@@ -135,7 +135,7 @@ defmodule Kadabra do
   def close(pid) do
     pid
     |> Connection.via_tuple()
-    |> GenServer.cast({:send, :goaway})
+    |> GenStage.cast({:send, :goaway})
   end
 
   @doc ~S"""
@@ -154,7 +154,7 @@ defmodule Kadabra do
   def ping(pid) do
     pid
     |> Connection.via_tuple()
-    |> GenServer.cast({:send, :ping})
+    |> GenStage.cast({:send, :ping})
   end
 
   @doc ~S"""

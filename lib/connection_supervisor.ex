@@ -24,7 +24,8 @@ defmodule Kadabra.ConnectionSupervisor do
       worker(Hpack, [{ref, :encoder}], start_opts(:encoder)),
       worker(Hpack, [{ref, :decoder}], start_opts(:decoder)),
       worker(ConnectionQueue, [sup], start_opts(:connection_queue)),
-      worker(Connection, [uri, pid, sup, ref, opts], start_opts(:connection))
+      worker(Connection.Socket, [uri, sup, opts], start_opts(:socket)),
+      worker(Connection, [uri, pid, sup, ref, opts], start_opts(:connection)),
     ]
 
     supervise(children, strategy: :one_for_all)
