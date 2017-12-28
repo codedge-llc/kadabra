@@ -20,6 +20,7 @@ defmodule Kadabra.Connection do
     Encodable,
     Error,
     Frame,
+    FrameParser,
     Hpack,
     Http2,
     Stream,
@@ -167,6 +168,24 @@ defmodule Kadabra.Connection do
   end
 
   # recv
+
+  def recv(frame, state) when is_binary(frame) do
+    case FrameParser.sid_and_type(frame) do
+      {0, _} ->
+        {:ok, f, ""} = Frame.new(frame)
+        mod = FrameParser.to_module(f.type)
+        f |> mod.new() |> recv(state)
+      {_, 0x5} ->
+        {:ok, f, ""} = Frame.new(frame)
+        mod = FrameParser.to_module(f.type)
+        f |> mod.new() |> recv(state)
+      {stream_id, _} ->
+        state.ref
+        |> Stream.via_tuple(stream_id)
+        |> Stream.cast_recv(frame)
+        {:noreply, [], state}
+    end
+  end
 
   def recv(%Data{stream_id: 0}, state) do
     # This is an error

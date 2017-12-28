@@ -14,7 +14,7 @@ defmodule Kadabra.Stream do
 
   require Logger
 
-  alias Kadabra.{Connection, Encodable, Hpack, Http2, Stream}
+  alias Kadabra.{Connection, Encodable, Frame, Hpack, Http2, Stream}
   alias Kadabra.Connection.{Settings, Socket}
 
   alias Kadabra.Frame.{
@@ -98,6 +98,12 @@ defmodule Kadabra.Stream do
       |> Stream.FlowControl.set_max_frame_size(new_max_frame)
 
     {:keep_state, %{stream | flow: flow}}
+  end
+
+  def recv(frame, state, stream) when is_binary(frame) do
+    {:ok, f, ""} = Frame.new(frame)
+    mod = Kadabra.FrameParser.to_module(f.type)
+    f |> mod.new() |> recv(state, stream)
   end
 
   def recv(%Data{end_stream: true, data: data}, state, stream)

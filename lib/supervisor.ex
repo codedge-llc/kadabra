@@ -19,6 +19,6 @@ defmodule Kadabra.Supervisor do
       supervisor(ConnectionSupervisor, conn_opts, id: :connection_sup)
     ]
 
-    supervise(children, strategy: :one_for_one)
+    supervise(children, strategy: :one_for_all)
   end
 end

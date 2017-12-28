@@ -107,7 +107,7 @@ defmodule Kadabra.Connection.Socket do
   end
 
   def sendf(pid, bin) do
-    GenServer.cast(pid, {:send, bin})
+    GenServer.call(pid, {:send, bin})
   end
 
   def setopts(pid, opts) do
@@ -180,7 +180,7 @@ defmodule Kadabra.Connection.Socket do
       {:ok, frame, rest} ->
         state.sup
         |> Connection.via_tuple()
-        |> GenStage.call({:recv, frame})
+        |> GenStage.cast({:recv, frame})
 
         parse_bin(socket, rest, state)
 

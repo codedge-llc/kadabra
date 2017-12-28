@@ -16,15 +16,29 @@ defmodule Kadabra.FrameParser do
   }
 
   def parse(bin) do
-    case Frame.new(bin) do
-      {:ok, %{type: type} = frame, rest} ->
-        mod = to_module(type)
-        f = mod.new(frame)
-        {:ok, f, rest}
+    case p(bin) do
+      {:ok, frame, rest} ->
+        {:ok, frame, rest}
 
       {:error, bin} ->
         {:error, bin}
     end
+  end
+
+  def p(""), do: {:error, ""}
+  def p(<<p_size::24, type::8, f::8, 0::1, s_id::31, p::bitstring>> = bin) do
+    size = p_size * 8
+    if byte_size(bin) < (p_size + 9) do
+      {:error, bin}
+    else
+      f_size = size + 72
+      <<frame::size(f_size)>> <> rest = bin
+      {:ok, <<frame::size(f_size)>>, <<rest::bitstring>>}
+    end
+  end
+
+  def sid_and_type(<<_::24, type::8, _::8, 0::1, s_id::31, _::bitstring>>) do
+    {s_id, type}
   end
 
   def to_module(0x0), do: Data
