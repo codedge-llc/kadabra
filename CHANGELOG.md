@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.7
+- Fixed: `noproc` crash caused by race condition on recv GOAWAY
+
 ## v0.3.6
 - Fixed: ES flag properly set on certain HEADERS frames
 
