@@ -50,10 +50,11 @@ defmodule KadabraTest do
         Kadabra.get(pid, "/reqinfo")
       end
 
-      streams = 1..(2 * count) |> Enum.filter(&(rem(&1, 2) == 1))
+      is_odd = fn x -> rem(x, 2) == 1 end
+      streams = 1..(2 * count) |> Enum.filter(&is_odd.(&1))
 
       for x <- streams do
-        assert_receive {:end_stream, %Stream.Response{id: ^x}}, 15_000
+        assert_receive {:end_stream, %Stream.Response{id: ^x}}, 30_000
       end
     end
 
@@ -139,7 +140,7 @@ defmodule KadabraTest do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
       payload = String.duplicate("test", 10)
-      Kadabra.put(pid, "/ECHO", payload)
+      Kadabra.put(pid, "/ECHO", body: payload)
 
       expected_body = String.upcase(payload)
 
@@ -159,7 +160,7 @@ defmodule KadabraTest do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
       payload = String.duplicate("test", 1_000_000)
-      Kadabra.put(pid, "/ECHO", payload)
+      Kadabra.put(pid, "/ECHO", body: payload)
 
       expected_body = String.upcase(payload)
 
@@ -179,7 +180,7 @@ defmodule KadabraTest do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
       payload = "test"
-      Kadabra.put(pid, "/crc32", payload)
+      Kadabra.put(pid, "/crc32", body: payload)
 
       expected_body = "bytes=4, CRC32=d87f7e0c"
 

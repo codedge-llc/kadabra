@@ -10,6 +10,7 @@ defmodule Kadabra.Stream do
             flow: nil,
             headers: [],
             body: "",
+            on_response: nil,
             scheme: :https
 
   require Logger
@@ -181,7 +182,9 @@ defmodule Kadabra.Stream do
   end
 
   def handle_event(:enter, _old, @closed, stream) do
-    send(stream.connection, {:finished, Response.new(stream)})
+    response = Response.new(stream)
+    process_on_response(stream, response)
+    send(stream.connection, {:finished, response})
     {:stop, :normal}
   end
 
@@ -212,7 +215,7 @@ defmodule Kadabra.Stream do
   # Calls
 
   def handle_event({:call, from}, {:send_headers, request}, _state, stream) do
-    %{headers: headers, body: payload} = request
+    %{headers: headers, body: payload, on_response: on_resp} = request
     headers = add_headers(headers, stream)
 
     {:ok, encoded} = Hpack.encode(stream.ref, headers)
@@ -235,7 +238,7 @@ defmodule Kadabra.Stream do
         stream.flow
       end
 
-    stream = %{stream | flow: flow}
+    stream = %{stream | flow: flow, on_response: on_resp}
 
     {:next_state, @open, stream, []}
   end
@@ -250,6 +253,12 @@ defmodule Kadabra.Stream do
 
     # sorting headers to have pseudo headers first.
     Enum.sort(h, fn {a, _b}, {c, _d} -> a < c end)
+  end
+
+  def process_on_response(%{on_response: nil}, _response), do: :ok
+
+  def process_on_response(%{on_response: on_resp}, response) do
+    Task.Supervisor.start_child(Kadabra.Tasks, fn -> on_resp.(response) end)
   end
 
   # Other Callbacks

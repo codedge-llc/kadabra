@@ -9,6 +9,7 @@ defmodule Kadabra.Frame.Continuation do
           stream_id: pos_integer
         }
 
+  alias Kadabra.Frame
   alias Kadabra.Frame.Flags
 
   @doc ~S"""
@@ -21,8 +22,8 @@ defmodule Kadabra.Frame.Continuation do
       %Kadabra.Frame.Continuation{header_block_fragment: <<136>>,
       end_headers: true}
   """
-  @spec new(Kadabra.Frame.t()) :: t
-  def new(%{stream_id: id, payload: payload, flags: flags}) do
+  @spec new(Frame.t()) :: t
+  def new(%Frame{stream_id: id, payload: payload, flags: flags}) do
     %__MODULE__{
       header_block_fragment: payload,
       end_headers: Flags.end_headers?(flags),

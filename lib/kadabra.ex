@@ -66,7 +66,7 @@ defmodule Kadabra do
   ```
   """
 
-  alias Kadabra.{Connection, ConnectionQueue, Request, Supervisor}
+  alias Kadabra.{Connection, ConnectionQueue, Request, Stream, Supervisor}
   alias Kadabra.Connection.Socket
 
   @typedoc ~S"""
@@ -89,10 +89,12 @@ defmodule Kadabra do
 
   - `:headers` - (Required) Headers for request.
   - `:body` - (Optional) Used for requests that can have a body, such as POST.
+  - `:on_response` - (Optional) Async callback for handling stream response.
   """
   @type request_opts :: [
           headers: [{String.t(), String.t()}, ...],
-          body: String.t()
+          body: String.t(),
+          on_response: (Stream.Response.t -> no_return)
         ]
 
   @type scheme :: :http | :https
@@ -154,7 +156,7 @@ defmodule Kadabra do
   def ping(pid) do
     pid
     |> Connection.via_tuple()
-    |> GenServer.cast({:send, :ping})
+    |> Connection.ping()
   end
 
   @doc ~S"""
@@ -205,9 +207,9 @@ defmodule Kadabra do
       iex> {response.id, response.status}
       {1, 200}
   """
-  @spec get(pid, String.t()) :: no_return
-  def get(pid, path) do
-    request(pid, headers: headers("GET", path))
+  @spec get(pid, String.t(), Keyword.t) :: no_return
+  def get(pid, path, opts \\ []) do
+    request(pid, [{:headers, headers("GET", path)} | opts])
   end
 
   @doc ~S"""
@@ -224,9 +226,9 @@ defmodule Kadabra do
       iex> {response.id, response.status, response.body}
       {1, 200, ""}
   """
-  @spec head(pid, String.t()) :: no_return
-  def head(pid, path) do
-    request(pid, headers: headers("HEAD", path))
+  @spec head(pid, String.t(), Keyword.t) :: no_return
+  def head(pid, path, opts \\ []) do
+    request(pid, [{:headers, headers("HEAD", path)} | opts])
   end
 
   @doc ~S"""
@@ -235,7 +237,7 @@ defmodule Kadabra do
   ## Examples
 
       iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
-      iex> Kadabra.post(pid, "/", "test=123")
+      iex> Kadabra.post(pid, "/", body: "test=123")
       :ok
       iex> response = receive do
       ...>   {:end_stream, response} -> response
@@ -243,9 +245,9 @@ defmodule Kadabra do
       iex> {response.id, response.status}
       {1, 200}
   """
-  @spec post(pid, String.t(), any) :: no_return
-  def post(pid, path, payload \\ nil) do
-    request(pid, headers: headers("POST", path), body: payload)
+  @spec post(pid, String.t(), Keyword.t) :: no_return
+  def post(pid, path, opts \\ []) do
+    request(pid, [{:headers, headers("POST", path)} | opts])
   end
 
   @doc ~S"""
@@ -254,7 +256,7 @@ defmodule Kadabra do
   ## Examples
 
       iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
-      iex> Kadabra.put(pid, "/crc32", "test")
+      iex> Kadabra.put(pid, "/crc32", body: "test")
       :ok
       iex> stream = receive do
       ...>   {:end_stream, stream} -> stream
@@ -264,9 +266,9 @@ defmodule Kadabra do
       iex> stream.body
       "bytes=4, CRC32=d87f7e0c"
   """
-  @spec put(pid, String.t(), any) :: no_return
-  def put(pid, path, payload \\ nil) do
-    request(pid, headers: headers("PUT", path), body: payload)
+  @spec put(pid, String.t(), Keyword.t) :: no_return
+  def put(pid, path, opts \\ []) do
+    request(pid, [{:headers, headers("PUT", path)} | opts])
   end
 
   @doc ~S"""
@@ -283,9 +285,9 @@ defmodule Kadabra do
       iex> stream.status
       200
   """
-  @spec delete(pid, String.t()) :: no_return
-  def delete(pid, path) do
-    request(pid, headers: headers("DELETE", path))
+  @spec delete(pid, String.t(), Keyword.t) :: no_return
+  def delete(pid, path, opts \\ []) do
+    request(pid, [{:headers, headers("DELETE", path)} | opts])
   end
 
   defp headers(method, path) do

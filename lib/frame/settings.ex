@@ -8,7 +8,7 @@ defmodule Kadabra.Frame.Settings do
 
   @type t :: %__MODULE__{
           ack: boolean,
-          settings: Connection.Settings.t()
+          settings: Connection.Settings.t() | nil
         }
 
   @spec ack :: t
@@ -33,7 +33,7 @@ defmodule Kadabra.Frame.Settings do
   def ack?(1), do: true
   def ack?(0), do: false
 
-  @spec parse_settings(binary) :: [{binary, binary}, ...]
+  @spec parse_settings(bitstring) :: [{char, non_neg_integer}, ...] | []
   def parse_settings(<<>>), do: []
 
   def parse_settings(bin) do

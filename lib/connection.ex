@@ -81,9 +81,7 @@ defmodule Kadabra.Connection do
         state = initial_state(socket, uri, pid, ref, opts)
         {:consumer, state, subscribe_to: [ConnectionQueue.via_tuple(sup)]}
 
-      {:error, error} ->
-        Logger.error(inspect(error))
-        {:error, error}
+      {:error, error} -> {:stop, error}
     end
   end
 
@@ -111,6 +109,10 @@ defmodule Kadabra.Connection do
       |> Encodable.to_bin()
 
     Socket.send(socket, bin)
+  end
+
+  def ping(pid) do
+    GenServer.cast(pid, {:send, :ping})
   end
 
   # handle_cast
@@ -189,6 +191,7 @@ defmodule Kadabra.Connection do
   # nil settings means use default
   def recv(%Frame.Settings{ack: false, settings: nil}, state) do
     %{flow_control: flow} = state
+
     bin = Frame.Settings.ack() |> Encodable.to_bin()
     Socket.send(state.socket, bin)
 
@@ -223,8 +226,19 @@ defmodule Kadabra.Connection do
     {:noreply, [], %{state | flow_control: flow}}
   end
 
+  def send_huge_window_update(socket) do
+    bin =
+      0
+      #|> Frame.WindowUpdate.new(2_147_483_647)
+      |> Frame.WindowUpdate.new(2_147_000_000)
+      |> Encodable.to_bin()
+
+    Socket.send(socket, bin)
+  end
+
   def recv(%Frame.Settings{ack: true}, state) do
     # Do nothing on ACK. Might change in the future.
+    send_huge_window_update(state.socket)
     {:noreply, [], state}
   end
 
@@ -330,7 +344,7 @@ defmodule Kadabra.Connection do
     bin = state.buffer <> bin
 
     case parse_bin(socket, bin, state) do
-      {:error, bin, state} ->
+      {:unfinished, bin, state} ->
         Socket.setopts(socket, [{:active, :once}])
         {:noreply, [], %{state | buffer: bin}}
     end
@@ -343,7 +357,7 @@ defmodule Kadabra.Connection do
         parse_bin(socket, rest, state)
 
       {:error, bin} ->
-        {:error, bin, state}
+        {:unfinished, bin, state}
     end
   end
 

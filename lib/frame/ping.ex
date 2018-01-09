@@ -23,8 +23,8 @@ defmodule Kadabra.Frame.Ping do
   @spec new() :: t
   def new do
     %__MODULE__{
-      data: <<0, 0, 0, 0, 0, 0, 0, 0>>,
-      ack: false
+      ack: false,
+      data: <<0, 0, 0, 0, 0, 0, 0, 0>>
     }
   end
 
@@ -39,10 +39,10 @@ defmodule Kadabra.Frame.Ping do
       %Kadabra.Frame.Ping{data: <<0, 0, 0, 0, 0, 0, 0, 0>>, ack: true}
   """
   @spec new(Frame.t()) :: t
-  def new(%Frame{type: 0x6, payload: data, flags: flags}) do
+  def new(%Frame{type: 0x6, payload: <<data::64>>, flags: flags}) do
     %__MODULE__{
-      data: data,
-      ack: Flags.ack?(flags)
+      ack: Flags.ack?(flags),
+      data: <<data::64>>
     }
   end
 end

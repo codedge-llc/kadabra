@@ -25,7 +25,7 @@ defmodule Kadabra.Frame.Flags do
       iex> Kadabra.Frame.Flags.ack?(0)
       false
   """
-  @spec ack?(binary) :: boolean
+  @spec ack?(non_neg_integer) :: boolean
   def ack?(flags) when (flags &&& 1) == 1, do: true
   def ack?(_), do: false
 
@@ -40,7 +40,7 @@ defmodule Kadabra.Frame.Flags do
       iex> Kadabra.Frame.Flags.priority?(0x4)
       false
   """
-  @spec priority?(binary) :: boolean
+  @spec priority?(non_neg_integer) :: boolean
   def priority?(flags) when (flags &&& 0x20) == 0x20, do: true
   def priority?(_), do: false
 
@@ -55,7 +55,7 @@ defmodule Kadabra.Frame.Flags do
       iex> Kadabra.Frame.Flags.padded?(0x7)
       false
   """
-  @spec padded?(binary) :: boolean
+  @spec padded?(non_neg_integer) :: boolean
   def padded?(flags) when (flags &&& 8) == 8, do: true
   def padded?(_), do: false
 
@@ -73,7 +73,7 @@ defmodule Kadabra.Frame.Flags do
       iex> Kadabra.Frame.Flags.end_headers?(0x1)
       false
   """
-  @spec end_headers?(binary) :: boolean
+  @spec end_headers?(non_neg_integer) :: boolean
   def end_headers?(flags) when (flags &&& 4) == 4, do: true
   def end_headers?(_), do: false
 
@@ -88,7 +88,7 @@ defmodule Kadabra.Frame.Flags do
       iex> Kadabra.Frame.Flags.end_stream?(0x0)
       false
   """
-  @spec end_stream?(binary) :: boolean
+  @spec end_stream?(non_neg_integer) :: boolean
   def end_stream?(flags) when (flags &&& 1) == 1, do: true
   def end_stream?(_), do: false
 end
