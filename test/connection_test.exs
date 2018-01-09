@@ -33,7 +33,7 @@ defmodule Kadabra.ConnectionTest do
     GenServer.cast(conn_pid, {:recv, frame})
 
     # Give a moment to clean everything up
-    Process.sleep(500)
+    Process.sleep(1_500)
 
     receive do
       {:closed, _pid} ->
