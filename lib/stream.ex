@@ -80,7 +80,7 @@ defmodule Kadabra.Stream do
   end
 
   def close(ref, stream_id) do
-    :gen_statem.stop(via_tuple(ref, stream_id))
+    ref |> via_tuple(stream_id) |> cast_recv(:close)
   end
 
   def cast_recv(pid, frame) do
@@ -89,6 +89,10 @@ defmodule Kadabra.Stream do
 
   def cast_send(pid, frame) do
     :gen_statem.cast(pid, {:send, frame})
+  end
+
+  def recv(:close, _state, _stream) do
+    {:stop, :normal}
   end
 
   # For SETTINGS initial_window_size and max_frame_size changes

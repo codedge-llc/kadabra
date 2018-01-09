@@ -21,11 +21,11 @@ defmodule Kadabra.StreamSupervisor do
 
   def start_stream(%{flow_control: flow, ref: ref} = conn, stream_id \\ nil) do
     stream = Stream.new(conn, flow.settings, stream_id || flow.stream_id)
-    spec = worker(Stream, [stream], start_opts())
-    Supervisor.start_child(via_tuple(ref), spec)
+    Supervisor.start_child(via_tuple(ref), [stream])
   end
 
   def init(:ok) do
-    supervise([], strategy: :one_for_all)
+    spec = worker(Stream, [], start_opts())
+    supervise([spec], strategy: :simple_one_for_one)
   end
 end

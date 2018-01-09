@@ -6,7 +6,18 @@ HTTP/2 client for Elixir
 
 Written to manage HTTP/2 connections for [pigeon](https://github.com/codedge-llc/pigeon). Very much a work in progress.
 
+## Installation
+
 *Requires Elixir 1.4/OTP 19.2 or later.*
+ 
+Add kadabra to your `mix.exs`:
+  ```elixir
+  def deps do
+    [
+      {:kadabra, "~> 0.3.7"}
+    ]
+  end
+  ```
 
 ## Usage
 ```elixir
