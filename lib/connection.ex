@@ -281,12 +281,7 @@ defmodule Kadabra.Connection do
   end
 
   defp do_send_headers(requests, state) when is_list(requests) do
-    flow =
-      requests
-      |> Enum.reduce(state.flow_control, &Connection.FlowControl.add(&2, &1))
-      |> Connection.FlowControl.process(state)
-
-    %{state | flow_control: flow}
+    Enum.reduce(requests, state, &do_send_headers/2)
   end
 
   defp do_send_headers(request, %{flow_control: flow} = state) do
