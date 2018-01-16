@@ -22,6 +22,57 @@ defmodule KadabraTest do
     end
   end
 
+  describe "request/2" do
+    @tag :golang
+    test "can take a list of requests" do
+      uri = 'http2.golang.org'
+      {:ok, pid} = Kadabra.open(uri, :https)
+
+      headers = [
+        {":method", "GET"},
+        {":path", "/"}
+      ]
+      request = Kadabra.Request.new(headers: headers)
+
+      Kadabra.request(pid, [request, request])
+
+      for x <- [1, 3] do
+        assert_receive {:end_stream, %Stream.Response{id: ^x}}, 5_000
+      end
+    end
+
+    @tag :golang
+    test "can take a single request" do
+      uri = 'http2.golang.org'
+      {:ok, pid} = Kadabra.open(uri, :https)
+
+      headers = [
+        {":method", "GET"},
+        {":path", "/"}
+      ]
+      request = Kadabra.Request.new(headers: headers)
+
+      Kadabra.request(pid, request)
+
+      assert_receive {:end_stream, %Stream.Response{id: 1}}, 5_000
+    end
+
+    @tag :golang
+    test "can take an options keyword list" do
+      uri = 'http2.golang.org'
+      {:ok, pid} = Kadabra.open(uri, :https)
+
+      headers = [
+        {":method", "GET"},
+        {":path", "/"}
+      ]
+
+      Kadabra.request(pid, headers: headers, on_response: & &1)
+
+      assert_receive {:end_stream, %Stream.Response{id: 1}}, 5_000
+    end
+  end
+
   describe "GET" do
     @tag :golang
     test "https://http2.golang.org/reqinfo" do
