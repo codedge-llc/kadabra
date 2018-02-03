@@ -170,7 +170,7 @@ defmodule Kadabra.Connection do
   end
 
   def recv(%Frame.Settings{ack: true}, state) do
-    # Do nothing on ACK. Might change in the future.
+    send_huge_window_update(state.socket)
     {:noreply, state}
   end
   def recv(%Frame.Settings{ack: false, settings: settings},
@@ -396,6 +396,15 @@ defmodule Kadabra.Connection do
     :ssl.send(socket, s_bin)
   end
   def send_window_update(_socket, %Data{data: _data}), do: :ok
+
+  def send_huge_window_update(socket) do
+    bin =
+      0
+      |> Frame.WindowUpdate.new(2_147_000_000)
+      |> Encodable.to_bin()
+
+    :ssl.send(socket, bin)
+  end
 
   def maybe_reconnect(%{reconnect: false, client: pid} = state) do
     Logger.debug "Socket closed, not reopening, informing client"
