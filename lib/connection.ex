@@ -346,6 +346,12 @@ defmodule Kadabra.Connection do
   end
 
   def process(%Frame.PushPromise{stream_id: stream_id} = frame, state) do
+    """
+    Received push promise for stream #{stream_id}!
+    #{inspect(frame)}
+    """
+    |> Logger.info
+
     {:ok, pid} = StreamSupervisor.start_stream(state, stream_id)
 
     flow = Connection.FlowControl.add_active(state.flow_control, stream_id)
