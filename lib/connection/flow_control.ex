@@ -143,7 +143,6 @@ defmodule Kadabra.Connection.FlowControl do
   def process(%{queue: queue} = flow, conn) do
     with {{:value, request}, queue} <- :queue.out(queue),
          {:can_send, true} <- {:can_send, can_send?(flow)} do
-
       {:ok, pid} = StreamSupervisor.start_stream(conn)
 
       size = byte_size(request.body || <<>>)

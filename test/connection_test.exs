@@ -2,8 +2,8 @@ defmodule Kadabra.ConnectionTest do
   use ExUnit.Case
 
   test "closes active streams on recv GOAWAY" do
-    uri = 'http2.golang.org'
-    {:ok, pid} = Kadabra.open(uri, :https)
+    uri = 'https://http2.golang.org'
+    {:ok, pid} = Kadabra.open(uri)
 
     # Open two streams that send the time every second
     Kadabra.get(pid, "/clockstream", on_response: & &1)
@@ -11,18 +11,18 @@ defmodule Kadabra.ConnectionTest do
 
     {_, stream_sup_pid, _, _} =
       pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :stream_sup end)
+      |> Supervisor.which_children()
+      |> Enum.find(fn {name, _, _, _} -> name == :stream_sup end)
 
     {_, conn_sup_pid, _, _} =
       pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :connection_sup end)
+      |> Supervisor.which_children()
+      |> Enum.find(fn {name, _, _, _} -> name == :connection_sup end)
 
     {_, conn_pid, _, _} =
       conn_sup_pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :connection end)
+      |> Supervisor.which_children()
+      |> Enum.find(fn {name, _, _, _} -> name == :connection end)
 
     # Wait to collect some data on the streams
     Process.sleep(500)
@@ -39,7 +39,7 @@ defmodule Kadabra.ConnectionTest do
       {:closed, _pid} ->
         assert Supervisor.count_children(stream_sup_pid).active == 0
     after
-      5_000 -> flunk "Connection did not close"
+      5_000 -> flunk("Connection did not close")
     end
   end
 end

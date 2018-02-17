@@ -1,15 +1,17 @@
 defmodule Kadabra.Connection do
   @moduledoc false
 
-  defstruct ref: nil,
-            buffer: "",
+  defstruct buffer: "",
             client: nil,
-            uri: nil,
-            scheme: :https,
+            flow_control: nil,
+            on_ping: nil,
+            on_close: nil,
             opts: [],
+            ref: nil,
+            scheme: :https,
             socket: nil,
-            queue: nil,
-            flow_control: nil
+            uri: nil,
+            queue: nil
 
   use GenStage
   require Logger
@@ -24,7 +26,8 @@ defmodule Kadabra.Connection do
     Hpack,
     Http2,
     Stream,
-    StreamSupervisor
+    StreamSupervisor,
+    Tasks
   }
 
   alias Kadabra.Connection.Socket
@@ -81,7 +84,8 @@ defmodule Kadabra.Connection do
         state = initial_state(socket, uri, pid, ref, opts)
         {:consumer, state, subscribe_to: [ConnectionQueue.via_tuple(sup)]}
 
-      {:error, error} -> {:stop, error}
+      {:error, error} ->
+        {:stop, error}
     end
   end
 
@@ -148,12 +152,11 @@ defmodule Kadabra.Connection do
   end
 
   def sendf(:goaway, state) do
-    %Connection{socket: socket, client: pid, flow_control: flow} = state
+    %Connection{socket: socket, flow_control: flow} = state
     bin = flow.stream_id |> Goaway.new() |> Encodable.to_bin()
     Socket.send(socket, bin)
 
     close(state)
-    send(pid, {:closed, self()})
 
     {:stop, :normal, state}
   end
@@ -163,6 +166,8 @@ defmodule Kadabra.Connection do
   end
 
   def close(state) do
+    Tasks.run(state.on_close, {:closed, self()})
+    send(state.client, {:closed, self()})
     Hpack.close(state.ref)
 
     for stream <- state.flow_control.active_streams do
@@ -226,18 +231,7 @@ defmodule Kadabra.Connection do
     {:noreply, [], %{state | flow_control: flow}}
   end
 
-  def send_huge_window_update(socket) do
-    bin =
-      0
-      #|> Frame.WindowUpdate.new(2_147_483_647)
-      |> Frame.WindowUpdate.new(2_147_000_000)
-      |> Encodable.to_bin()
-
-    Socket.send(socket, bin)
-  end
-
   def recv(%Frame.Settings{ack: true}, state) do
-    # Do nothing on ACK. Might change in the future.
     send_huge_window_update(state.socket)
     {:noreply, [], state}
   end
@@ -452,9 +446,17 @@ defmodule Kadabra.Connection do
     Socket.send(socket, s_bin)
   end
 
-  def handle_disconnect(%{client: pid} = state) do
+  def send_huge_window_update(socket) do
+    bin =
+      0
+      |> Frame.WindowUpdate.new(2_147_000_000)
+      |> Encodable.to_bin()
+
+    Socket.send(socket, bin)
+  end
+
+  def handle_disconnect(state) do
     Logger.debug("Socket closed, informing client")
-    send(pid, {:closed, self()})
     close(state)
     {:noreply, [], %{state | socket: nil}}
   end

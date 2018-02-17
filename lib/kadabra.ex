@@ -67,7 +67,6 @@ defmodule Kadabra do
   """
 
   alias Kadabra.{Connection, ConnectionQueue, Request, Stream, Supervisor}
-  alias Kadabra.Connection.Socket
 
   @typedoc ~S"""
   Options for connections.
@@ -94,10 +93,8 @@ defmodule Kadabra do
   @type request_opts :: [
           headers: [{String.t(), String.t()}, ...],
           body: String.t(),
-          on_response: (Stream.Response.t -> no_return)
+          on_response: (Stream.Response.t() -> no_return)
         ]
-
-  @type scheme :: :http | :https
 
   @type uri :: charlist | String.t()
 
@@ -106,27 +103,44 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open("http2.golang.org", :http)
+      iex> {:ok, pid} = Kadabra.open("http://http2.golang.org")
       iex> is_pid(pid)
       true
 
-      iex> {:ok, pid} = Kadabra.open("http2.golang.org", :https)
+      iex> {:ok, pid} = Kadabra.open("https://http2.golang.org")
       iex> is_pid(pid)
       true
   """
-  @spec open(uri, scheme, conn_opts) :: {:ok, pid} | {:error, term}
-  def open(uri, scheme, opts \\ []) do
-    port = Socket.default_port(scheme)
-    opts = Keyword.merge([scheme: scheme, port: port], opts)
-    Supervisor.start_link(uri, self(), opts)
+  @spec open(uri, conn_opts) :: {:ok, pid} | {:error, term}
+  def open(uri, opts \\ [])
+
+  def open(uri, opts) when is_binary(uri) do
+    uri = URI.parse(uri)
+
+    case scheme_to_atom(uri.scheme) do
+      nil ->
+        {:error, :bad_scheme}
+
+      scheme ->
+        opts = Keyword.merge([scheme: scheme, port: uri.port], opts)
+        Supervisor.start_link(uri.host, self(), opts)
+    end
   end
+
+  def open(uri, opts) when is_list(uri) do
+    uri |> to_string() |> open(opts)
+  end
+
+  defp scheme_to_atom("http"), do: :http
+  defp scheme_to_atom("https"), do: :https
+  defp scheme_to_atom(_), do: nil
 
   @doc ~S"""
   Closes an existing connection.
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open("http2.golang.org", :https)
+      iex> {:ok, pid} = Kadabra.open("https://http2.golang.org")
       iex> Kadabra.close(pid)
       iex> receive do
       ...>   {:closed, _pid} -> "connection closed!"
@@ -145,7 +159,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
       iex> Kadabra.ping(pid)
       iex> receive do
       ...>   {:pong, _pid} -> "got pong!"
@@ -164,7 +178,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
       iex> path = "/ECHO" # Route echoes PUT body in uppercase
       iex> body = "sample echo request"
       iex> headers = [
@@ -198,7 +212,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
       iex> Kadabra.get(pid, "/reqinfo")
       :ok
       iex> response = receive do
@@ -207,8 +221,8 @@ defmodule Kadabra do
       iex> {response.id, response.status}
       {1, 200}
   """
-  @spec get(pid, String.t(), Keyword.t) :: no_return
-  def get(pid, path, opts \\ []) do
+  @spec get(pid, String.t(), Keyword.t()) :: no_return
+  def get(pid, path, opts \\ []) when is_binary(path) do
     request(pid, [{:headers, headers("GET", path)} | opts])
   end
 
@@ -217,7 +231,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
       iex> Kadabra.head(pid, "/")
       :ok
       iex> response = receive do
@@ -226,7 +240,7 @@ defmodule Kadabra do
       iex> {response.id, response.status, response.body}
       {1, 200, ""}
   """
-  @spec head(pid, String.t(), Keyword.t) :: no_return
+  @spec head(pid, String.t(), Keyword.t()) :: no_return
   def head(pid, path, opts \\ []) do
     request(pid, [{:headers, headers("HEAD", path)} | opts])
   end
@@ -236,7 +250,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
       iex> Kadabra.post(pid, "/", body: "test=123")
       :ok
       iex> response = receive do
@@ -245,7 +259,7 @@ defmodule Kadabra do
       iex> {response.id, response.status}
       {1, 200}
   """
-  @spec post(pid, String.t(), Keyword.t) :: no_return
+  @spec post(pid, String.t(), Keyword.t()) :: no_return
   def post(pid, path, opts \\ []) do
     request(pid, [{:headers, headers("POST", path)} | opts])
   end
@@ -255,7 +269,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
       iex> Kadabra.put(pid, "/crc32", body: "test")
       :ok
       iex> stream = receive do
@@ -266,7 +280,7 @@ defmodule Kadabra do
       iex> stream.body
       "bytes=4, CRC32=d87f7e0c"
   """
-  @spec put(pid, String.t(), Keyword.t) :: no_return
+  @spec put(pid, String.t(), Keyword.t()) :: no_return
   def put(pid, path, opts \\ []) do
     request(pid, [{:headers, headers("PUT", path)} | opts])
   end
@@ -276,7 +290,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
       iex> Kadabra.delete(pid, "/")
       :ok
       iex> stream = receive do
@@ -285,7 +299,7 @@ defmodule Kadabra do
       iex> stream.status
       200
   """
-  @spec delete(pid, String.t(), Keyword.t) :: no_return
+  @spec delete(pid, String.t(), Keyword.t()) :: no_return
   def delete(pid, path, opts \\ []) do
     request(pid, [{:headers, headers("DELETE", path)} | opts])
   end

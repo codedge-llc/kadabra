@@ -22,9 +22,10 @@ defmodule Kadabra.StreamTest do
 
     test "closes stream on DATA with END_STREAM in hc_local state" do
       stream = Stream.new(%Connection{}, %Connection.Settings{}, 1)
-
       data = %Frame.Data{stream_id: 1, data: "test", end_stream: true}
-      assert {:next_state, :closed, _stream} = Stream.recv(data, :half_closed_local, stream)
+
+      assert {:next_state, :closed, _stream} =
+               Stream.recv(data, :half_closed_local, stream)
     end
   end
 end
