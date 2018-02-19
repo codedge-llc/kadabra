@@ -11,16 +11,12 @@ defmodule Kadabra.Supervisor do
     Supervisor.start_link(__MODULE__, {uri, pid, ref, opts})
   end
 
-  def start_opts(id \\ :erlang.make_ref) do
-    [id: id, restart: :transient]
-  end
-
   def init({uri, pid, ref, opts}) do
     children = [
       supervisor(StreamSupervisor, [ref], id: :stream_sup),
-      worker(Hpack, [{ref, :encoder}], start_opts(:encoder)),
-      worker(Hpack, [{ref, :decoder}], start_opts(:decoder)),
-      worker(Connection, [uri, pid, self(), ref, opts], start_opts(:connection))
+      worker(Hpack, [{ref, :encoder}], id: :encoder),
+      worker(Hpack, [{ref, :decoder}], id: :decoder),
+      worker(Connection, [uri, pid, self(), ref, opts], id: :connection)
     ]
 
     supervise(children, strategy: :one_for_all)
