@@ -8,6 +8,7 @@ defmodule Kadabra.Connection do
             scheme: :https,
             opts: [],
             socket: nil,
+            supervisor: nil,
             reconnect: true,
             flow_control: nil
 
@@ -56,18 +57,18 @@ defmodule Kadabra.Connection do
 
   def start_link(uri, pid, sup, ref, opts \\ []) do
     name = via_tuple(sup)
-    GenServer.start_link(__MODULE__, {:ok, uri, pid, ref, opts}, name: name)
+    GenServer.start_link(__MODULE__, {:ok, uri, pid, sup, ref, opts}, name: name)
   end
 
   def via_tuple(ref) do
     {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
   end
 
-  def init({:ok, uri, pid, ref, opts}) do
+  def init({:ok, uri, pid, sup, ref, opts}) do
     case Ssl.connect(uri, opts) do
       {:ok, socket} ->
         send_preface_and_settings(socket, opts[:settings])
-        state = initial_state(socket, uri, pid, ref, opts)
+        state = initial_state(socket, uri, pid, sup, ref, opts)
         {:ok, state}
       {:error, error} ->
         Logger.error(inspect(error))
@@ -75,7 +76,7 @@ defmodule Kadabra.Connection do
     end
   end
 
-  defp initial_state(socket, uri, pid, ref, opts) do
+  defp initial_state(socket, uri, pid, sup, ref, opts) do
    %__MODULE__{
       ref: ref,
       client: pid,
@@ -83,11 +84,16 @@ defmodule Kadabra.Connection do
       scheme: opts[:scheme] || :https,
       opts: opts,
       socket: socket,
+      supervisor: sup,
       reconnect: opts[:reconnect],
       flow_control: %Kadabra.Connection.FlowControl{
         settings: opts[:settings] || Connection.Settings.default
       }
     }
+  end
+
+  def close(pid) do
+    GenServer.call(pid, :close)
   end
 
   defp send_preface_and_settings(socket, settings \\ nil) do
@@ -122,6 +128,21 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
+  # handle_call
+
+  def handle_call(:close, _from, %Connection{socket: socket,
+                                             client: pid,
+                                             supervisor: sup,
+                                             flow_control: flow} = state) do
+    bin = flow.stream_id |> Goaway.new |> Encodable.to_bin
+    :ssl.send(socket, bin)
+
+    send(pid, {:closed, sup})
+    Task.start(fn -> Kadabra.Supervisor.stop(state.supervisor) end)
+
+    {:stop, :normal, :ok, state}
+  end
+
   # sendf
 
   @spec sendf(:goaway | :ping, t) :: {:noreply, t}
@@ -130,26 +151,8 @@ defmodule Kadabra.Connection do
     :ssl.send(socket, bin)
     {:noreply, state}
   end
-  def sendf(:goaway, %Connection{socket: socket,
-                                 client: pid,
-                                 flow_control: flow} = state) do
-    bin = flow.stream_id |> Goaway.new |> Encodable.to_bin
-    :ssl.send(socket, bin)
-
-    close(state)
-    send(pid, {:closed, self()})
-
-    {:stop, :normal, state}
-  end
   def sendf(_else, state) do
     {:noreply, state}
-  end
-
-  def close(state) do
-    Hpack.close(state.ref)
-    for stream <- state.flow_control.active_streams do
-      Stream.close(state.ref, stream)
-    end
   end
 
   # recv
@@ -170,7 +173,7 @@ defmodule Kadabra.Connection do
   end
 
   def recv(%Frame.Settings{ack: true}, state) do
-    # Do nothing on ACK. Might change in the future.
+    send_huge_window_update(state.socket)
     {:noreply, state}
   end
   def recv(%Frame.Settings{ack: false, settings: settings},
@@ -194,8 +197,8 @@ defmodule Kadabra.Connection do
                    error_code: error,
                    debug_data: debug}, %{client: pid} = state) do
     log_goaway(error, id, debug)
-    send(pid, {:closed, self()})
-    close(state)
+    send(pid, {:closed, state.supervisor})
+    Task.start(fn -> Kadabra.Supervisor.stop(state.supervisor) end)
 
     {:stop, :normal, state}
   end
@@ -397,30 +400,43 @@ defmodule Kadabra.Connection do
   end
   def send_window_update(_socket, %Data{data: _data}), do: :ok
 
+  def send_huge_window_update(socket) do
+    bin =
+      0
+      |> Frame.WindowUpdate.new(2_000_000_000)
+      |> Encodable.to_bin()
+
+    :ssl.send(socket, bin)
+  end
+
   def maybe_reconnect(%{reconnect: false, client: pid} = state) do
     Logger.debug "Socket closed, not reopening, informing client"
-    send(pid, {:closed, self()})
-    close(state)
-    {:noreply, reset_state(state, nil)}
+    send(pid, {:closed, state.supervisor})
+    Task.start(fn -> Kadabra.Supervisor.stop(state.supervisor) end)
+    {:stop, :normal, state}
   end
   def maybe_reconnect(%{reconnect: true,
                         uri: uri,
                         opts: opts,
+                        supervisor: sup,
                         client: pid} = state) do
+
+    for stream <- state.flow_control.active_streams do
+      Stream.close(state.ref, stream)
+    end
+    Hpack.reset(state.ref)
+
     case Connection.Ssl.connect(uri, opts) do
       {:ok, socket} ->
         send_preface_and_settings(socket)
         Logger.debug "Socket closed, reopened automatically"
-        {:noreply, reset_state(state, socket)}
+        {:noreply, %{state | socket: socket}}
+
       {:error, error} ->
         Logger.error "Socket closed, reopening failed with #{error}"
-        close(state)
-        send(pid, {:closed, self()})
+        send(pid, {:closed, sup})
+        Task.start(fn -> Kadabra.Supervisor.stop(sup) end)
         {:stop, :normal, state}
     end
-  end
-
-  defp reset_state(state, socket) do
-    %{state | socket: socket}
   end
 end

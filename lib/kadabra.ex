@@ -40,7 +40,11 @@ defmodule Kadabra do
       "connection closed!"
   """
   @spec close(pid) :: :ok
-  def close(pid), do: GenServer.cast(Connection.via_tuple(pid), {:send, :goaway})
+  def close(pid) do
+    pid
+    |> Connection.via_tuple()
+    |> Connection.close()
+  end
 
   @doc ~S"""
   Pings an existing connection.

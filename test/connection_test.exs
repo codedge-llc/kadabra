@@ -29,13 +29,13 @@ defmodule Kadabra.ConnectionTest do
 
     {_, stream_sup_pid, _, _} =
       pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :stream_sup end)
+      |> Supervisor.which_children()
+      |> Enum.find(fn {name, _, _, _} -> name == :stream_sup end)
 
     {_, conn_pid, _, _} =
       pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :connection end)
+      |> Supervisor.which_children()
+      |> Enum.find(fn {name, _, _, _} -> name == :connection end)
 
     # Wait to collect some data on the streams
     Process.sleep(1_500)
@@ -45,12 +45,13 @@ defmodule Kadabra.ConnectionTest do
     frame = Kadabra.Frame.Goaway.new(1)
     GenServer.cast(conn_pid, {:recv, frame})
 
-    # Give a moment to clean everything up
-    Process.sleep(500)
-
     receive do
-      {:closed, _pid} ->
-        assert Supervisor.count_children(stream_sup_pid).active == 0
+      {:closed, ^pid} ->
+        # Give a moment to clean everything up
+        Process.sleep(500)
+
+        refute Process.alive?(stream_sup_pid)
+        refute Process.alive?(pid)
     after
       5_000 -> flunk "Connection did not close"
     end
