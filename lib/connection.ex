@@ -332,7 +332,7 @@ defmodule Kadabra.Connection do
 
   def process(%Frame.Headers{} = frame, state) do
     pid = Stream.via_tuple(state.ref, frame.stream_id)
-    Stream.cast_recv(pid, frame)
+    Stream.call_recv(pid, frame)
     state
   end
 
@@ -350,7 +350,7 @@ defmodule Kadabra.Connection do
 
   def process(%Frame.PushPromise{stream_id: stream_id} = frame, state) do
     {:ok, pid} = StreamSupervisor.start_stream(state, stream_id)
-    Stream.cast_recv(pid, frame)
+    Stream.call_recv(pid, frame)
 
     flow = Connection.FlowControl.add_active(state.flow_control, stream_id)
 
@@ -380,7 +380,7 @@ defmodule Kadabra.Connection do
 
   def process(%Frame.Continuation{stream_id: stream_id} = frame, state) do
     pid = Stream.via_tuple(state.ref, stream_id)
-    Stream.cast_recv(pid, frame)
+    Stream.call_recv(pid, frame)
     state
   end
 
