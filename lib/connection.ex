@@ -194,8 +194,8 @@ defmodule Kadabra.Connection do
                    error_code: error,
                    debug_data: debug}, %{client: pid} = state) do
     log_goaway(error, id, debug)
-    close(state)
     send(pid, {:closed, self()})
+    close(state)
 
     {:stop, :normal, state}
   end
