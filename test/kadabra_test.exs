@@ -197,13 +197,8 @@ defmodule KadabraTest do
     uri = 'http2.golang.org'
     {:ok, pid} = Kadabra.open(uri, :https)
 
-    {_, sup_pid, _, _} =
-      pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :connection_sup end)
-
     {_, conn_pid, _, _} =
-      sup_pid
+      pid
       |> Supervisor.which_children
       |> Enum.find(fn({name, _, _, _}) -> name == :connection end)
 

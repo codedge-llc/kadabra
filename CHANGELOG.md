@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.8
+- Fixed: Streams properly killed if hpack table crashes
+- Removed unused `Scribe` dependency
+
 ## v0.3.7
 - Fixed: `noproc` crash caused by race condition on recv GOAWAY
 

@@ -347,10 +347,10 @@ defmodule Kadabra.Connection do
 
   def process(%Frame.PushPromise{stream_id: stream_id} = frame, state) do
     {:ok, pid} = StreamSupervisor.start_stream(state, stream_id)
+    Stream.cast_recv(pid, frame)
 
     flow = Connection.FlowControl.add_active(state.flow_control, stream_id)
 
-    Stream.cast_recv(pid, frame)
     %{state | flow_control: flow}
   end
 
