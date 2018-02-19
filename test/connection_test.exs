@@ -23,6 +23,8 @@ defmodule Kadabra.ConnectionTest do
     uri = 'http2.golang.org'
     {:ok, pid} = Kadabra.open(uri, :https)
 
+    ref = Process.monitor(pid)
+
     # Open two streams that send the time every second
     Kadabra.get(pid, "/clockstream")
     Kadabra.get(pid, "/clockstream")
@@ -45,15 +47,7 @@ defmodule Kadabra.ConnectionTest do
     frame = Kadabra.Frame.Goaway.new(1)
     GenServer.cast(conn_pid, {:recv, frame})
 
-    receive do
-      {:closed, ^pid} ->
-        # Give a moment to clean everything up
-        Process.sleep(500)
-
-        refute Process.alive?(stream_sup_pid)
-        refute Process.alive?(pid)
-    after
-      5_000 -> flunk "Connection did not close"
-    end
+    assert_receive {:closed, ^pid}, 5_000
+    assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
   end
 end

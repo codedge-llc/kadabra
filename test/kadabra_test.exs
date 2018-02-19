@@ -39,14 +39,11 @@ defmodule KadabraTest do
     test "sends close message and stops supervisor" do
       uri = 'http2.golang.org'
       {:ok, pid} = Kadabra.open(uri, :https)
+      ref = Process.monitor(pid)
       Kadabra.close(pid)
 
-      receive do
-        {:closed, ^pid} ->
-          refute Process.alive?(pid)
-      after 5_000 ->
-        flunk "Connection did not close."
-      end
+      assert_receive {:closed, ^pid}, 5_000
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
     end
   end
 
