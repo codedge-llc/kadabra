@@ -14,7 +14,7 @@ defmodule Kadabra.ConnectionTest do
     {_, stream_sup_pid, _, _} =
       pid
       |> Supervisor.which_children()
-      |> Enum.find(fn {name, _, _, _} -> name == :stream_sup end)
+      |> Enum.find(fn {name, _, _, _} -> name == :stream_supervisor end)
 
     {_, conn_pid, _, _} =
       pid

@@ -126,18 +126,6 @@ defmodule Kadabra.Stream do
     {:keep_state, stream}
   end
 
-  def recv(%Headers{end_stream: true} = frame, _state, stream) do
-    {:ok, headers} = Hpack.decode(stream.ref, frame.header_block_fragment)
-    stream = %Stream{stream | headers: stream.headers ++ headers}
-    {:next_state, @hc_remote, stream}
-  end
-
-  def recv(%Headers{end_stream: false} = frame, _state, stream) do
-    {:ok, headers} = Hpack.decode(stream.ref, frame.header_block_fragment)
-    stream = %Stream{stream | headers: stream.headers ++ headers}
-    {:keep_state, stream}
-  end
-
   def recv(%WindowUpdate{window_size_increment: inc}, _state, stream) do
     flow =
       stream.flow
@@ -193,7 +181,7 @@ defmodule Kadabra.Stream do
     {:next_state, @reserved_remote, stream}
   end
 
-  def recv(from, %Continuation{} = frame, state, stream) do
+  def recv(from, %Continuation{} = frame, _state, stream) do
     {:ok, headers} = Hpack.decode(stream.decoder, frame.header_block_fragment)
     :gen_statem.reply(from, :ok)
 

@@ -21,9 +21,9 @@ defmodule Kadabra.Supervisor do
 
   def init({uri, pid, ref, opts}) do
     children = [
-      supervisor(StreamSupervisor, [ref], id: :stream_sup),
-      worker(Hpack, [{ref, :encoder}], id: :encoder),
-      worker(Hpack, [{ref, :decoder}], id: :decoder),
+      supervisor(StreamSupervisor, [ref], id: :stream_supervisor),
+      worker(Hpack, [ref, :encoder], id: :encoder),
+      worker(Hpack, [ref, :decoder], id: :decoder),
       worker(ConnectionQueue, [self()], id: :connection_queue),
       worker(Connection, [uri, pid, self(), ref, opts], id: :connection)
     ]
