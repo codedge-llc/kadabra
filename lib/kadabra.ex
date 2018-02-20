@@ -151,7 +151,7 @@ defmodule Kadabra do
   def close(pid) do
     pid
     |> Connection.via_tuple()
-    |> GenServer.cast({:send, :goaway})
+    |> Connection.close()
   end
 
   @doc ~S"""

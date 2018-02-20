@@ -14,9 +14,10 @@ defmodule KadabraTest do
       |> Kadabra.open()
       |> elem(1)
 
-    on_exit(fn ->
-      Kadabra.close(pid)
-    end)
+    # on_exit(fn ->
+    #   Process.sleep(500)
+    #   if Process.alive?(pid), do: Kadabra.close(pid)
+    # end)
 
     [conn: pid]
   end
@@ -33,6 +34,7 @@ defmodule KadabraTest do
         |> :sys.get_state()
 
       assert consumer.state.opts[:port] == 443
+      Kadabra.close(pid)
     end
   end
 
@@ -66,7 +68,20 @@ defmodule KadabraTest do
 
       assert_receive {:end_stream, %Stream.Response{id: 1}}, 5_000
     end
+  end
 
+  describe "close/1" do
+    test "sends close message and stops supervisor", context do
+      pid = context[:conn]
+      ref = Process.monitor(pid)
+      Kadabra.close(pid)
+
+      assert_receive {:closed, ^pid}, 5_000
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
+    end
+  end
+
+  describe "GET" do
     @tag :golang
     test "can take an options keyword list", context do
       headers = [
@@ -78,9 +93,7 @@ defmodule KadabraTest do
 
       assert_receive {:end_stream, %Stream.Response{id: 1}}, 5_000
     end
-  end
 
-  describe "GET" do
     @tag :golang
     test "https://http2.golang.org/reqinfo", context do
       Kadabra.get(context[:conn], "/reqinfo")
@@ -235,14 +248,20 @@ defmodule KadabraTest do
     end
   end
 
-  test "GOAWAY frame closes connection", context do
-    sup_pid = find_child(context[:conn], :connection_sup)
-    conn_pid = find_child(sup_pid, :connection)
+  test "GOAWAY frame closes connection", _context do
+    pid =
+      @golang_uri
+      |> Kadabra.open()
+      |> elem(1)
+
+    ref = Process.monitor(pid)
+    conn_pid = find_child(pid, :connection)
 
     bin = 1 |> Frame.Goaway.new() |> Encodable.to_bin()
     send(conn_pid, {:ssl, nil, bin})
 
-    assert_receive {:closed, _pid}, 5_000
+    assert_receive {:closed, ^pid}, 5_000
+    assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
   end
 
   defp find_child(pid, name) do

@@ -88,6 +88,10 @@ defmodule Kadabra.Stream do
     :gen_statem.cast(pid, {:recv, frame})
   end
 
+  def call_recv(pid, frame) do
+    :gen_statem.call(pid, {:recv, frame})
+  end
+
   def cast_send(pid, frame) do
     :gen_statem.cast(pid, {:send, frame})
   end
@@ -143,26 +147,10 @@ defmodule Kadabra.Stream do
     {:keep_state, %{stream | flow: flow}}
   end
 
-  def recv(%PushPromise{header_block_fragment: fragment}, state, stream)
-      when state in [@idle] do
-    {:ok, headers} = Hpack.decode(stream.ref, fragment)
-    stream = %Stream{stream | headers: stream.headers ++ headers}
-
-    send(stream.connection, {:push_promise, Stream.Response.new(stream)})
-    {:next_state, @reserved_remote, stream}
-  end
-
   def recv(%RstStream{} = _frame, state, stream)
       when state in [@open, @hc_local, @hc_remote, @closed] do
     # IO.inspect(frame, label: "Got RST_STREAM")
     {:next_state, :closed, stream}
-  end
-
-  def recv(%Continuation{header_block_fragment: fragment}, _state, stream) do
-    {:ok, headers} = Hpack.decode(stream.decoder, fragment)
-    stream = %Stream{stream | headers: stream.headers ++ headers}
-
-    {:keep_state, stream}
   end
 
   def recv(frame, state, stream) do
@@ -173,6 +161,43 @@ defmodule Kadabra.Stream do
     """
     |> Logger.info()
 
+    {:keep_state, stream}
+  end
+
+  # Headers, PushPromise and Continuation frames must be calls
+
+  def recv(from, %Headers{end_stream: true} = frame, _state, stream) do
+    {:ok, headers} = Hpack.decode(stream.ref, frame.header_block_fragment)
+    :gen_statem.reply(from, :ok)
+
+    stream = %Stream{stream | headers: stream.headers ++ headers}
+    {:next_state, @hc_remote, stream}
+  end
+
+  def recv(from, %Headers{end_stream: false} = frame, _state, stream) do
+    {:ok, headers} = Hpack.decode(stream.ref, frame.header_block_fragment)
+    :gen_statem.reply(from, :ok)
+
+    stream = %Stream{stream | headers: stream.headers ++ headers}
+    {:keep_state, stream}
+  end
+
+  def recv(from, %PushPromise{} = frame, state, stream)
+      when state in [@idle] do
+    {:ok, headers} = Hpack.decode(stream.ref, frame.header_block_fragment)
+    stream = %Stream{stream | headers: stream.headers ++ headers}
+
+    :gen_statem.reply(from, :ok)
+
+    send(stream.connection, {:push_promise, Stream.Response.new(stream)})
+    {:next_state, @reserved_remote, stream}
+  end
+
+  def recv(from, %Continuation{} = frame, state, stream) do
+    {:ok, headers} = Hpack.decode(stream.decoder, frame.header_block_fragment)
+    :gen_statem.reply(from, :ok)
+
+    stream = %Stream{stream | headers: stream.headers ++ headers}
     {:keep_state, stream}
   end
 
@@ -220,8 +245,13 @@ defmodule Kadabra.Stream do
 
   # Calls
 
+  def handle_event({:call, from}, {:recv, frame}, state, stream) do
+    recv(from, frame, state, stream)
+  end
+
   def handle_event({:call, from}, {:send_headers, request}, _state, stream) do
     %{headers: headers, body: payload, on_response: on_resp} = request
+
     headers = add_headers(headers, stream)
 
     {:ok, encoded} = Hpack.encode(stream.ref, headers)

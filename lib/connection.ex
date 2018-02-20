@@ -10,6 +10,7 @@ defmodule Kadabra.Connection do
             ref: nil,
             scheme: :https,
             socket: nil,
+            supervisor: nil,
             uri: nil,
             queue: nil
 
@@ -81,7 +82,7 @@ defmodule Kadabra.Connection do
     case Socket.connect(uri, opts) do
       {:ok, socket} ->
         send_preface_and_settings(socket, opts[:settings])
-        state = initial_state(socket, uri, pid, ref, opts)
+        state = initial_state(socket, uri, pid, sup, ref, opts)
         {:consumer, state, subscribe_to: [ConnectionQueue.via_tuple(sup)]}
 
       {:error, error} ->
@@ -89,7 +90,7 @@ defmodule Kadabra.Connection do
     end
   end
 
-  defp initial_state(socket, uri, pid, ref, opts) do
+  defp initial_state(socket, uri, pid, sup, ref, opts) do
     settings = Keyword.get(opts, :settings, Connection.Settings.default())
 
     %__MODULE__{
@@ -99,10 +100,15 @@ defmodule Kadabra.Connection do
       scheme: Keyword.get(opts, :scheme, :https),
       opts: opts,
       socket: socket,
+      supervisor: sup,
       flow_control: %Connection.FlowControl{
         settings: settings
       }
     }
+  end
+
+  def close(pid) do
+    GenStage.call(pid, :close)
   end
 
   defp send_preface_and_settings(socket, settings) do
@@ -116,7 +122,7 @@ defmodule Kadabra.Connection do
   end
 
   def ping(pid) do
-    GenServer.cast(pid, {:send, :ping})
+    GenStage.cast(pid, {:send, :ping})
   end
 
   # handle_cast
@@ -142,6 +148,28 @@ defmodule Kadabra.Connection do
     {:manual, %{state | queue: from}}
   end
 
+  # handle_call
+
+  def handle_call(:close, _from, %Connection{} = state) do
+    %Connection{
+      client: pid,
+      flow_control: flow,
+      socket: socket,
+      supervisor: sup
+    } = state
+
+    bin = flow.stream_id |> Goaway.new() |> Encodable.to_bin()
+    :ssl.send(socket, bin)
+
+    send(pid, {:closed, sup})
+
+    Task.Supervisor.start_child(Kadabra.Tasks, fn ->
+      Kadabra.Supervisor.stop(state.supervisor)
+    end)
+
+    {:stop, :normal, :ok, state}
+  end
+
   # sendf
 
   @spec sendf(:goaway | :ping, t) :: {:noreply, [], t}
@@ -151,28 +179,8 @@ defmodule Kadabra.Connection do
     {:noreply, [], state}
   end
 
-  def sendf(:goaway, state) do
-    %Connection{socket: socket, flow_control: flow} = state
-    bin = flow.stream_id |> Goaway.new() |> Encodable.to_bin()
-    Socket.send(socket, bin)
-
-    close(state)
-
-    {:stop, :normal, state}
-  end
-
   def sendf(_else, state) do
     {:noreply, [], state}
-  end
-
-  def close(state) do
-    Tasks.run(state.on_close, {:closed, self()})
-    send(state.client, {:closed, self()})
-    Hpack.close(state.ref)
-
-    for stream <- state.flow_control.active_streams do
-      Stream.close(state.ref, stream)
-    end
   end
 
   # recv
@@ -236,10 +244,10 @@ defmodule Kadabra.Connection do
     {:noreply, [], state}
   end
 
-  def recv(%Goaway{} = goaway, %{client: pid} = state) do
-    log_goaway(goaway)
-    close(state)
-    send(pid, {:closed, self()})
+  def recv(%Goaway{} = frame, %{client: pid} = state) do
+    log_goaway(frame)
+    send(pid, {:closed, state.supervisor})
+    Task.start(fn -> Kadabra.Supervisor.stop(state.supervisor) end)
 
     {:stop, :normal, state}
   end
@@ -374,7 +382,7 @@ defmodule Kadabra.Connection do
   def process(%Headers{stream_id: stream_id} = frame, state) do
     state.ref
     |> Stream.via_tuple(stream_id)
-    |> Stream.cast_recv(frame)
+    |> Stream.call_recv(frame)
 
     state
   end
@@ -393,10 +401,10 @@ defmodule Kadabra.Connection do
 
   def process(%PushPromise{stream_id: stream_id} = frame, state) do
     {:ok, pid} = StreamSupervisor.start_stream(state, stream_id)
+    Stream.call_recv(pid, frame)
 
     flow = Connection.FlowControl.add_active(state.flow_control, stream_id)
 
-    Stream.cast_recv(pid, frame)
     %{state | flow_control: flow}
   end
 
@@ -407,7 +415,7 @@ defmodule Kadabra.Connection do
   end
 
   def process(%Goaway{} = frame, state) do
-    GenServer.cast(self(), {:recv, frame})
+    GenStage.cast(self(), {:recv, frame})
     state
   end
 
@@ -424,7 +432,7 @@ defmodule Kadabra.Connection do
 
   def process(%Continuation{stream_id: stream_id} = frame, state) do
     pid = Stream.via_tuple(state.ref, stream_id)
-    Stream.cast_recv(pid, frame)
+    Stream.call_recv(pid, frame)
     state
   end
 
@@ -449,7 +457,7 @@ defmodule Kadabra.Connection do
   def send_huge_window_update(socket) do
     bin =
       0
-      |> Frame.WindowUpdate.new(2_147_000_000)
+      |> Frame.WindowUpdate.new(2_000_000_000)
       |> Encodable.to_bin()
 
     Socket.send(socket, bin)
@@ -457,7 +465,9 @@ defmodule Kadabra.Connection do
 
   def handle_disconnect(state) do
     Logger.debug("Socket closed, informing client")
-    close(state)
-    {:noreply, [], %{state | socket: nil}}
+    send(state.client, {:closed, state.supervisor})
+    Task.start(fn -> Kadabra.Supervisor.stop(state.supervisor) end)
+
+    {:stop, :normal, state}
   end
 end
