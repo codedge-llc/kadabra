@@ -35,6 +35,18 @@ defmodule KadabraTest do
     end
   end
 
+  describe "close/1" do
+    test "sends close message and stops supervisor" do
+      uri = 'http2.golang.org'
+      {:ok, pid} = Kadabra.open(uri, :https)
+      ref = Process.monitor(pid)
+      Kadabra.close(pid)
+
+      assert_receive {:closed, ^pid}, 5_000
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
+    end
+  end
+
   describe "GET"  do
     @tag :golang
     test "https://http2.golang.org/reqinfo" do
@@ -67,7 +79,7 @@ defmodule KadabraTest do
           headers: _headers,
           body: _body,
           status: _status
-        }}, 15_000
+        }}, 30_000
       end
     end
 
@@ -197,19 +209,14 @@ defmodule KadabraTest do
     uri = 'http2.golang.org'
     {:ok, pid} = Kadabra.open(uri, :https)
 
-    {_, sup_pid, _, _} =
-      pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :connection_sup end)
-
     {_, conn_pid, _, _} =
-      sup_pid
+      pid
       |> Supervisor.which_children
       |> Enum.find(fn({name, _, _, _}) -> name == :connection end)
 
     bin = 1 |> Frame.Goaway.new |> Encodable.to_bin
     send(conn_pid, {:ssl, nil, bin})
 
-    assert_receive {:closed, _pid}, 5_000
+    assert_receive {:closed, ^pid}, 5_000
   end
 end

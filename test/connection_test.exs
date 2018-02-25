@@ -5,13 +5,8 @@ defmodule Kadabra.ConnectionTest do
     uri = 'http2.golang.org'
     {:ok, pid} = Kadabra.open(uri, :https)
 
-    {_, sup_pid, _, _} =
-      pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :connection_sup end)
-
     {_, conn_pid, _, _} =
-      sup_pid
+      pid
       |> Supervisor.which_children
       |> Enum.find(fn({name, _, _, _}) -> name == :connection end)
 
@@ -28,24 +23,21 @@ defmodule Kadabra.ConnectionTest do
     uri = 'http2.golang.org'
     {:ok, pid} = Kadabra.open(uri, :https)
 
+    ref = Process.monitor(pid)
+
     # Open two streams that send the time every second
     Kadabra.get(pid, "/clockstream")
     Kadabra.get(pid, "/clockstream")
 
     {_, stream_sup_pid, _, _} =
       pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :stream_sup end)
-
-    {_, conn_sup_pid, _, _} =
-      pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :connection_sup end)
+      |> Supervisor.which_children()
+      |> Enum.find(fn {name, _, _, _} -> name == :stream_sup end)
 
     {_, conn_pid, _, _} =
-      conn_sup_pid
-      |> Supervisor.which_children
-      |> Enum.find(fn({name, _, _, _}) -> name == :connection end)
+      pid
+      |> Supervisor.which_children()
+      |> Enum.find(fn {name, _, _, _} -> name == :connection end)
 
     # Wait to collect some data on the streams
     Process.sleep(1_500)
@@ -55,14 +47,7 @@ defmodule Kadabra.ConnectionTest do
     frame = Kadabra.Frame.Goaway.new(1)
     GenServer.cast(conn_pid, {:recv, frame})
 
-    # Give a moment to clean everything up
-    Process.sleep(500)
-
-    receive do
-      {:closed, _pid} ->
-        assert Supervisor.count_children(stream_sup_pid).active == 0
-    after
-      5_000 -> flunk "Connection did not close"
-    end
+    assert_receive {:closed, ^pid}, 5_000
+    assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
   end
 end
