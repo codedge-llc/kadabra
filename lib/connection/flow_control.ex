@@ -143,18 +143,21 @@ defmodule Kadabra.Connection.FlowControl do
   def process(%{queue: [{:send, headers, payload} | rest]} = flow, conn) do
 
     if can_send?(flow) do
-      {:ok, pid} = StreamSupervisor.start_stream(conn)
+      case StreamSupervisor.start_stream(conn) do
+        {:ok, pid} ->
+          size = byte_size(payload || <<>>)
+          :gen_statem.call(pid, {:send_headers, headers, payload})
 
-      size = byte_size(payload || <<>>)
-      :gen_statem.call(pid, {:send_headers, headers, payload})
+          flow_control = %{flow | queue: rest}
 
-      flow_control = %{flow | queue: rest}
-
-      flow_control
-      |> decrement_window(size)
-      |> add_active(flow.stream_id)
-      |> increment_active_stream_count()
-      |> increment_stream_id()
+          flow_control
+          |> decrement_window(size)
+          |> add_active(flow.stream_id)
+          |> increment_active_stream_count()
+          |> increment_stream_id()
+        {:error, {:already_started, _pid}} ->
+          raise "Already started Stream #{flow.stream_id}, Flow: #{inspect(flow)}"
+      end
     else
       flow
     end
