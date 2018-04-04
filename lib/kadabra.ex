@@ -10,7 +10,7 @@ defmodule Kadabra do
   ## Usage
 
   ```elixir
-  {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+  {:ok, pid} = Kadabra.open("https://http2.golang.org")
   Kadabra.get(pid, "/")
   receive do
     {:end_stream, %Kadabra.Stream.Response{} = stream} ->
@@ -35,7 +35,7 @@ defmodule Kadabra do
   ## Making Requests Manually
 
   ```elixir
-  {:ok, pid} = Kadabra.open('http2.golang.org', :https)
+  {:ok, pid} = Kadabra.open("https://http2.golang.org")
 
   path = "/ECHO" # Route echoes PUT body in uppercase
   body = "sample echo request"
@@ -71,14 +71,12 @@ defmodule Kadabra do
   @typedoc ~S"""
   Options for connections.
 
-  - `:port` - Override default port (80/443).
   - `:ssl` - Specify custom options for `:ssl.connect/3`
     when used with `:https` scheme.
   - `:tcp` - Specify custom options for `:gen_tcp.connect/3`
     when used with `:http` scheme.
   """
   @type conn_opts :: [
-          port: pos_integer,
           ssl: [...],
           tcp: [...]
         ]
@@ -116,24 +114,12 @@ defmodule Kadabra do
 
   def open(uri, opts) when is_binary(uri) do
     uri = URI.parse(uri)
-
-    case scheme_to_atom(uri.scheme) do
-      nil ->
-        {:error, :bad_scheme}
-
-      scheme ->
-        opts = Keyword.merge([scheme: scheme, port: uri.port], opts)
-        Supervisor.start_link(uri.host, self(), opts)
-    end
+    Supervisor.start_link(uri, self(), opts)
   end
 
   def open(uri, opts) when is_list(uri) do
     uri |> to_string() |> open(opts)
   end
-
-  defp scheme_to_atom("http"), do: :http
-  defp scheme_to_atom("https"), do: :https
-  defp scheme_to_atom(_), do: nil
 
   @doc ~S"""
   Closes an existing connection.
@@ -213,16 +199,16 @@ defmodule Kadabra do
   ## Examples
 
       iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
-      iex> Kadabra.get(pid, "/reqinfo")
+      iex> Kadabra.head(pid, "/reqinfo")
       :ok
       iex> response = receive do
       ...>   {:end_stream, response} -> response
       ...> end
-      iex> {response.id, response.status}
-      {1, 200}
+      iex> {response.id, response.status, response.body}
+      {1, 200, ""}
   """
   @spec get(pid, String.t(), Keyword.t()) :: no_return
-  def get(pid, path, opts \\ []) when is_binary(path) do
+  def get(pid, path, opts \\ []) do
     request(pid, [{:headers, headers("GET", path)} | opts])
   end
 

@@ -81,7 +81,7 @@ defmodule KadabraTest do
     end
   end
 
-  describe "GET"  do
+  describe "GET" do
     @tag :golang
     test "can take an options keyword list", context do
       headers = [

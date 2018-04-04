@@ -7,8 +7,6 @@ defmodule Kadabra.ConnectionTest do
 
     ref = Process.monitor(pid)
 
-    ref = Process.monitor(pid)
-
     # Open two streams that send the time every second
     Kadabra.get(pid, "/clockstream", on_response: & &1)
     Kadabra.get(pid, "/clockstream", on_response: & &1)

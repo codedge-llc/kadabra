@@ -9,19 +9,11 @@ defmodule Kadabra.Connection.Socket do
           | {:error, :not_implmenented}
           | {:error, :bad_scheme}
 
-  def default_port(:http), do: 80
-  def default_port(:https), do: 443
-  def default_port(_), do: 443
-
-  @spec connect(charlist, Keyword.t()) :: connection_result
-  def connect(uri, opts) when is_binary(uri) do
-    uri |> String.to_charlist() |> connect(opts)
-  end
-
+  @spec connect(URI.t(), Keyword.t()) :: connection_result
   def connect(uri, opts) do
-    case opts[:scheme] do
-      :http -> do_connect(uri, :http, opts)
-      :https -> do_connect(uri, :https, opts)
+    case uri.scheme do
+      "http" -> do_connect(uri, :http, opts)
+      "https" -> do_connect(uri, :https, opts)
       _ -> {:error, :bad_scheme}
     end
   end
@@ -32,7 +24,9 @@ defmodule Kadabra.Connection.Socket do
       |> Keyword.get(:tcp, [])
       |> options(:http)
 
-    :gen_tcp.connect(uri, opts[:port], tcp_opts)
+    uri.host
+    |> to_charlist()
+    |> :gen_tcp.connect(uri.port, tcp_opts)
   end
 
   defp do_connect(uri, :https, opts) do
@@ -43,7 +37,9 @@ defmodule Kadabra.Connection.Socket do
       |> Keyword.get(:ssl, [])
       |> options(:https)
 
-    :ssl.connect(uri, opts[:port], ssl_opts)
+    uri.host
+    |> to_charlist()
+    |> :ssl.connect(uri.port, ssl_opts)
   end
 
   @spec options(Keyword.t(), :http | :https) :: [...]

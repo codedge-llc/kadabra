@@ -4,11 +4,8 @@ defmodule Kadabra.Connection do
   defstruct buffer: "",
             client: nil,
             flow_control: nil,
-            on_ping: nil,
-            on_close: nil,
             opts: [],
             ref: nil,
-            scheme: :https,
             socket: nil,
             supervisor: nil,
             uri: nil,
@@ -27,8 +24,7 @@ defmodule Kadabra.Connection do
     Hpack,
     Http2,
     Stream,
-    StreamSupervisor,
-    Tasks
+    StreamSupervisor
   }
 
   alias Kadabra.Connection.Socket
@@ -49,10 +45,9 @@ defmodule Kadabra.Connection do
           client: pid,
           flow_control: term,
           opts: Keyword.t(),
-          ref: nil,
-          scheme: :https,
+          ref: reference,
           socket: sock,
-          uri: charlist | String.t()
+          uri: URI.t()
         }
 
   @type sock :: {:sslsocket, any, pid | {any, any}}
@@ -97,7 +92,6 @@ defmodule Kadabra.Connection do
       ref: ref,
       client: pid,
       uri: uri,
-      scheme: Keyword.get(opts, :scheme, :https),
       opts: opts,
       socket: socket,
       supervisor: sup,

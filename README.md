@@ -21,7 +21,7 @@ Add kadabra to your `mix.exs`:
 
 ## Usage
 ```elixir
-{:ok, pid} = Kadabra.open('http2.golang.org', :https)
+{:ok, pid} = Kadabra.open("https://http2.golang.org")
 Kadabra.get(pid, "/")
 receive do
   {:end_stream, %Kadabra.Stream.Response{} = stream} ->
@@ -40,7 +40,7 @@ end
 
 ## Making Requests Manually
 ```elixir
-{:ok, pid} = Kadabra.open('http2.golang.org', :https)
+{:ok, pid} = Kadabra.open("https://http2.golang.org")
 
 path = "/ECHO" # Route echoes PUT body in uppercase
 body = "sample echo request"

@@ -11,8 +11,7 @@ defmodule Kadabra.Stream do
             headers: [],
             body: "",
             on_push_promise: nil,
-            on_response: nil,
-            scheme: :https
+            on_response: nil
 
   require Logger
 
@@ -33,14 +32,13 @@ defmodule Kadabra.Stream do
   @type t :: %__MODULE__{
           id: pos_integer,
           ref: term,
-          uri: charlist,
+          uri: URI.t(),
           connection: pid,
           settings: pid,
           socket: pid,
           flow: Kadabra.Stream.FlowControl.t(),
           headers: [...],
-          body: binary,
-          scheme: :https
+          body: binary
         }
 
   # @data 0x0
@@ -65,7 +63,6 @@ defmodule Kadabra.Stream do
       id: stream_id,
       ref: conn.ref,
       uri: conn.uri,
-      scheme: conn.scheme,
       connection: self(),
       socket: conn.socket,
       flow: Stream.FlowControl.new(flow_opts)
@@ -267,12 +264,12 @@ defmodule Kadabra.Stream do
     {:next_state, @open, stream, []}
   end
 
-  def add_headers(headers, stream) do
+  def add_headers(headers, %{uri: uri}) do
     h =
       headers ++
         [
-          {":scheme", to_string(stream.scheme)},
-          {":authority", to_string(stream.uri)}
+          {":scheme", uri.scheme},
+          {":authority", uri.authority}
         ]
 
     # sorting headers to have pseudo headers first.
