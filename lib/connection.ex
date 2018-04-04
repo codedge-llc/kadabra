@@ -457,7 +457,7 @@ defmodule Kadabra.Connection do
 
   def handle_disconnect(state) do
     send(state.client, {:closed, state.supervisor})
-    Kadabra.Supervisor.stop(state.supervisor)
+    Task.start(fn -> Kadabra.Supervisor.stop(state.supervisor) end)
 
     {:stop, :normal, state}
   end
