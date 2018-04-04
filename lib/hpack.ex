@@ -3,7 +3,7 @@ defmodule Kadabra.Hpack do
 
   use GenServer
 
-  def start_link({ref, name}) do
+  def start_link(ref, name) do
     id = via_tuple(ref, name)
     GenServer.start_link(__MODULE__, :ok, name: id)
   end
@@ -13,7 +13,7 @@ defmodule Kadabra.Hpack do
   end
 
   def init(:ok) do
-    {:ok, :hpack.new_context}
+    {:ok, :hpack.new_context()}
   end
 
   def encode(ref, headers) do
@@ -34,7 +34,7 @@ defmodule Kadabra.Hpack do
   end
 
   def handle_call(:reset, _pid, _state) do
-    {:reply, :ok, :hpack.new_context}
+    {:reply, :ok, :hpack.new_context()}
   end
 
   def handle_call({:encode, headers}, _pid, state) do

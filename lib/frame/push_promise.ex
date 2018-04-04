@@ -9,10 +9,10 @@ defmodule Kadabra.Frame.PushPromise do
   alias Kadabra.Frame.Flags
 
   @type t :: %__MODULE__{
-    end_headers: boolean,
-    header_block_fragment: bitstring,
-    stream_id: non_neg_integer
-  }
+          end_headers: boolean,
+          header_block_fragment: bitstring,
+          stream_id: non_neg_integer
+        }
 
   @doc ~S"""
   Initializes a new `Frame.PushPromise` given a `Frame`.
@@ -24,7 +24,7 @@ defmodule Kadabra.Frame.PushPromise do
       %Kadabra.Frame.PushPromise{stream_id: 3, header_block_fragment: <<136>>,
       end_headers: true}
   """
-  @spec new(Frame.t) :: t
+  @spec new(Frame.t()) :: t
   def new(%Frame{payload: <<_::1, id::31, headers::bitstring>>, flags: f}) do
     %__MODULE__{
       stream_id: id,

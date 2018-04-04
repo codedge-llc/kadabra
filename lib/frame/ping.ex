@@ -7,9 +7,9 @@ defmodule Kadabra.Frame.Ping do
   alias Kadabra.Frame.Flags
 
   @type t :: %__MODULE__{
-    ack: boolean,
-    data: <<_::64>>
-  }
+          ack: boolean,
+          data: <<_::64>>
+        }
 
   @doc ~S"""
   Returns new unacked ping frame.
@@ -23,8 +23,8 @@ defmodule Kadabra.Frame.Ping do
   @spec new() :: t
   def new do
     %__MODULE__{
-      data: <<0, 0, 0, 0, 0, 0, 0, 0>>,
-      ack: false
+      ack: false,
+      data: <<0, 0, 0, 0, 0, 0, 0, 0>>
     }
   end
 
@@ -38,11 +38,11 @@ defmodule Kadabra.Frame.Ping do
       iex> Kadabra.Frame.Ping.new(frame)
       %Kadabra.Frame.Ping{data: <<0, 0, 0, 0, 0, 0, 0, 0>>, ack: true}
   """
-  @spec new(Frame.t) :: t
-  def new(%Frame{type: 0x6, payload: data, flags: flags}) do
+  @spec new(Frame.t()) :: t
+  def new(%Frame{type: 0x6, payload: <<data::64>>, flags: flags}) do
     %__MODULE__{
-      data: data,
-      ack: Flags.ack?(flags)
+      ack: Flags.ack?(flags),
+      data: <<data::64>>
     }
   end
 end
@@ -52,7 +52,7 @@ defimpl Kadabra.Encodable, for: Kadabra.Frame.Ping do
   alias Kadabra.Frame.Flags
 
   def to_bin(frame) do
-    ack = if frame.ack, do: Flags.ack, else: 0x0
+    ack = if frame.ack, do: Flags.ack(), else: 0x0
     Http2.build_frame(0x6, ack, 0x0, frame.data)
   end
 end

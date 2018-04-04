@@ -24,14 +24,14 @@ defmodule Kadabra.Stream.Response do
   alias Kadabra.Stream
 
   @type t :: %__MODULE__{
-    id: non_neg_integer,
-    headers: Keyword.t,
-    body: String.t,
-    status: integer
-  }
+          id: non_neg_integer,
+          headers: Keyword.t(),
+          body: String.t(),
+          status: integer
+        }
 
   @doc false
-  @spec new(Stream.t) :: t
+  @spec new(Stream.t()) :: t
   def new(%Stream{id: id, headers: headers, body: body}) do
     %__MODULE__{
       id: id,
@@ -43,7 +43,7 @@ defmodule Kadabra.Stream.Response do
 
   defp get_status(headers) do
     case get_header(headers, ":status") do
-      {":status", status} -> status |> String.to_integer
+      {":status", status} -> status |> String.to_integer()
       nil -> nil
     end
   end
@@ -57,10 +57,10 @@ defmodule Kadabra.Stream.Response do
       iex> Kadabra.Stream.Response.get_header(stream.headers, ":status")
       {":status", "200"}
   """
-  @spec get_header([...], String.t) :: {String.t, term} | nil
+  @spec get_header([...], String.t()) :: {String.t(), term} | nil
   def get_header(headers, header) do
     headers
-    |> Enum.filter(& &1 != :undefined)
-    |> Enum.find(fn({key, _val}) -> key == header end)
+    |> Enum.filter(&(&1 != :undefined))
+    |> Enum.find(fn {key, _val} -> key == header end)
   end
 end

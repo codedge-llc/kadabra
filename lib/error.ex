@@ -64,7 +64,7 @@ defmodule Kadabra.Error do
       iex> Kadabra.Error.string(0xfff)
       0xfff
   """
-  @spec string(integer) :: String.t | integer
+  @spec string(integer) :: String.t() | integer
   def string(0x0), do: "NO_ERROR"
   def string(0x1), do: "PROTOCOL_ERROR"
   def string(0x2), do: "INTERNAL_ERROR"
@@ -75,10 +75,10 @@ defmodule Kadabra.Error do
   def string(0x7), do: "REFUSED_STREAM"
   def string(0x8), do: "CANCEL"
   def string(0x9), do: "COMPRESSION_ERROR"
-  def string(0xa), do: "CONNECT_ERROR"
-  def string(0xb), do: "ENHANCE_YOUR_CALM"
-  def string(0xc), do: "INADEQUATE_SECURITY"
-  def string(0xd), do: "HTTP_1_1_REQUIRED"
+  def string(0xA), do: "CONNECT_ERROR"
+  def string(0xB), do: "ENHANCE_YOUR_CALM"
+  def string(0xC), do: "INADEQUATE_SECURITY"
+  def string(0xD), do: "HTTP_1_1_REQUIRED"
   def string(error), do: error
 
   @doc ~S"""
@@ -101,9 +101,9 @@ defmodule Kadabra.Error do
   def code("REFUSED_STREAM"), do: 0x7
   def code("CANCEL"), do: 0x8
   def code("COMPRESSION_ERROR"), do: 0x9
-  def code("CONNECT_ERROR"), do: 0xa
-  def code("ENHANCE_YOUR_CALM"), do: 0xb
-  def code("INADEQUATE_SECURITY"), do: 0xc
-  def code("HTTP_1_1_REQUIRED"), do: 0xd
+  def code("CONNECT_ERROR"), do: 0xA
+  def code("ENHANCE_YOUR_CALM"), do: 0xB
+  def code("INADEQUATE_SECURITY"), do: 0xC
+  def code("HTTP_1_1_REQUIRED"), do: 0xD
   def code(error), do: error
 end

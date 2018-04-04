@@ -6,17 +6,18 @@ defmodule Kadabra.Frame.WindowUpdate do
   alias Kadabra.Frame
 
   @type t :: %__MODULE__{
-    stream_id: non_neg_integer,
-    window_size_increment: non_neg_integer
-  }
+          stream_id: non_neg_integer,
+          window_size_increment: non_neg_integer
+        }
 
-  @spec new(Frame.t | binary) :: t
+  @spec new(Frame.t() | binary) :: t
   def new(%Frame{payload: <<inc::32>>, stream_id: stream_id}) do
     %__MODULE__{
       window_size_increment: inc,
       stream_id: stream_id
     }
   end
+
   def new(bin) do
     new(0x0, bin)
   end
@@ -28,6 +29,7 @@ defmodule Kadabra.Frame.WindowUpdate do
       window_size_increment: increment
     }
   end
+
   def new(stream_id, bin) when is_binary(bin) do
     new(stream_id, byte_size(bin))
   end
