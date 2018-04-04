@@ -238,10 +238,8 @@ defmodule Kadabra.Connection do
     {:noreply, [], state}
   end
 
-  def recv(%Goaway{} = frame, %{client: pid} = state) do
+  def recv(%Goaway{} = frame, state) do
     log_goaway(frame)
-    send(pid, {:closed, state.supervisor})
-    Task.start(fn -> Kadabra.Supervisor.stop(state.supervisor) end)
 
     {:stop, :normal, state}
   end
@@ -458,9 +456,8 @@ defmodule Kadabra.Connection do
   end
 
   def handle_disconnect(state) do
-    Logger.debug("Socket closed, informing client")
     send(state.client, {:closed, state.supervisor})
-    Task.start(fn -> Kadabra.Supervisor.stop(state.supervisor) end)
+    Kadabra.Supervisor.stop(state.supervisor)
 
     {:stop, :normal, state}
   end

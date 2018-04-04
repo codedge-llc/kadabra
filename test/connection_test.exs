@@ -1,7 +1,7 @@
 defmodule Kadabra.ConnectionTest do
   use ExUnit.Case
 
-  test "closes active streams on recv GOAWAY" do
+  test "closes active streams on socket close" do
     uri = 'https://http2.golang.org'
     {:ok, pid} = Kadabra.open(uri)
 
@@ -26,8 +26,9 @@ defmodule Kadabra.ConnectionTest do
 
     assert Supervisor.count_children(stream_sup_pid).active == 2
 
-    frame = Kadabra.Frame.Goaway.new(1)
-    GenServer.cast(conn_pid, {:recv, frame})
+    # frame = Kadabra.Frame.Goaway.new(1)
+    # GenServer.cast(conn_pid, {:recv, frame})
+    send(conn_pid, {:ssl_closed, nil})
 
     assert_receive {:closed, ^pid}, 5_000
     assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000

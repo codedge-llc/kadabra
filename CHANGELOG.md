@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.0
+- Support for `http` URIs
+- Requests are now buffered with GenStage
+- Added `Kadabra.head/2` and `Kadabra.delete/2`
+- `Kadabra.open/3` replaced with `Kadabra.open/2`.
+  - Scheme, host and port are now automatically parsed from the URI string.
+    See the README for examples.
+  - Socket options passed as `:tcp`/`:ssl`, respectively
+- Removed `:reconnect` functionality
+
 ## v0.3.8
 - Fixed: Streams properly killed if hpack table crashes
 - Removed unused `Scribe` dependency
