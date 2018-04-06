@@ -6,26 +6,32 @@ defmodule Kadabra.StreamTest do
 
   describe "recv/3" do
     test "keeps state on unknown stream" do
-      stream = Stream.new(%Connection{}, %Connection.Settings{}, 1)
+      stream = Stream.new(%Connection.Settings{}, 1)
 
       # Individual streams shouldn't get pings
       ping = Frame.Ping.new()
-      assert {:keep_state, ^stream} = Stream.recv(ping, :idle, stream)
+      assert stream == Stream.recv(stream, ping, %Connection{})
     end
 
     test "closes stream on RST_STREAM" do
-      stream = Stream.new(%Connection{}, %Connection.Settings{}, 1)
+      stream =
+        %Connection.Settings{}
+        |> Stream.new(1)
+        |> Map.put(:state, :open)
 
       rst = Frame.RstStream.new(1)
-      assert {:next_state, :closed, ^stream} = Stream.recv(rst, :open, stream)
+      assert Stream.recv(stream, rst).state == :closed
     end
 
     test "closes stream on DATA with END_STREAM in hc_local state" do
-      stream = Stream.new(%Connection{}, %Connection.Settings{}, 1)
+      stream =
+        %Connection.Settings{}
+        |> Stream.new(1)
+        |> Map.put(:state, :half_closed_local)
+
       data = %Frame.Data{stream_id: 1, data: "test", end_stream: true}
 
-      assert {:next_state, :closed, _stream} =
-               Stream.recv(data, :half_closed_local, stream)
+      assert Stream.recv(stream, data).state == :closed
     end
   end
 end

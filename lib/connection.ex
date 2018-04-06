@@ -8,6 +8,7 @@ defmodule Kadabra.Connection do
             ref: nil,
             socket: nil,
             supervisor: nil,
+            streams: %{},
             uri: nil,
             queue: nil
 
@@ -39,6 +40,8 @@ defmodule Kadabra.Connection do
     RstStream,
     WindowUpdate
   }
+
+  alias Kadabra.Stream.Response
 
   @type t :: %__MODULE__{
           buffer: binary,
@@ -342,6 +345,7 @@ defmodule Kadabra.Connection do
   def parse_bin(socket, bin, state) do
     case FrameParser.parse(bin) do
       {:ok, frame, rest} ->
+        # IO.inspect(frame, label: "recv")
         state = process(frame, state)
         parse_bin(socket, rest, state)
 
@@ -364,19 +368,25 @@ defmodule Kadabra.Connection do
   def process(%Data{stream_id: stream_id} = frame, state) do
     send_window_update(state.socket, frame)
 
-    state.ref
-    |> Stream.via_tuple(stream_id)
-    |> Stream.cast_recv(frame)
+    stream =
+      state
+      |> get_stream(stream_id)
+      |> Stream.recv(frame)
 
     state
+    |> put_stream(stream)
+    |> process_stream_close(stream)
   end
 
   def process(%Headers{stream_id: stream_id} = frame, state) do
-    state.ref
-    |> Stream.via_tuple(stream_id)
-    |> Stream.call_recv(frame)
+    stream =
+      state
+      |> get_stream(stream_id)
+      |> Stream.recv(frame, state)
 
     state
+    |> put_stream(stream)
+    |> process_stream_close(stream)
   end
 
   def process(%RstStream{} = frame, state) do
@@ -392,12 +402,17 @@ defmodule Kadabra.Connection do
   end
 
   def process(%PushPromise{stream_id: stream_id} = frame, state) do
-    {:ok, pid} = StreamSupervisor.start_stream(state, stream_id)
-    Stream.call_recv(pid, frame)
+    stream =
+      state
+      |> get_stream(stream_id)
+      |> Stream.recv(frame, state)
 
     flow = Connection.FlowControl.add_active(state.flow_control, stream_id)
 
-    %{state | flow_control: flow}
+    state
+    |> put_stream(stream)
+    |> process_stream_close(stream)
+    |> Map.put(:flow_control, flow)
   end
 
   def process(%Ping{} = frame, state) do
@@ -417,9 +432,12 @@ defmodule Kadabra.Connection do
   end
 
   def process(%WindowUpdate{stream_id: stream_id} = frame, state) do
-    pid = Stream.via_tuple(state.ref, stream_id)
-    Stream.cast_recv(pid, frame)
-    state
+    stream =
+      state
+      |> get_stream(stream_id)
+      |> Stream.recv(frame, state)
+
+    put_stream(state, stream)
   end
 
   def process(%Continuation{stream_id: stream_id} = frame, state) do
@@ -429,6 +447,37 @@ defmodule Kadabra.Connection do
   end
 
   def process(_error, state), do: state
+
+  def process_stream_close(conn, %{state: :reserved_remote} = stream) do
+    send(conn.client, {:push_promise, Stream.Response.new(stream)})
+    conn
+  end
+
+  def process_stream_close(conn, %{state: :half_closed_remote} = stream) do
+    bin = stream.id |> RstStream.new() |> Encodable.to_bin()
+    Socket.send(conn.socket, bin)
+    process_stream_close(conn, %{stream | state: :closed})
+  end
+
+  def process_stream_close(conn, %{state: :closed} = stream) do
+    response = Response.new(stream)
+    %{client: pid, flow_control: flow} = conn
+    send(pid, {:end_stream, response})
+
+    flow =
+      flow
+      |> Connection.FlowControl.decrement_active_stream_count()
+      |> Connection.FlowControl.remove_active(response.id)
+      |> Connection.FlowControl.process(conn)
+
+    GenStage.ask(conn.queue, 1)
+
+    %{conn | flow_control: flow}
+  end
+
+  def process_stream_close(conn, _stream) do
+    conn
+  end
 
   def send_window_update(_socket, %Data{data: nil}), do: :ok
 
@@ -460,5 +509,19 @@ defmodule Kadabra.Connection do
     Task.start(fn -> Kadabra.Supervisor.stop(state.supervisor) end)
 
     {:stop, :normal, state}
+  end
+
+  def get_stream(conn, stream_id) do
+    Map.get(
+      conn.flow_control.streams,
+      stream_id,
+      Kadabra.Stream.new(conn.flow_control.settings, stream_id)
+    )
+  end
+
+  def put_stream(conn, stream) do
+    streams = Map.put(conn.flow_control.streams, stream.id, stream)
+    flow = Map.put(conn.flow_control, :streams, streams)
+    %{conn | flow_control: flow}
   end
 end

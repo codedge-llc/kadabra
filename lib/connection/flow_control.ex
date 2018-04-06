@@ -5,6 +5,7 @@ defmodule Kadabra.Connection.FlowControl do
             stream_id: 1,
             active_stream_count: 0,
             active_streams: MapSet.new(),
+            streams: %{},
             window: 65_535,
             settings: %Kadabra.Connection.Settings{}
 
@@ -143,13 +144,14 @@ defmodule Kadabra.Connection.FlowControl do
   def process(%{queue: queue} = flow, conn) do
     with {{:value, request}, queue} <- :queue.out(queue),
          {:can_send, true} <- {:can_send, can_send?(flow)} do
-      {:ok, pid} = StreamSupervisor.start_stream(conn)
-
+      stream = get_stream(flow, flow.stream_id)
       size = byte_size(request.body || <<>>)
-      :gen_statem.call(pid, {:send_headers, request})
+
+      stream = Kadabra.Stream.send_frame(stream, request, conn)
 
       flow
       |> Map.put(:queue, queue)
+      |> put_stream(stream)
       |> decrement_window(size)
       |> add_active(flow.stream_id)
       |> increment_active_stream_count()
@@ -187,5 +189,18 @@ defmodule Kadabra.Connection.FlowControl do
   @spec can_send?(t) :: boolean
   def can_send?(%{active_stream_count: count, settings: s, window: bytes}) do
     count < s.max_concurrent_streams and bytes > 0
+  end
+
+  def get_stream(flow, stream_id) do
+    Map.get(
+      flow.streams,
+      stream_id,
+      Kadabra.Stream.new(flow.settings, stream_id)
+    )
+  end
+
+  def put_stream(flow, stream) do
+    streams = Map.put(flow.streams, stream.id, stream)
+    %{flow | streams: streams}
   end
 end
