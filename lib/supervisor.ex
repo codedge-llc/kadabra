@@ -4,7 +4,7 @@ defmodule Kadabra.Supervisor do
   use Supervisor
   import Supervisor.Spec
 
-  alias Kadabra.{Connection, ConnectionQueue, Hpack, StreamSupervisor}
+  alias Kadabra.{Connection, ConnectionQueue, Hpack}
 
   def start_link(uri, pid, opts) do
     ref = :erlang.make_ref()
@@ -21,7 +21,6 @@ defmodule Kadabra.Supervisor do
 
   def init({uri, pid, ref, opts}) do
     children = [
-      supervisor(StreamSupervisor, [ref], id: :stream_supervisor),
       worker(Hpack, [ref, :encoder], id: :encoder),
       worker(Hpack, [ref, :decoder], id: :decoder),
       worker(ConnectionQueue, [self()], id: :connection_queue),

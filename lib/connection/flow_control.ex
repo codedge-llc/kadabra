@@ -9,7 +9,7 @@ defmodule Kadabra.Connection.FlowControl do
             window: 65_535,
             settings: %Kadabra.Connection.Settings{}
 
-  alias Kadabra.{Connection, StreamSupervisor}
+  alias Kadabra.{Connection}
 
   @type t :: %__MODULE__{
           queue: :queue.queue(),
@@ -201,6 +201,11 @@ defmodule Kadabra.Connection.FlowControl do
 
   def put_stream(flow, stream) do
     streams = Map.put(flow.streams, stream.id, stream)
+    %{flow | streams: streams}
+  end
+
+  def delete_stream(flow, stream_id) do
+    streams = Map.delete(flow.streams, stream_id)
     %{flow | streams: streams}
   end
 end

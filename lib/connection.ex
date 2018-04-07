@@ -271,10 +271,11 @@ defmodule Kadabra.Connection do
     new_window = settings.initial_window_size
     window_diff = new_window - old_window
 
-    for stream_id <- flow.active_streams do
-      pid = Stream.via_tuple(ref, stream_id)
-      Stream.cast_recv(pid, {:settings_change, window_diff, max_frame_size})
-    end
+    # TODO: Update this
+    # for stream_id <- flow.active_streams do
+    #   pid = Stream.via_tuple(ref, stream_id)
+    #   Stream.cast_recv(pid, {:settings_change, window_diff, max_frame_size})
+    # end
   end
 
   defp do_send_headers(requests, state) when is_list(requests) do
@@ -390,9 +391,14 @@ defmodule Kadabra.Connection do
   end
 
   def process(%RstStream{} = frame, state) do
-    pid = Stream.via_tuple(state.ref, frame.stream_id)
-    Stream.cast_recv(pid, frame)
+    stream =
+      state
+      |> get_stream(frame.stream_id)
+      |> Stream.recv(frame, state)
+
     state
+    |> put_stream(stream)
+    |> process_stream_close(stream)
   end
 
   def process(%Frame.Settings{} = frame, state) do
@@ -427,7 +433,7 @@ defmodule Kadabra.Connection do
   end
 
   def process(%WindowUpdate{stream_id: 0} = frame, state) do
-    Stream.cast_recv(self(), frame)
+    GenStage.cast(self(), {:recv, frame})
     state
   end
 
@@ -441,9 +447,12 @@ defmodule Kadabra.Connection do
   end
 
   def process(%Continuation{stream_id: stream_id} = frame, state) do
-    pid = Stream.via_tuple(state.ref, stream_id)
-    Stream.call_recv(pid, frame)
-    state
+    stream =
+      state
+      |> get_stream(stream_id)
+      |> Stream.recv(frame, state)
+
+    put_stream(state, stream)
   end
 
   def process(_error, state), do: state
@@ -469,6 +478,7 @@ defmodule Kadabra.Connection do
       flow
       |> Connection.FlowControl.decrement_active_stream_count()
       |> Connection.FlowControl.remove_active(response.id)
+      |> Connection.FlowControl.delete_stream(response.id)
       |> Connection.FlowControl.process(conn)
 
     GenStage.ask(conn.queue, 1)
