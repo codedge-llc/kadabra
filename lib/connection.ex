@@ -463,6 +463,7 @@ defmodule Kadabra.Connection do
     response = Response.new(stream)
     %{client: pid, flow_control: flow} = conn
     send(pid, {:end_stream, response})
+    Kadabra.Tasks.run(stream.on_response, response)
 
     flow =
       flow
