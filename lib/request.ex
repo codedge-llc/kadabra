@@ -7,8 +7,6 @@ defmodule Kadabra.Request do
   """
   defstruct headers: [], body: nil, on_response: nil
 
-  alias Kadabra.Stream.Response
-
   @type t :: %__MODULE__{
           headers: [],
           body: binary,

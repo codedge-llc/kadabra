@@ -8,7 +8,7 @@ defmodule Kadabra.Connection.FlowControl do
             window: 65_535,
             settings: %Kadabra.Connection.Settings{}
 
-  alias Kadabra.{Connection, StreamSupervisor}
+  alias Kadabra.{Config, Connection, StreamSupervisor}
 
   @type t :: %__MODULE__{
           queue: :queue.queue(),
@@ -139,21 +139,26 @@ defmodule Kadabra.Connection.FlowControl do
     %{flow_control | queue: queue}
   end
 
-  @spec process(t, Connection.t()) :: t
-  def process(%{queue: queue} = flow, conn) do
+  @spec process(t, Config.t()) :: t
+  def process(%{queue: queue} = flow, config) do
     with {{:value, request}, queue} <- :queue.out(queue),
          {:can_send, true} <- {:can_send, can_send?(flow)} do
-      {:ok, pid} = StreamSupervisor.start_stream(conn)
+      case StreamSupervisor.start_stream(config, flow) do
+        {:ok, pid} ->
+          size = byte_size(request.body || <<>>)
+          :gen_statem.call(pid, {:send_headers, request})
 
-      size = byte_size(request.body || <<>>)
-      :gen_statem.call(pid, {:send_headers, request})
+          flow
+          |> Map.put(:queue, queue)
+          |> decrement_window(size)
+          |> add_active(flow.stream_id)
+          |> increment_active_stream_count()
+          |> increment_stream_id()
 
-      flow
-      |> Map.put(:queue, queue)
-      |> decrement_window(size)
-      |> add_active(flow.stream_id)
-      |> increment_active_stream_count()
-      |> increment_stream_id()
+        other ->
+          raise "something happened #{inspect(other)}"
+          flow
+      end
     else
       {:empty, _queue} -> flow
       {:can_send, false} -> flow

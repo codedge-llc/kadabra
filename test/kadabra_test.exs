@@ -33,7 +33,7 @@ defmodule KadabraTest do
         |> Connection.via_tuple()
         |> :sys.get_state()
 
-      assert consumer.state.opts[:port] == 443
+      assert consumer.state.config.opts[:port] == 443
       Kadabra.close(pid)
     end
   end

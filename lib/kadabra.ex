@@ -180,16 +180,16 @@ defmodule Kadabra do
       {1, 200, "SAMPLE ECHO REQUEST"}
   """
   @spec request(pid, Request.t() | [Request.t()] | request_opts) :: no_return
-  def request(pid, %Kadabra.Request{} = request) do
+  def request(pid, %Request{} = request) do
     ConnectionQueue.queue_request(pid, request)
   end
 
-  def request(pid, [%Kadabra.Request{} | _rest] = requests) do
+  def request(pid, [%Request{} | _rest] = requests) do
     ConnectionQueue.queue_request(pid, requests)
   end
 
   def request(pid, opts) when is_list(opts) do
-    request = Kadabra.Request.new(opts)
+    request = Request.new(opts)
     ConnectionQueue.queue_request(pid, request)
   end
 

@@ -19,8 +19,8 @@ defmodule Kadabra.StreamSupervisor do
     [id: id, restart: :transient]
   end
 
-  def start_stream(%{flow_control: flow, ref: ref} = conn, stream_id \\ nil) do
-    stream = Stream.new(conn, flow.settings, stream_id || flow.stream_id)
+  def start_stream(%{ref: ref} = config, flow, stream_id \\ nil) do
+    stream = Stream.new(config, flow.settings, stream_id || flow.stream_id)
     Supervisor.start_child(via_tuple(ref), [stream])
   end
 
