@@ -36,12 +36,12 @@ defmodule Kadabra.Frame.WindowUpdate do
 end
 
 defimpl Kadabra.Encodable, for: Kadabra.Frame.WindowUpdate do
-  alias Kadabra.Http2
+  alias Kadabra.Frame
 
   @window_update 0x8
 
   def to_bin(frame) do
     size = <<frame.window_size_increment::32>>
-    Http2.build_frame(@window_update, 0x0, frame.stream_id, size)
+    Frame.binary_frame(@window_update, 0x0, frame.stream_id, size)
   end
 end

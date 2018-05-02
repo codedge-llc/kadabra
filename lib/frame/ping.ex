@@ -48,11 +48,11 @@ defmodule Kadabra.Frame.Ping do
 end
 
 defimpl Kadabra.Encodable, for: Kadabra.Frame.Ping do
-  alias Kadabra.Http2
+  alias Kadabra.Frame
   alias Kadabra.Frame.Flags
 
   def to_bin(frame) do
     ack = if frame.ack, do: Flags.ack(), else: 0x0
-    Http2.build_frame(0x6, ack, 0x0, frame.data)
+    Frame.binary_frame(0x6, ack, 0x0, frame.data)
   end
 end

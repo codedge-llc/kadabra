@@ -52,7 +52,7 @@ defmodule Kadabra.Frame.Settings do
 end
 
 defimpl Kadabra.Encodable, for: Kadabra.Frame.Settings do
-  alias Kadabra.{Encodable, Http2}
+  alias Kadabra.{Encodable, Frame}
 
   @settings 0x4
 
@@ -61,11 +61,11 @@ defimpl Kadabra.Encodable, for: Kadabra.Frame.Settings do
 
     case frame.settings do
       nil ->
-        Http2.build_frame(@settings, ack, 0x0, <<>>)
+        Frame.binary_frame(@settings, ack, 0x0, <<>>)
 
       settings ->
         p = settings |> Encodable.to_bin()
-        Http2.build_frame(@settings, ack, 0x0, p)
+        Frame.binary_frame(@settings, ack, 0x0, p)
     end
   end
 end

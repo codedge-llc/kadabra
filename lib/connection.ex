@@ -22,7 +22,6 @@ defmodule Kadabra.Connection do
     Frame,
     FrameParser,
     Hpack,
-    Http2,
     Stream,
     StreamSupervisor
   }
@@ -106,7 +105,7 @@ defmodule Kadabra.Connection do
   end
 
   defp send_preface_and_settings(socket, settings) do
-    Socket.send(socket, Http2.connection_preface())
+    Socket.send(socket, Frame.connection_preface())
 
     bin =
       %Frame.Settings{settings: settings || Connection.Settings.default()}

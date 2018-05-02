@@ -15,7 +15,7 @@ defmodule Kadabra.Stream do
 
   require Logger
 
-  alias Kadabra.{Connection, Encodable, Hpack, Http2, Stream}
+  alias Kadabra.{Connection, Encodable, Frame, Hpack, Stream}
   alias Kadabra.Connection.{Settings, Socket}
 
   alias Kadabra.Frame.{
@@ -243,7 +243,7 @@ defmodule Kadabra.Stream do
     headers_payload = :erlang.iolist_to_binary(encoded)
 
     flags = if payload, do: 0x4, else: 0x5
-    h = Http2.build_frame(@headers, flags, stream.id, headers_payload)
+    h = Frame.binary_frame(@headers, flags, stream.id, headers_payload)
     Socket.send(stream.socket, h)
     # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
 

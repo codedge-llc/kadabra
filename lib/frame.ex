@@ -11,6 +11,9 @@ defmodule Kadabra.Frame do
           payload: bitstring
         }
 
+  @spec connection_preface() :: String.t()
+  def connection_preface, do: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+
   @spec new(binary) :: {:ok, t, binary} | {:error, binary}
   def new(<<p_size::24, type::8, f::8, 0::1, s_id::31, p::bitstring>> = bin) do
     size = p_size * 8
@@ -42,5 +45,12 @@ defmodule Kadabra.Frame do
       bin ->
         {:error, <<bin::bitstring>>}
     end
+  end
+
+  @spec binary_frame(integer, integer, integer, binary) :: binary
+  def binary_frame(frame_type, flags, stream_id, payload) do
+    size = byte_size(payload)
+    header = <<size::24, frame_type::8, flags::8, 0::1, stream_id::31>>
+    <<header::bitstring, payload::bitstring>>
   end
 end

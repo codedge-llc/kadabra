@@ -38,11 +38,11 @@ defmodule Kadabra.Frame.RstStream do
 end
 
 defimpl Kadabra.Encodable, for: Kadabra.Frame.RstStream do
-  alias Kadabra.Http2
+  alias Kadabra.Frame
 
   @rst_stream 0x3
 
   def to_bin(frame) do
-    Http2.build_frame(@rst_stream, 0x0, frame.stream_id, frame.error_code)
+    Frame.binary_frame(@rst_stream, 0x0, frame.stream_id, frame.error_code)
   end
 end

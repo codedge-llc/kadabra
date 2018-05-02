@@ -23,12 +23,12 @@ defmodule Kadabra.Frame.Data do
 end
 
 defimpl Kadabra.Encodable, for: Kadabra.Frame.Data do
-  alias Kadabra.Http2
+  alias Kadabra.Frame
 
   @data 0x0
 
   def to_bin(frame) do
     end_stream = if frame.end_stream, do: 0x1, else: 0x0
-    Http2.build_frame(@data, end_stream, frame.stream_id, frame.data)
+    Frame.binary_frame(@data, end_stream, frame.stream_id, frame.data)
   end
 end
