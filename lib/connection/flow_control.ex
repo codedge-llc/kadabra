@@ -1,11 +1,13 @@
 defmodule Kadabra.Connection.FlowControl do
   @moduledoc false
 
+  @default_window_size 65_535
+
   defstruct queue: :queue.new(),
             stream_id: 1,
             active_stream_count: 0,
             active_streams: MapSet.new(),
-            window: 65_535,
+            window: @default_window_size,
             settings: %Kadabra.Connection.Settings{}
 
   alias Kadabra.{Config, Connection, StreamSupervisor}

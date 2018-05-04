@@ -51,6 +51,7 @@ defmodule Kadabra.Stream do
   def new(%Config{} = config, %Settings{} = settings, stream_id) do
     flow_opts = [
       stream_id: stream_id,
+      socket: config.socket,
       window: settings.initial_window_size,
       max_frame_size: settings.max_frame_size
     ]
@@ -123,7 +124,7 @@ defmodule Kadabra.Stream do
     flow =
       stream.flow
       |> Stream.FlowControl.increment_window(inc)
-      |> Stream.FlowControl.process(stream.config.socket)
+      |> Stream.FlowControl.process()
 
     {:keep_state, %{stream | flow: flow}}
   end
@@ -180,8 +181,9 @@ defmodule Kadabra.Stream do
     {:next_state, @reserved_remote, stream}
   end
 
-  def recv(from, %Continuation{} = frame, _state, stream) do
-    {:ok, headers} = Hpack.decode(stream.decoder, frame.header_block_fragment)
+  def recv(from, %Continuation{} = frame, _state, %{config: config} = stream) do
+    {:ok, headers} = Hpack.decode(config.ref, frame.header_block_fragment)
+
     :gen_statem.reply(from, :ok)
 
     stream = %Stream{stream | headers: stream.headers ++ headers}
@@ -257,7 +259,7 @@ defmodule Kadabra.Stream do
       if payload do
         stream.flow
         |> Stream.FlowControl.add(payload)
-        |> Stream.FlowControl.process(stream.config.socket)
+        |> Stream.FlowControl.process()
       else
         stream.flow
       end
