@@ -13,8 +13,8 @@ defmodule Kadabra.Stream do
 
   require Logger
 
-  alias Kadabra.{Config, Encodable, Frame, Hpack, Stream, Tasks}
-  alias Kadabra.Connection.{Settings, Socket}
+  alias Kadabra.{Config, Encodable, Frame, Hpack, Socket, Stream, Tasks}
+  alias Kadabra.Connection.Settings
 
   alias Kadabra.Frame.{
     Continuation,

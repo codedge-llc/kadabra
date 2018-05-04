@@ -255,9 +255,9 @@ defmodule KadabraTest do
       |> elem(1)
 
     ref = Process.monitor(pid)
-    conn_pid = find_child(pid, :connection)
+    socket = find_child(pid, :socket)
 
-    send(conn_pid, {:ssl_closed, nil})
+    send(socket, {:ssl_closed, nil})
 
     assert_receive {:closed, ^pid}, 5_000
     assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000

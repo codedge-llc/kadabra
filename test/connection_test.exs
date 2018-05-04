@@ -16,10 +16,10 @@ defmodule Kadabra.ConnectionTest do
       |> Supervisor.which_children()
       |> Enum.find(fn {name, _, _, _} -> name == :stream_supervisor end)
 
-    {_, conn_pid, _, _} =
+    {_, socket_pid, _, _} =
       pid
       |> Supervisor.which_children()
-      |> Enum.find(fn {name, _, _, _} -> name == :connection end)
+      |> Enum.find(fn {name, _, _, _} -> name == :socket end)
 
     # Wait to collect some data on the streams
     Process.sleep(500)
@@ -28,7 +28,7 @@ defmodule Kadabra.ConnectionTest do
 
     # frame = Kadabra.Frame.Goaway.new(1)
     # GenServer.cast(conn_pid, {:recv, frame})
-    send(conn_pid, {:ssl_closed, nil})
+    send(socket_pid, {:ssl_closed, nil})
 
     assert_receive {:closed, ^pid}, 5_000
     assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000

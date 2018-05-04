@@ -9,8 +9,7 @@ defmodule Kadabra.Stream.FlowControl do
             socket: nil,
             stream_id: nil
 
-  alias Kadabra.{Encodable, Frame}
-  alias Kadabra.Connection.Socket
+  alias Kadabra.{Encodable, Frame, Socket}
 
   @type t :: %__MODULE__{
           max_frame_size: non_neg_integer,

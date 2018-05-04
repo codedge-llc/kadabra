@@ -16,13 +16,13 @@ defmodule Kadabra.Connection do
     Encodable,
     Error,
     Frame,
-    FrameParser,
     Hpack,
+    Socket,
     Stream,
     StreamSupervisor
   }
 
-  alias Kadabra.Connection.{FlowControl, Socket}
+  alias Kadabra.Connection.FlowControl
 
   alias Kadabra.Frame.{
     Continuation,
@@ -63,24 +63,18 @@ defmodule Kadabra.Connection do
     {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
   end
 
-  def init(%Config{supervisor: sup, uri: uri, opts: opts} = config) do
-    case Socket.connect(uri, opts) do
-      {:ok, socket} ->
-        send_preface_and_settings(socket, opts[:settings])
-        config = %{config | socket: socket}
-        state = initial_state(config)
-        {:consumer, state, subscribe_to: [ConnectionQueue.via_tuple(sup)]}
-
-      {:error, error} ->
-        {:stop, error}
-    end
+  def init(%Config{supervisor: sup} = config) do
+    state = initial_state(config)
+    send(self(), :start)
+    {:consumer, state, subscribe_to: [ConnectionQueue.via_tuple(sup)]}
   end
 
   defp initial_state(%Config{opts: opts} = config) do
     settings = Keyword.get(opts, :settings, Connection.Settings.default())
+    socket = config.supervisor |> Socket.via_tuple()
 
     %__MODULE__{
-      config: config,
+      config: %{config | socket: socket},
       flow_control: %Connection.FlowControl{
         settings: settings
       }
@@ -89,16 +83,6 @@ defmodule Kadabra.Connection do
 
   def close(pid) do
     GenStage.call(pid, :close)
-  end
-
-  defp send_preface_and_settings(socket, settings) do
-    Socket.send(socket, Frame.connection_preface())
-
-    bin =
-      %Frame.Settings{settings: settings || Connection.Settings.default()}
-      |> Encodable.to_bin()
-
-    Socket.send(socket, bin)
   end
 
   def ping(pid) do
@@ -137,7 +121,7 @@ defmodule Kadabra.Connection do
     } = state
 
     bin = flow.stream_id |> Goaway.new() |> Encodable.to_bin()
-    :ssl.send(config.socket, bin)
+    Socket.send(config.socket, bin)
 
     send(config.client, {:closed, config.supervisor})
 
@@ -276,6 +260,32 @@ defmodule Kadabra.Connection do
     Logger.error("Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{b}")
   end
 
+  def handle_info(:start, %{config: config} = state) do
+    settings =
+      Keyword.get(config.opts, :settings, Connection.Settings.default())
+
+    config.supervisor
+    |> Socket.via_tuple()
+    |> Socket.set_active()
+
+    bin =
+      %Frame.Settings{settings: settings}
+      |> Encodable.to_bin()
+
+    config.supervisor
+    |> Socket.via_tuple()
+    |> Socket.send(bin)
+
+    {:noreply, [], state}
+  end
+
+  def handle_info({:closed, _pid}, %{config: config} = state) do
+    send(config.client, {:closed, config.supervisor})
+    Task.start(fn -> Kadabra.Supervisor.stop(config.supervisor) end)
+
+    {:stop, :normal, state}
+  end
+
   def handle_info({:finished, stream_id}, %{flow_control: flow} = state) do
     flow =
       flow
@@ -293,42 +303,9 @@ defmodule Kadabra.Connection do
     {:noreply, [], state}
   end
 
-  def handle_info({:tcp, _socket, bin}, state) do
-    do_recv_bin(bin, state)
+  def handle_info({:recv, frame}, state) do
+    state = process(frame, state)
     {:noreply, [], state}
-  end
-
-  def handle_info({:tcp_closed, _socket}, state) do
-    handle_disconnect(state)
-  end
-
-  def handle_info({:ssl, _socket, bin}, state) do
-    do_recv_bin(bin, state)
-  end
-
-  def handle_info({:ssl_closed, _socket}, state) do
-    handle_disconnect(state)
-  end
-
-  defp do_recv_bin(bin, %{config: %{socket: socket}} = state) do
-    bin = state.buffer <> bin
-
-    case parse_bin(socket, bin, state) do
-      {:unfinished, bin, state} ->
-        Socket.setopts(socket, [{:active, :once}])
-        {:noreply, [], %{state | buffer: bin}}
-    end
-  end
-
-  def parse_bin(socket, bin, state) do
-    case FrameParser.parse(bin) do
-      {:ok, frame, rest} ->
-        state = process(frame, state)
-        parse_bin(socket, rest, state)
-
-      {:error, bin} ->
-        {:unfinished, bin, state}
-    end
   end
 
   @spec process(frame, t) :: :ok
@@ -436,12 +413,5 @@ defmodule Kadabra.Connection do
       |> Encodable.to_bin()
 
     Socket.send(socket, bin)
-  end
-
-  def handle_disconnect(%{config: config} = state) do
-    send(config.client, {:closed, config.supervisor})
-    Task.start(fn -> Kadabra.Supervisor.stop(config.supervisor) end)
-
-    {:stop, :normal, state}
   end
 end
