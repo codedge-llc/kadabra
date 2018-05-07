@@ -148,24 +148,21 @@ defmodule Kadabra.Stream do
 
   # Headers, PushPromise and Continuation frames must be calls
 
-  def recv(from, %Headers{end_stream: true} = frame, _state, stream) do
-    {:ok, headers} =
-      Hpack.decode(stream.config.ref, frame.header_block_fragment)
+  def recv(from, %Headers{end_stream: end_stream?} = frame, _state, stream) do
+    case Hpack.decode(stream.config.ref, frame.header_block_fragment) do
+      {:ok, headers} ->
+        :gen_statem.reply(from, :ok)
 
-    :gen_statem.reply(from, :ok)
+        stream = %Stream{stream | headers: stream.headers ++ headers}
 
-    stream = %Stream{stream | headers: stream.headers ++ headers}
-    {:next_state, @hc_remote, stream}
-  end
+        if end_stream?,
+          do: {:next_state, @hc_remote, stream},
+          else: {:keep_state, stream}
 
-  def recv(from, %Headers{end_stream: false} = frame, _state, stream) do
-    {:ok, headers} =
-      Hpack.decode(stream.config.ref, frame.header_block_fragment)
-
-    :gen_statem.reply(from, :ok)
-
-    stream = %Stream{stream | headers: stream.headers ++ headers}
-    {:keep_state, stream}
+      _error ->
+        :gen_statem.reply(from, {:connection_error, "COMPRESSION_ERROR"})
+        {:stop, :normal}
+    end
   end
 
   def recv(from, %PushPromise{} = frame, state, %{config: config} = stream)

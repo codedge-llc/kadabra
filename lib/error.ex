@@ -55,6 +55,17 @@ defmodule Kadabra.Error do
   def frame_size_error, do: <<6::32>>
 
   @doc ~S"""
+  32-bit error code of type `COMPRESSION_ERROR`
+
+  ## Examples
+
+      iex> Kadabra.Error.compression_error
+      <<0, 0, 0, 9>>
+  """
+  @spec compression_error :: <<_::32>>
+  def compression_error, do: <<9::32>>
+
+  @doc ~S"""
   Returns a string error given integer error in range 0x0 - 0xd.
 
   ## Examples
