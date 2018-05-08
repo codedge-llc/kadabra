@@ -33,7 +33,6 @@ defmodule Kadabra.Socket do
   def init(%{uri: uri, opts: opts}) do
     case connect(uri, opts) do
       {:ok, socket} ->
-        # Kernel.send(self(), :send_preface)
         socket_send(socket, Frame.connection_preface())
         {:ok, %__MODULE__{socket: socket}}
 

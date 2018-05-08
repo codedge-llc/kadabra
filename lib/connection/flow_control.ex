@@ -2,6 +2,7 @@ defmodule Kadabra.Connection.FlowControl do
   @moduledoc false
 
   @default_window_size 65_535
+  @window_max 2_147_483_647
 
   defstruct queue: :queue.new(),
             stream_id: 1,
@@ -20,6 +21,8 @@ defmodule Kadabra.Connection.FlowControl do
           window: integer,
           settings: Connection.Settings.t()
         }
+
+  def window_max, do: @window_max
 
   @spec update_settings(t, Connection.Settings.t()) :: t
   def update_settings(flow_control, nil), do: flow_control
@@ -113,7 +116,7 @@ defmodule Kadabra.Connection.FlowControl do
   end
 
   @doc ~S"""
-  Marks stream_id as active.
+  Removes stream_id from active set.
 
   ## Examples
 

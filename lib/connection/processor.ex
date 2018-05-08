@@ -51,7 +51,7 @@ defmodule Kadabra.Connection.Processor do
 
     config.ref
     |> Stream.via_tuple(stream_id)
-    |> Stream.cast_recv(frame)
+    |> Stream.call_recv(frame)
 
     {:ok, state}
   end
@@ -76,7 +76,7 @@ defmodule Kadabra.Connection.Processor do
 
   def process(%RstStream{} = frame, %{config: config} = state) do
     pid = Stream.via_tuple(config.ref, frame.stream_id)
-    Stream.cast_recv(pid, frame)
+    Stream.call_recv(pid, frame)
     {:ok, state}
   end
 
@@ -106,8 +106,9 @@ defmodule Kadabra.Connection.Processor do
 
     notify_settings_change(config.ref, old_settings, flow)
 
-    pid = Hpack.via_tuple(config.ref, :encoder)
-    Hpack.update_max_table_size(pid, settings.max_header_list_size)
+    config.ref
+    |> Hpack.via_tuple(:encoder)
+    |> Hpack.update_max_table_size(settings.max_header_list_size)
 
     bin = Frame.Settings.ack() |> Encodable.to_bin()
     Socket.send(config.socket, bin)
@@ -119,7 +120,7 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%Frame.Settings{ack: true}, state) do
-    send_huge_window_update(state.config.socket)
+    send_huge_window_update(state.config.socket, state.flow_control)
     {:ok, state}
   end
 
@@ -201,10 +202,12 @@ defmodule Kadabra.Connection.Processor do
     Socket.send(socket, s_bin)
   end
 
-  def send_huge_window_update(socket) do
+  def send_huge_window_update(socket, flow_control) do
+    available = Connection.FlowControl.window_max() - flow_control.window
+
     bin =
       0
-      |> Frame.WindowUpdate.new(2_000_000_000)
+      |> Frame.WindowUpdate.new(available)
       |> Encodable.to_bin()
 
     Socket.send(socket, bin)

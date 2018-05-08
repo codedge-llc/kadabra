@@ -30,6 +30,13 @@ defmodule Kadabra.Connection.Settings do
     %__MODULE__{}
   end
 
+  def fastest do
+    %__MODULE__{
+      initial_window_size: 2_147_483_647,
+      max_frame_size: 16_777_215
+    }
+  end
+
   @doc ~S"""
   Puts setting value, returning an error if present.
 

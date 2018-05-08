@@ -50,7 +50,7 @@ defmodule Kadabra.Connection do
   end
 
   defp initial_state(%Config{opts: opts} = config) do
-    settings = Keyword.get(opts, :settings, Connection.Settings.default())
+    settings = Keyword.get(opts, :settings, Connection.Settings.fastest())
     socket = config.supervisor |> Socket.via_tuple()
 
     %__MODULE__{
@@ -147,20 +147,17 @@ defmodule Kadabra.Connection do
   end
 
   def log_goaway(%Goaway{last_stream_id: id, error_code: c, debug_data: b}) do
-    error = Error.string(c)
+    error = Error.parse(c)
     Logger.error("Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{b}")
   end
 
-  def handle_info(:start, %{config: config} = state) do
-    settings =
-      Keyword.get(config.opts, :settings, Connection.Settings.default())
-
+  def handle_info(:start, %{config: config, flow_control: flow} = state) do
     config.supervisor
     |> Socket.via_tuple()
     |> Socket.set_active()
 
     bin =
-      %Frame.Settings{settings: settings}
+      %Frame.Settings{settings: flow.settings}
       |> Encodable.to_bin()
 
     config.supervisor
@@ -213,11 +210,11 @@ defmodule Kadabra.Connection do
   end
 
   def send_protocol_error(state) do
-    send_goaway(state, "PROTOCOL_ERROR")
+    send_goaway(state, :PROTOCOL_ERROR)
   end
 
   def send_frame_size_error(state) do
-    send_goaway(state, "FRAME_SIZE_ERROR")
+    send_goaway(state, :FRAME_SIZE_ERROR)
   end
 
   def send_goaway(%{config: config, flow_control: flow}, error) do

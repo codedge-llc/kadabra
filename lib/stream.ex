@@ -104,22 +104,6 @@ defmodule Kadabra.Stream do
     {:keep_state, %{stream | flow: flow}}
   end
 
-  def recv(%Data{end_stream: true, data: data}, state, stream)
-      when state in [@hc_local] do
-    stream = %Stream{stream | body: stream.body <> data}
-    {:next_state, @closed, stream}
-  end
-
-  def recv(%Data{end_stream: true, data: data}, _state, stream) do
-    stream = %Stream{stream | body: stream.body <> data}
-    {:next_state, @hc_remote, stream}
-  end
-
-  def recv(%Data{end_stream: false, data: data}, _state, stream) do
-    stream = %Stream{stream | body: stream.body <> data}
-    {:keep_state, stream}
-  end
-
   def recv(%WindowUpdate{window_size_increment: inc}, _state, stream) do
     flow =
       stream.flow
@@ -127,12 +111,6 @@ defmodule Kadabra.Stream do
       |> Stream.FlowControl.process()
 
     {:keep_state, %{stream | flow: flow}}
-  end
-
-  def recv(%RstStream{} = _frame, state, stream)
-      when state in [@open, @hc_local, @hc_remote, @closed] do
-    # IO.inspect(frame, label: "Got RST_STREAM")
-    {:next_state, :closed, stream}
   end
 
   def recv(frame, state, stream) do
@@ -148,6 +126,25 @@ defmodule Kadabra.Stream do
 
   # Headers, PushPromise and Continuation frames must be calls
 
+  def recv(from, %Data{end_stream: true, data: data}, state, stream)
+      when state in [@hc_local] do
+    :gen_statem.reply(from, :ok)
+    stream = %Stream{stream | body: stream.body <> data}
+    {:next_state, @closed, stream}
+  end
+
+  def recv(from, %Data{end_stream: true, data: data}, _state, stream) do
+    :gen_statem.reply(from, :ok)
+    stream = %Stream{stream | body: stream.body <> data}
+    {:next_state, @hc_remote, stream}
+  end
+
+  def recv(from, %Data{end_stream: false, data: data}, _state, stream) do
+    :gen_statem.reply(from, :ok)
+    stream = %Stream{stream | body: stream.body <> data}
+    {:keep_state, stream}
+  end
+
   def recv(from, %Headers{end_stream: end_stream?} = frame, _state, stream) do
     case Hpack.decode(stream.config.ref, frame.header_block_fragment) do
       {:ok, headers} ->
@@ -160,9 +157,15 @@ defmodule Kadabra.Stream do
           else: {:keep_state, stream}
 
       _error ->
-        :gen_statem.reply(from, {:connection_error, "COMPRESSION_ERROR"})
+        :gen_statem.reply(from, {:connection_error, :COMPRESSION_ERROR})
         {:stop, :normal}
     end
+  end
+
+  def recv(from, %RstStream{} = _frame, state, stream)
+      when state in [@open, @hc_local, @hc_remote, @closed] do
+    # IO.inspect(frame, label: "Got RST_STREAM")
+    {:next_state, :closed, stream, [{:reply, from, :ok}]}
   end
 
   def recv(from, %PushPromise{} = frame, state, %{config: config} = stream)
