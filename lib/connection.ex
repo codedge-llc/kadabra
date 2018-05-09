@@ -48,6 +48,7 @@ defmodule Kadabra.Connection do
   def init(%Config{supervisor: sup} = config) do
     state = initial_state(config)
     Kernel.send(self(), :start)
+    Process.flag(:trap_exit, true)
     {:consumer, state, subscribe_to: [ConnectionQueue.via_tuple(sup)]}
   end
 
@@ -157,6 +158,32 @@ defmodule Kadabra.Connection do
       flow
       |> FlowControl.decrement_active_stream_count()
       |> FlowControl.remove_active(stream_id)
+      |> FlowControl.process(state.config)
+
+    GenStage.ask(state.queue, 1)
+
+    {:noreply, [], %{state | flow_control: flow}}
+  end
+
+  def handle_info({:DOWN, _ref, _type, pid, _info} = tup, state) do
+    IO.inspect(tup)
+
+    flow =
+      state.flow_control
+      |> FlowControl.decrement_active_stream_count()
+      |> FlowControl.remove_active(pid)
+      |> FlowControl.process(state.config)
+
+    GenStage.ask(state.queue, 1)
+
+    {:noreply, [], %{state | flow_control: flow}}
+  end
+
+  def handle_info({:EXIT, pid, _info}, state) do
+    flow =
+      state.flow_control
+      |> FlowControl.decrement_active_stream_count()
+      |> FlowControl.remove_active(pid)
       |> FlowControl.process(state.config)
 
     GenStage.ask(state.queue, 1)

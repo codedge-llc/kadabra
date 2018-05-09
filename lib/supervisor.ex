@@ -4,7 +4,7 @@ defmodule Kadabra.Supervisor do
   use Supervisor
   import Supervisor.Spec
 
-  alias Kadabra.{Connection, ConnectionQueue, Hpack, Socket, StreamSupervisor}
+  alias Kadabra.{Connection, ConnectionQueue, Hpack, Socket}
 
   def start_link(uri, pid, opts) do
     config = %Kadabra.Config{
@@ -29,7 +29,6 @@ defmodule Kadabra.Supervisor do
     config = %{config | supervisor: self()}
 
     children = [
-      supervisor(StreamSupervisor, [ref], id: :stream_supervisor),
       worker(ConnectionQueue, [self()], id: :connection_queue),
       worker(Socket, [config], id: :socket),
       worker(Hpack, [ref, :encoder], id: :encoder),

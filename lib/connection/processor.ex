@@ -10,8 +10,7 @@ defmodule Kadabra.Connection.Processor do
     Frame,
     Hpack,
     Socket,
-    Stream,
-    StreamSupervisor
+    Stream
   }
 
   alias Kadabra.Frame.{
@@ -132,13 +131,20 @@ defmodule Kadabra.Connection.Processor do
 
   def process(%PushPromise{stream_id: stream_id} = frame, state) do
     %{config: config, flow_control: flow_control} = state
-    {:ok, pid} = StreamSupervisor.start_stream(config, flow_control, stream_id)
 
-    Stream.call_recv(pid, frame)
+    stream = Stream.new(config, flow_control.settings, stream_id)
 
-    flow = Connection.FlowControl.add_active(flow_control, stream_id)
+    case Stream.start_link(stream) do
+      {:ok, pid} ->
+        Stream.call_recv(pid, frame)
 
-    {:ok, %{state | flow_control: flow}}
+        flow = Connection.FlowControl.add_active(flow_control, stream_id, pid)
+
+        {:ok, %{state | flow_control: flow}}
+
+      error ->
+        raise "#{inspect(error)}"
+    end
   end
 
   def process(%Frame.Ping{stream_id: sid}, state) when sid != 0 do
