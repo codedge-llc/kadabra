@@ -19,7 +19,8 @@ defmodule Kadabra.Connection do
     Encodable,
     Error,
     Frame,
-    Socket
+    Socket,
+    Tasks
   }
 
   alias Kadabra.Frame.{Goaway, Ping}
@@ -101,12 +102,9 @@ defmodule Kadabra.Connection do
     Socket.send(config.socket, bin)
 
     Kernel.send(config.client, {:closed, config.supervisor})
+    Tasks.run(fn -> Kadabra.Supervisor.stop(config.supervisor) end)
 
-    Task.Supervisor.start_child(Kadabra.Tasks, fn ->
-      Kadabra.Supervisor.stop(config.supervisor)
-    end)
-
-    {:stop, :normal, :ok, state}
+    {:reply, :ok, [], state}
   end
 
   # sendf
@@ -149,9 +147,9 @@ defmodule Kadabra.Connection do
 
   def handle_info({:closed, _pid}, %{config: config} = state) do
     Kernel.send(config.client, {:closed, config.supervisor})
-    Task.start(fn -> Kadabra.Supervisor.stop(config.supervisor) end)
+    Tasks.run(fn -> Kadabra.Supervisor.stop(config.supervisor) end)
 
-    {:stop, :normal, state}
+    {:noreply, [], state}
   end
 
   def handle_info({:finished, stream_id}, %{flow_control: flow} = state) do
@@ -185,7 +183,9 @@ defmodule Kadabra.Connection do
           |> Encodable.to_bin()
 
         Socket.send(config.socket, bin)
-        {:stop, :normal, state}
+        Tasks.run(fn -> Kadabra.Supervisor.stop(config.supervisor) end)
+
+        {:noreply, [], state}
     end
   end
 
