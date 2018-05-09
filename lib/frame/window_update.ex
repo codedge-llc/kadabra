@@ -10,16 +10,12 @@ defmodule Kadabra.Frame.WindowUpdate do
           window_size_increment: non_neg_integer
         }
 
-  @spec new(Frame.t() | binary) :: t
+  @spec new(Frame.t()) :: t
   def new(%Frame{payload: <<inc::32>>, stream_id: stream_id}) do
     %__MODULE__{
       window_size_increment: inc,
       stream_id: stream_id
     }
-  end
-
-  def new(bin) do
-    new(0x0, bin)
   end
 
   @spec new(non_neg_integer, pos_integer | binary) :: t
@@ -28,10 +24,6 @@ defmodule Kadabra.Frame.WindowUpdate do
       stream_id: stream_id,
       window_size_increment: increment
     }
-  end
-
-  def new(stream_id, bin) when is_binary(bin) do
-    new(stream_id, byte_size(bin))
   end
 end
 

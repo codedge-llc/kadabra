@@ -37,7 +37,6 @@ defmodule Kadabra.Socket do
         {:ok, %__MODULE__{socket: socket}}
 
       error ->
-        raise "who dis #{inspect(error)}"
         error
     end
   end
