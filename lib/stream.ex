@@ -64,18 +64,12 @@ defmodule Kadabra.Stream do
     }
   end
 
-  def start_link(%{id: id, config: config} = stream) do
-    config.ref
-    |> via_tuple(id)
-    |> :gen_statem.start_link(__MODULE__, stream, [])
+  def start_link(%Stream{} = stream) do
+    :gen_statem.start_link(__MODULE__, stream, [])
   end
 
-  def via_tuple(ref, stream_id) do
-    {:via, Registry, {Registry.Kadabra, {ref, stream_id}}}
-  end
-
-  def close(ref, stream_id) do
-    ref |> via_tuple(stream_id) |> call_recv(:close)
+  def close(pid) do
+    call_recv(pid, :close)
   end
 
   def call_recv(pid, frame) do
@@ -90,16 +84,6 @@ defmodule Kadabra.Stream do
 
   def recv(from, :close, _state, _stream) do
     {:stop, :normal, [{:reply, from, :ok}]}
-  end
-
-  # For SETTINGS initial_window_size and max_frame_size changes
-  def recv(from, {:settings_change, window, new_max_frame}, _state, stream) do
-    flow =
-      stream.flow
-      |> Stream.FlowControl.increment_window(window)
-      |> Stream.FlowControl.set_max_frame_size(new_max_frame)
-
-    {:keep_state, %{stream | flow: flow}, [{:reply, from, :ok}]}
   end
 
   def recv(from, %WindowUpdate{window_size_increment: inc}, _state, stream) do
@@ -206,6 +190,16 @@ defmodule Kadabra.Stream do
   end
 
   def handle_event(:enter, _old, _new, stream), do: {:keep_state, stream}
+
+  # For SETTINGS initial_window_size and max_frame_size changes
+  def handle_event(:info, {:settings_change, window, max_frame}, _, stream) do
+    flow =
+      stream.flow
+      |> Stream.FlowControl.increment_window(window)
+      |> Stream.FlowControl.set_max_frame_size(max_frame)
+
+    {:keep_state, %{stream | flow: flow}}
+  end
 
   # Casts
 

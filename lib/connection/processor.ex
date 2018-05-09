@@ -54,17 +54,14 @@ defmodule Kadabra.Connection.Processor do
     send_window_update(config.socket, 0, size)
     send_window_update(config.socket, stream_id, size)
 
-    config.ref
-    |> Stream.via_tuple(stream_id)
-    |> Stream.call_recv(frame)
+    process_on_stream(state, stream_id, frame)
 
     {:ok, %{state | remote_window: state.remote_window + size}}
   end
 
-  def process(%Headers{stream_id: stream_id} = frame, %{config: config} = state) do
-    config.ref
-    |> Stream.via_tuple(stream_id)
-    |> Stream.call_recv(frame)
+  def process(%Headers{stream_id: stream_id} = frame, state) do
+    state
+    |> process_on_stream(stream_id, frame)
     |> case do
       :ok ->
         {:ok, state}
@@ -79,9 +76,9 @@ defmodule Kadabra.Connection.Processor do
     {:ok, state}
   end
 
-  def process(%RstStream{} = frame, %{config: config} = state) do
-    pid = Stream.via_tuple(config.ref, frame.stream_id)
-    Stream.call_recv(pid, frame)
+  def process(%RstStream{stream_id: stream_id} = frame, state) do
+    process_on_stream(state, stream_id, frame)
+
     {:ok, state}
   end
 
@@ -109,7 +106,7 @@ defmodule Kadabra.Connection.Processor do
     old_settings = flow.settings
     flow = Connection.FlowControl.update_settings(flow, settings)
 
-    notify_settings_change(config.ref, old_settings, flow)
+    notify_settings_change(old_settings, flow)
 
     config.ref
     |> Hpack.via_tuple(:encoder)
@@ -181,14 +178,12 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%WindowUpdate{stream_id: stream_id} = frame, state) do
-    pid = Stream.via_tuple(state.config.ref, stream_id)
-    Stream.call_recv(pid, frame)
+    process_on_stream(state, stream_id, frame)
     {:ok, state}
   end
 
   def process(%Continuation{stream_id: stream_id} = frame, state) do
-    pid = Stream.via_tuple(state.config.ref, stream_id)
-    Stream.call_recv(pid, frame)
+    process_on_stream(state, stream_id, frame)
     {:ok, state}
   end
 
@@ -227,7 +222,7 @@ defmodule Kadabra.Connection.Processor do
     send_window_update(socket, 0, available)
   end
 
-  def notify_settings_change(ref, old_settings, flow) do
+  def notify_settings_change(old_settings, flow) do
     %{initial_window_size: old_window} = old_settings
     %{settings: settings} = flow
 
@@ -235,9 +230,14 @@ defmodule Kadabra.Connection.Processor do
     new_window = settings.initial_window_size
     window_diff = new_window - old_window
 
-    for stream_id <- flow.active_streams do
-      pid = Stream.via_tuple(ref, stream_id)
-      Stream.call_recv(pid, {:settings_change, window_diff, max_frame_size})
+    for {_stream_id, pid} <- flow.active_streams do
+      send(pid, {:settings_change, window_diff, max_frame_size})
     end
+  end
+
+  def process_on_stream(state, stream_id, frame) do
+    state.flow_control.active_streams
+    |> Map.get(stream_id)
+    |> Stream.call_recv(frame)
   end
 end
