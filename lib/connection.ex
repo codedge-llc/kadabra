@@ -4,6 +4,7 @@ defmodule Kadabra.Connection do
   defstruct buffer: "",
             config: nil,
             flow_control: nil,
+            remote_window: 65_535,
             queue: nil
 
   use GenStage
@@ -133,9 +134,9 @@ defmodule Kadabra.Connection do
     {:stop, :normal, state}
   end
 
-  defp do_send_headers(requests, state) when is_list(requests) do
-    Enum.reduce(requests, state, &do_send_headers/2)
-  end
+  # defp do_send_headers(requests, state) when is_list(requests) do
+  #   Enum.reduce(requests, state, &do_send_headers/2)
+  # end
 
   defp do_send_headers(request, %{flow_control: flow} = state) do
     flow =

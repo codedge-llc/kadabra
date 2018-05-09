@@ -1,8 +1,8 @@
 defmodule Kadabra.Connection.FlowControl do
   @moduledoc false
 
-  @default_window_size 65_535
-  @window_max 2_147_483_647
+  @default_window_size round(:math.pow(2, 16) - 1)
+  @max_window_size round(:math.pow(2, 31) - 1)
 
   defstruct queue: :queue.new(),
             stream_id: 1,
@@ -24,7 +24,7 @@ defmodule Kadabra.Connection.FlowControl do
 
   def window_default, do: @default_window_size
 
-  def window_max, do: @window_max
+  def window_max, do: @max_window_size
 
   @spec update_settings(t, Connection.Settings.t()) :: t
   def update_settings(flow_control, nil), do: flow_control
@@ -141,6 +141,11 @@ defmodule Kadabra.Connection.FlowControl do
       1
   """
   @spec add(t, Kadabra.Request.t()) :: t
+  def add(%{queue: queue} = flow_control, requests) when is_list(requests) do
+    queue = Enum.reduce(requests, queue, &:queue.in(&1, &2))
+    %{flow_control | queue: queue}
+  end
+
   def add(%{queue: queue} = flow_control, request) do
     queue = :queue.in(request, queue)
     %{flow_control | queue: queue}
@@ -161,6 +166,7 @@ defmodule Kadabra.Connection.FlowControl do
           |> add_active(flow.stream_id)
           |> increment_active_stream_count()
           |> increment_stream_id()
+          |> process(config)
 
         other ->
           raise "something happened #{inspect(other)}"

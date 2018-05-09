@@ -2,8 +2,8 @@ defmodule Kadabra.Connection.Settings do
   @moduledoc false
 
   @default_header_table_size 4096
-  @default_initial_window_size (:math.pow(2, 16) - 1) |> round()
-  @default_max_frame_size :math.pow(2, 14) |> round()
+  @default_initial_window_size round(:math.pow(2, 16) - 1)
+  @default_max_frame_size round(:math.pow(2, 14))
 
   defstruct enable_push: true,
             header_table_size: @default_header_table_size,
@@ -30,8 +30,8 @@ defmodule Kadabra.Connection.Settings do
   @max_frame_size 0x5
   @max_header_list_size 0x6
 
-  @max_initial_window_size (:math.pow(2, 31) - 1) |> round()
-  @max_max_frame_size (:math.pow(2, 24) - 1) |> round()
+  @max_initial_window_size round(:math.pow(2, 31) - 1)
+  @max_max_frame_size round(:math.pow(2, 24) - 1)
 
   def default do
     %__MODULE__{}

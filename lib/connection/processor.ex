@@ -35,7 +35,8 @@ defmodule Kadabra.Connection.Processor do
           | WindowUpdate.t()
           | Continuation.t()
 
-  @spec process(frame, Connection.t()) :: :ok
+  @spec process(frame, Connection.t()) ::
+          {:ok, Connection.t()} | {:connection_error, atom, Connection.t()}
   def process(bin, state) when is_binary(bin) do
     Logger.info("Got binary: #{inspect(bin)}")
     state
@@ -47,13 +48,17 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%Data{stream_id: stream_id} = frame, %{config: config} = state) do
-    send_window_update(config.socket, frame)
+    available = Connection.FlowControl.window_max() - state.remote_window
+    size = min(available, byte_size(frame.data))
+
+    send_window_update(config.socket, 0, size)
+    send_window_update(config.socket, stream_id, size)
 
     config.ref
     |> Stream.via_tuple(stream_id)
     |> Stream.call_recv(frame)
 
-    {:ok, state}
+    {:ok, %{state | remote_window: state.remote_window + size}}
   end
 
   def process(%Headers{stream_id: stream_id} = frame, %{config: config} = state) do
@@ -119,9 +124,9 @@ defmodule Kadabra.Connection.Processor do
     {:ok, %{state | flow_control: flow}}
   end
 
-  def process(%Frame.Settings{ack: true}, state) do
-    send_huge_window_update(state.config.socket, state.flow_control)
-    {:ok, state}
+  def process(%Frame.Settings{ack: true}, %{config: c} = state) do
+    send_huge_window_update(c.socket, state.remote_window)
+    {:ok, %{state | remote_window: Connection.FlowControl.window_max()}}
   end
 
   def process(%PushPromise{stream_id: stream_id} = frame, state) do
@@ -136,11 +141,11 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%Frame.Ping{stream_id: sid}, state) when sid != 0 do
-    {:connection_error, "PROTOCOL_ERROR", state}
+    {:connection_error, :PROTOCOL_ERROR, state}
   end
 
   def process(%Frame.Ping{data: data}, state) when byte_size(data) != 8 do
-    {:connection_error, "FRAME_SIZE_ERROR", state}
+    {:connection_error, :FRAME_SIZE_ERROR, state}
   end
 
   def process(%Frame.Ping{ack: false}, %{config: config} = state) do
@@ -158,6 +163,11 @@ defmodule Kadabra.Connection.Processor do
     {:ok, state}
   end
 
+  def process(%WindowUpdate{stream_id: 0, window_size_increment: inc}, state)
+      when inc <= 0 do
+    {:connection_error, :PROTOCOL_ERROR, state}
+  end
+
   def process(%WindowUpdate{stream_id: 0, window_size_increment: inc}, state) do
     flow = Connection.FlowControl.increment_window(state.flow_control, inc)
     {:ok, %{state | flow_control: flow}}
@@ -165,7 +175,7 @@ defmodule Kadabra.Connection.Processor do
 
   def process(%WindowUpdate{stream_id: stream_id} = frame, state) do
     pid = Stream.via_tuple(state.config.ref, stream_id)
-    Stream.cast_recv(pid, frame)
+    Stream.call_recv(pid, frame)
     {:ok, state}
   end
 
@@ -186,17 +196,6 @@ defmodule Kadabra.Connection.Processor do
     {:ok, state}
   end
 
-  @spec send_window_update(pid, Data.t()) :: no_return
-  def send_window_update(_socket, %Data{data: nil}), do: :ok
-
-  def send_window_update(_socket, %Data{data: ""}), do: :ok
-
-  def send_window_update(socket, %Data{stream_id: sid, data: data}) do
-    size = byte_size(data)
-    send_window_update(socket, 0, size)
-    send_window_update(socket, sid, size)
-  end
-
   @spec send_window_update(pid, non_neg_integer, integer) :: no_return
   def send_window_update(socket, stream_id, bytes)
       when bytes > 0 and bytes < 2_147_483_647 do
@@ -205,16 +204,14 @@ defmodule Kadabra.Connection.Processor do
       |> WindowUpdate.new(bytes)
       |> Encodable.to_bin()
 
+    # Logger.info("Sending WINDOW_UPDATE on Stream #{stream_id} (#{bytes})")
     Socket.send(socket, bin)
   end
 
   def send_window_update(_socket, _stream_id, _bytes), do: :ok
 
-  def send_huge_window_update(socket, flow_control) do
-    available =
-      Connection.FlowControl.window_max() -
-        Connection.FlowControl.window_default()
-
+  def send_huge_window_update(socket, remote_window) do
+    available = Connection.FlowControl.window_max() - remote_window
     send_window_update(socket, 0, available)
   end
 
@@ -228,7 +225,7 @@ defmodule Kadabra.Connection.Processor do
 
     for stream_id <- flow.active_streams do
       pid = Stream.via_tuple(ref, stream_id)
-      Stream.cast_recv(pid, {:settings_change, window_diff, max_frame_size})
+      Stream.call_recv(pid, {:settings_change, window_diff, max_frame_size})
     end
   end
 end

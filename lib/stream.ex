@@ -75,11 +75,7 @@ defmodule Kadabra.Stream do
   end
 
   def close(ref, stream_id) do
-    ref |> via_tuple(stream_id) |> cast_recv(:close)
-  end
-
-  def cast_recv(pid, frame) do
-    :gen_statem.cast(pid, {:recv, frame})
+    ref |> via_tuple(stream_id) |> call_recv(:close)
   end
 
   def call_recv(pid, frame) do
@@ -90,41 +86,30 @@ defmodule Kadabra.Stream do
     :gen_statem.cast(pid, {:send, frame})
   end
 
-  def recv(:close, _state, _stream) do
-    {:stop, :normal}
+  # recv
+
+  def recv(from, :close, _state, _stream) do
+    {:stop, :normal, [{:reply, from, :ok}]}
   end
 
   # For SETTINGS initial_window_size and max_frame_size changes
-  def recv({:settings_change, window, new_max_frame}, _state, stream) do
+  def recv(from, {:settings_change, window, new_max_frame}, _state, stream) do
     flow =
       stream.flow
       |> Stream.FlowControl.increment_window(window)
       |> Stream.FlowControl.set_max_frame_size(new_max_frame)
 
-    {:keep_state, %{stream | flow: flow}}
+    {:keep_state, %{stream | flow: flow}, [{:reply, from, :ok}]}
   end
 
-  def recv(%WindowUpdate{window_size_increment: inc}, _state, stream) do
+  def recv(from, %WindowUpdate{window_size_increment: inc}, _state, stream) do
     flow =
       stream.flow
       |> Stream.FlowControl.increment_window(inc)
       |> Stream.FlowControl.process()
 
-    {:keep_state, %{stream | flow: flow}}
+    {:keep_state, %{stream | flow: flow}, [{:reply, from, :ok}]}
   end
-
-  def recv(frame, state, stream) do
-    """
-    Unknown RECV on stream #{stream.id}
-    Frame: #{inspect(frame)}
-    State: #{inspect(state)}
-    """
-    |> Logger.info()
-
-    {:keep_state, stream}
-  end
-
-  # Headers, PushPromise and Continuation frames must be calls
 
   def recv(from, %Data{end_stream: true, data: data}, state, stream)
       when state in [@hc_local] do
@@ -187,6 +172,17 @@ defmodule Kadabra.Stream do
     :gen_statem.reply(from, :ok)
 
     stream = %Stream{stream | headers: stream.headers ++ headers}
+    {:keep_state, stream}
+  end
+
+  def recv(frame, state, stream) do
+    """
+    Unknown RECV on stream #{stream.id}
+    Frame: #{inspect(frame)}
+    State: #{inspect(state)}
+    """
+    |> Logger.info()
+
     {:keep_state, stream}
   end
 
@@ -266,7 +262,7 @@ defmodule Kadabra.Stream do
 
     stream = %{stream | flow: flow, on_response: on_resp}
 
-    {:next_state, @open, stream, []}
+    {:next_state, @open, stream}
   end
 
   def add_headers(headers, %{uri: uri}) do
