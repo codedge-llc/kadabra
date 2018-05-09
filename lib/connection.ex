@@ -72,10 +72,6 @@ defmodule Kadabra.Connection do
 
   # handle_cast
 
-  def handle_cast({:recv, frame}, state) do
-    recv(frame, state)
-  end
-
   def handle_cast({:send, type}, state) do
     sendf(type, state)
   end
@@ -126,18 +122,6 @@ defmodule Kadabra.Connection do
     {:noreply, [], state}
   end
 
-  # recv
-
-  def recv(%Goaway{} = frame, state) do
-    log_goaway(frame)
-
-    {:stop, :normal, state}
-  end
-
-  # defp do_send_headers(requests, state) when is_list(requests) do
-  #   Enum.reduce(requests, state, &do_send_headers/2)
-  # end
-
   defp do_send_headers(request, %{flow_control: flow} = state) do
     flow =
       flow
@@ -145,11 +129,6 @@ defmodule Kadabra.Connection do
       |> FlowControl.process(state.config)
 
     %{state | flow_control: flow}
-  end
-
-  def log_goaway(%Goaway{last_stream_id: id, error_code: c, debug_data: b}) do
-    error = Error.parse(c)
-    Logger.error("Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{b}")
   end
 
   def handle_info(:start, %{config: config, flow_control: flow} = state) do

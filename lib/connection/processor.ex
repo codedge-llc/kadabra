@@ -6,6 +6,7 @@ defmodule Kadabra.Connection.Processor do
   alias Kadabra.{
     Connection,
     Encodable,
+    Error,
     Frame,
     Hpack,
     Socket,
@@ -159,8 +160,8 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%Goaway{} = frame, state) do
-    GenStage.cast(self(), {:recv, frame})
-    {:ok, state}
+    log_goaway(frame)
+    {:connection_error, :NO_ERROR, state}
   end
 
   def process(%WindowUpdate{stream_id: 0, window_size_increment: inc}, state)
@@ -194,6 +195,11 @@ defmodule Kadabra.Connection.Processor do
     |> Logger.info()
 
     {:ok, state}
+  end
+
+  def log_goaway(%Goaway{last_stream_id: id, error_code: c, debug_data: b}) do
+    error = Error.parse(c)
+    Logger.error("Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{b}")
   end
 
   @spec send_window_update(pid, non_neg_integer, integer) :: no_return
