@@ -4,12 +4,11 @@ defmodule Kadabra.Stream.FlowControl do
   @default_window_size 65_535
 
   defstruct queue: :queue.new(),
+            out_queue: :queue.new(),
             window: @default_window_size,
             max_frame_size: 16_384,
             socket: nil,
             stream_id: nil
-
-  alias Kadabra.{Encodable, Frame, Socket}
 
   @type t :: %__MODULE__{
           max_frame_size: non_neg_integer,
@@ -91,21 +90,20 @@ defmodule Kadabra.Stream.FlowControl do
   defp do_process(%{window: window} = flow, bin) when byte_size(bin) > window do
     %{
       queue: queue,
-      max_frame_size: max_size,
-      socket: socket,
-      stream_id: stream_id
+      out_queue: out_queue,
+      max_frame_size: max_size
     } = flow
 
     {chunk, rem_bin} = :erlang.split_binary(bin, window)
 
-    max_size
-    |> split_packet(chunk)
-    |> send_partial_data(socket, stream_id)
+    payloads = split_packet(max_size, chunk)
+    out_queue = enqueue_partial(out_queue, payloads)
 
     queue = :queue.in_r(rem_bin, queue)
 
     flow
     |> Map.put(:queue, queue)
+    |> Map.put(:out_queue, out_queue)
     |> Map.put(:window, 0)
     |> process()
   end
@@ -113,48 +111,38 @@ defmodule Kadabra.Stream.FlowControl do
   defp do_process(%{window: window} = flow_control, bin) do
     %{
       max_frame_size: max_size,
-      socket: socket,
-      stream_id: stream_id
+      out_queue: out_queue
     } = flow_control
 
-    max_size
-    |> split_packet(bin)
-    |> send_data(socket, stream_id)
+    payloads = split_packet(max_size, bin)
+    out_queue = enqueue_complete(out_queue, payloads)
 
     flow_control
     |> Map.put(:window, window - byte_size(bin))
+    |> Map.put(:out_queue, out_queue)
     |> process()
   end
 
-  def send_partial_data([], _socket, _stream_id), do: :ok
+  defp enqueue_complete(queue, []), do: queue
 
-  def send_partial_data([bin | rest], socket, stream_id) do
-    p =
-      %Frame.Data{stream_id: stream_id, end_stream: false, data: bin}
-      |> Encodable.to_bin()
-
-    Socket.send(socket, p)
-    send_partial_data(rest, socket, stream_id)
+  defp enqueue_complete(queue, [payload | []]) do
+    {payload, true}
+    |> :queue.in(queue)
+    |> enqueue_complete([])
   end
 
-  def send_data([], _socket, _stream_id), do: :ok
-
-  def send_data([bin | []], socket, stream_id) do
-    p =
-      %Frame.Data{stream_id: stream_id, end_stream: true, data: bin}
-      |> Encodable.to_bin()
-
-    Socket.send(socket, p)
-    send_data([], socket, stream_id)
+  defp enqueue_complete(queue, [payload | rest]) do
+    {payload, false}
+    |> :queue.in(queue)
+    |> enqueue_complete(rest)
   end
 
-  def send_data([bin | rest], socket, stream_id) do
-    p =
-      %Frame.Data{stream_id: stream_id, end_stream: false, data: bin}
-      |> Encodable.to_bin()
+  defp enqueue_partial(queue, []), do: queue
 
-    Socket.send(socket, p)
-    send_data(rest, socket, stream_id)
+  defp enqueue_partial(queue, [payload | rest]) do
+    {payload, false}
+    |> :queue.in(queue)
+    |> enqueue_partial(rest)
   end
 
   def split_packet(size, p) when byte_size(p) >= size do

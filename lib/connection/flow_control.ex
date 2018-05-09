@@ -123,13 +123,19 @@ defmodule Kadabra.Connection.FlowControl do
   ## Examples
 
       iex> flow = remove_active(%Kadabra.Connection.FlowControl{
-      ...> active_streams: %{1 => :test, 3 => :pid}}, :test)
+      ...> active_streams: %{1 => :test, 3 => :pid}}, 1)
       iex> flow.active_streams
       %{3 => :pid}
   """
-  def remove_active(%{active_streams: active} = flow_control, pid) do
+  def remove_active(%{active_streams: active} = flow_control, pid)
+      when is_pid(pid) do
     updated = Enum.filter(active, fn {_, p} -> p != pid end) |> Enum.into(%{})
     %{flow_control | active_streams: updated}
+  end
+
+  def remove_active(%{active_streams: active} = flow_control, stream_id)
+      when is_integer(stream_id) do
+    %{flow_control | active_streams: Map.delete(active, stream_id)}
   end
 
   @doc ~S"""
@@ -156,7 +162,12 @@ defmodule Kadabra.Connection.FlowControl do
   def process(%{queue: queue} = flow, config) do
     with {{:value, request}, queue} <- :queue.out(queue),
          {:can_send, true} <- {:can_send, can_send?(flow)} do
-      stream = Stream.new(config, flow.settings, flow.stream_id)
+      %{
+        initial_window_size: window,
+        max_frame_size: max_frame
+      } = flow.settings
+
+      stream = Stream.new(config, flow.stream_id, window, max_frame)
 
       case Stream.start_link(stream) do
         {:ok, pid} ->

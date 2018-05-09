@@ -14,7 +14,6 @@ defmodule Kadabra.Stream do
   require Logger
 
   alias Kadabra.{Config, Encodable, Frame, Hpack, Socket, Stream, Tasks}
-  alias Kadabra.Connection.Settings
 
   alias Kadabra.Frame.{
     Continuation,
@@ -48,12 +47,12 @@ defmodule Kadabra.Stream do
   # @reserved_local :reserved_local
   @reserved_remote :reserved_remote
 
-  def new(%Config{} = config, %Settings{} = settings, stream_id) do
+  def new(%Config{} = config, stream_id, initial_window_size, max_frame_size) do
     flow_opts = [
       stream_id: stream_id,
       socket: config.socket,
-      window: settings.initial_window_size,
-      max_frame_size: settings.max_frame_size
+      window: initial_window_size,
+      max_frame_size: max_frame_size
     ]
 
     %__MODULE__{
@@ -91,6 +90,7 @@ defmodule Kadabra.Stream do
       stream.flow
       |> Stream.FlowControl.increment_window(inc)
       |> Stream.FlowControl.process()
+      |> send_data_frames(stream.config.socket, stream.id)
 
     {:keep_state, %{stream | flow: flow}, [{:reply, from, :ok}]}
   end
@@ -131,7 +131,7 @@ defmodule Kadabra.Stream do
     end
   end
 
-  def recv(from, %RstStream{} = _frame, state, stream)
+  def recv(from, %RstStream{} = frame, state, stream)
       when state in [@open, @hc_local, @hc_remote, @closed] do
     # IO.inspect(frame, label: "Got RST_STREAM")
     {:next_state, :closed, stream, [{:reply, from, :ok}]}
@@ -186,7 +186,7 @@ defmodule Kadabra.Stream do
     send(stream.connection, {:finished, stream.id})
     send(stream.config.client, {:end_stream, response})
 
-    {:stop, :normal}
+    {:stop, {:shutdown, {:finished, stream.id}}}
   end
 
   def handle_event(:enter, _old, _new, stream), do: {:keep_state, stream}
@@ -250,6 +250,7 @@ defmodule Kadabra.Stream do
         stream.flow
         |> Stream.FlowControl.add(payload)
         |> Stream.FlowControl.process()
+        |> send_data_frames(stream.config.socket, stream.id)
       else
         stream.flow
       end
@@ -269,6 +270,20 @@ defmodule Kadabra.Stream do
 
     # sorting headers to have pseudo headers first.
     Enum.sort(h, fn {a, _b}, {c, _d} -> a < c end)
+  end
+
+  def send_data_frames(flow_control, socket, stream_id) do
+    flow_control.out_queue
+    |> :queue.to_list()
+    |> Enum.each(fn {data, end_stream?} ->
+      bin =
+        %Frame.Data{stream_id: stream_id, end_stream: end_stream?, data: data}
+        |> Encodable.to_bin()
+
+      Socket.send(socket, bin)
+    end)
+
+    %{flow_control | out_queue: :queue.new()}
   end
 
   # Other Callbacks

@@ -129,7 +129,12 @@ defmodule Kadabra.Connection.Processor do
   def process(%PushPromise{stream_id: stream_id} = frame, state) do
     %{config: config, flow_control: flow_control} = state
 
-    stream = Stream.new(config, flow_control.settings, stream_id)
+    %{
+      initial_window_size: window,
+      max_frame_size: max_frame
+    } = flow_control.settings
+
+    stream = Stream.new(config, stream_id, window, max_frame)
 
     case Stream.start_link(stream) do
       {:ok, pid} ->

@@ -179,11 +179,11 @@ defmodule Kadabra.Connection do
     {:noreply, [], %{state | flow_control: flow}}
   end
 
-  def handle_info({:EXIT, pid, _info}, state) do
+  def handle_info({:EXIT, _pid, {:shutdown, {:finished, stream_id}}}, state) do
     flow =
       state.flow_control
       |> FlowControl.decrement_active_stream_count()
-      |> FlowControl.remove_active(pid)
+      |> FlowControl.remove_active(stream_id)
       |> FlowControl.process(state.config)
 
     GenStage.ask(state.queue, 1)
