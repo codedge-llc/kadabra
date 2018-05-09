@@ -1,11 +1,15 @@
 defmodule Kadabra.Connection.Settings do
   @moduledoc false
 
+  @default_header_table_size 4096
+  @default_initial_window_size (:math.pow(2, 16) - 1) |> round()
+  @default_max_frame_size :math.pow(2, 14) |> round()
+
   defstruct enable_push: true,
-            header_table_size: 4096,
-            initial_window_size: 65_535,
+            header_table_size: @default_header_table_size,
+            initial_window_size: @default_initial_window_size,
             max_concurrent_streams: :infinite,
-            max_frame_size: 16_384,
+            max_frame_size: @default_max_frame_size,
             max_header_list_size: nil
 
   alias Kadabra.Error
@@ -26,14 +30,17 @@ defmodule Kadabra.Connection.Settings do
   @max_frame_size 0x5
   @max_header_list_size 0x6
 
+  @max_initial_window_size (:math.pow(2, 31) - 1) |> round()
+  @max_max_frame_size (:math.pow(2, 24) - 1) |> round()
+
   def default do
     %__MODULE__{}
   end
 
   def fastest do
     %__MODULE__{
-      initial_window_size: 2_147_483_647,
-      max_frame_size: 16_777_215
+      initial_window_size: @max_initial_window_size,
+      max_frame_size: @max_max_frame_size
     }
   end
 
@@ -86,7 +93,8 @@ defmodule Kadabra.Connection.Settings do
     {:ok, %{settings | max_concurrent_streams: value}}
   end
 
-  def put(settings, @initial_window_size, value) when value > 4_294_967_295 do
+  def put(settings, @initial_window_size, value)
+      when value > @max_initial_window_size do
     {:error, Error.flow_control_error(), settings}
   end
 
@@ -94,12 +102,13 @@ defmodule Kadabra.Connection.Settings do
     {:ok, %{settings | initial_window_size: value}}
   end
 
+  def put(settings, @max_frame_size, value)
+      when value < @default_max_frame_size or value > @max_max_frame_size do
+    {:error, Error.protocol_error(), settings}
+  end
+
   def put(settings, @max_frame_size, value) do
-    if value < 16_384 or value > 16_777_215 do
-      {:error, Error.protocol_error(), settings}
-    else
-      {:ok, %{settings | max_frame_size: value}}
-    end
+    {:ok, %{settings | max_frame_size: value}}
   end
 
   def put(settings, @max_header_list_size, value) do

@@ -186,31 +186,36 @@ defmodule Kadabra.Connection.Processor do
     {:ok, state}
   end
 
+  @spec send_window_update(pid, Data.t()) :: no_return
   def send_window_update(_socket, %Data{data: nil}), do: :ok
 
   def send_window_update(_socket, %Data{data: ""}), do: :ok
 
   def send_window_update(socket, %Data{stream_id: sid, data: data}) do
-    bin = data |> WindowUpdate.new() |> Encodable.to_bin()
-    Socket.send(socket, bin)
-
-    s_bin =
-      sid
-      |> WindowUpdate.new(byte_size(data))
-      |> Encodable.to_bin()
-
-    Socket.send(socket, s_bin)
+    size = byte_size(data)
+    send_window_update(socket, 0, size)
+    send_window_update(socket, sid, size)
   end
 
-  def send_huge_window_update(socket, flow_control) do
-    available = Connection.FlowControl.window_max() - flow_control.window
-
+  @spec send_window_update(pid, non_neg_integer, integer) :: no_return
+  def send_window_update(socket, stream_id, bytes)
+      when bytes > 0 and bytes < 2_147_483_647 do
     bin =
-      0
-      |> Frame.WindowUpdate.new(available)
+      stream_id
+      |> WindowUpdate.new(bytes)
       |> Encodable.to_bin()
 
     Socket.send(socket, bin)
+  end
+
+  def send_window_update(_socket, _stream_id, _bytes), do: :ok
+
+  def send_huge_window_update(socket, flow_control) do
+    available =
+      Connection.FlowControl.window_max() -
+        Connection.FlowControl.window_default()
+
+    send_window_update(socket, 0, available)
   end
 
   def notify_settings_change(ref, old_settings, flow) do

@@ -22,6 +22,8 @@ defmodule Kadabra.Connection.FlowControl do
           settings: Connection.Settings.t()
         }
 
+  def window_default, do: @default_window_size
+
   def window_max, do: @window_max
 
   @spec update_settings(t, Connection.Settings.t()) :: t
