@@ -16,7 +16,7 @@ defmodule Kadabra.Mixfile do
       name: "Kadabra",
       description: description(),
       source_url: "https://github.com/codedge-llc/kadabra",
-      docs: [main: "kadabra"],
+      docs: [main: "Kadabra"],
       test_coverage: [tool: ExCoveralls],
       preferred_cli_env: [
         coveralls: :test,
