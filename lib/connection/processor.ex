@@ -13,6 +13,8 @@ defmodule Kadabra.Connection.Processor do
     Stream
   }
 
+  alias Kadabra.Connection.FlowControl
+
   alias Kadabra.Frame.{
     Continuation,
     Data,
@@ -48,7 +50,7 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%Data{stream_id: stream_id} = frame, %{config: config} = state) do
-    available = Connection.FlowControl.window_max() - state.remote_window
+    available = FlowControl.window_max() - state.remote_window
     size = min(available, byte_size(frame.data))
 
     send_window_update(config.socket, 0, size)
@@ -104,7 +106,7 @@ defmodule Kadabra.Connection.Processor do
   def process(%Frame.Settings{ack: false, settings: settings}, state) do
     %{flow_control: flow, config: config} = state
     old_settings = flow.settings
-    flow = Connection.FlowControl.update_settings(flow, settings)
+    flow = FlowControl.update_settings(flow, settings)
 
     notify_settings_change(old_settings, flow)
 
@@ -123,7 +125,7 @@ defmodule Kadabra.Connection.Processor do
 
   def process(%Frame.Settings{ack: true}, %{config: c} = state) do
     send_huge_window_update(c.socket, state.remote_window)
-    {:ok, %{state | remote_window: Connection.FlowControl.window_max()}}
+    {:ok, %{state | remote_window: FlowControl.window_max()}}
   end
 
   def process(%PushPromise{stream_id: stream_id} = frame, state) do
@@ -140,7 +142,7 @@ defmodule Kadabra.Connection.Processor do
       {:ok, pid} ->
         Stream.call_recv(pid, frame)
 
-        flow = Connection.FlowControl.add_active(flow_control, stream_id, pid)
+        flow = FlowControl.add_active(flow_control, stream_id, pid)
 
         {:ok, %{state | flow_control: flow}}
 
@@ -149,20 +151,20 @@ defmodule Kadabra.Connection.Processor do
     end
   end
 
-  def process(%Frame.Ping{stream_id: sid}, state) when sid != 0 do
+  def process(%Ping{stream_id: sid}, state) when sid != 0 do
     {:connection_error, :PROTOCOL_ERROR, state}
   end
 
-  def process(%Frame.Ping{data: data}, state) when byte_size(data) != 8 do
+  def process(%Ping{data: data}, state) when byte_size(data) != 8 do
     {:connection_error, :FRAME_SIZE_ERROR, state}
   end
 
-  def process(%Frame.Ping{ack: false}, %{config: config} = state) do
+  def process(%Ping{ack: false}, %{config: config} = state) do
     Kernel.send(config.client, {:ping, self()})
     {:ok, state}
   end
 
-  def process(%Frame.Ping{ack: true}, %{config: config} = state) do
+  def process(%Ping{ack: true}, %{config: config} = state) do
     Kernel.send(config.client, {:pong, self()})
     {:ok, state}
   end
@@ -178,7 +180,7 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%WindowUpdate{stream_id: 0, window_size_increment: inc}, state) do
-    flow = Connection.FlowControl.increment_window(state.flow_control, inc)
+    flow = FlowControl.increment_window(state.flow_control, inc)
     {:ok, %{state | flow_control: flow}}
   end
 
@@ -223,7 +225,7 @@ defmodule Kadabra.Connection.Processor do
   def send_window_update(_socket, _stream_id, _bytes), do: :ok
 
   def send_huge_window_update(socket, remote_window) do
-    available = Connection.FlowControl.window_max() - remote_window
+    available = FlowControl.window_max() - remote_window
     send_window_update(socket, 0, available)
   end
 

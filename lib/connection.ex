@@ -166,9 +166,7 @@ defmodule Kadabra.Connection do
     {:noreply, [], %{state | flow_control: flow}}
   end
 
-  def handle_info({:DOWN, _ref, _type, pid, _info} = tup, state) do
-    IO.inspect(tup)
-
+  def handle_info({:DOWN, _ref, _type, pid, _info}, state) do
     flow =
       state.flow_control
       |> FlowControl.decrement_active_stream_count()

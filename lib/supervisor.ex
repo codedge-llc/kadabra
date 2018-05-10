@@ -21,10 +21,6 @@ defmodule Kadabra.Supervisor do
     Supervisor.stop(pid)
   end
 
-  def start_opts(id \\ :erlang.make_ref()) do
-    [id: id, restart: :transient]
-  end
-
   def init(%Kadabra.Config{ref: ref} = config) do
     config = %{config | supervisor: self()}
 

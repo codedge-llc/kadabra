@@ -38,9 +38,6 @@ defmodule Kadabra.Stream do
           body: binary
         }
 
-  # @data 0x0
-  @headers 0x1
-
   @closed :closed
   @hc_local :half_closed_local
   @hc_remote :half_closed_remote
@@ -240,9 +237,17 @@ defmodule Kadabra.Stream do
     {:ok, encoded} = Hpack.encode(stream.ref, headers)
     headers_payload = :erlang.iolist_to_binary(encoded)
 
-    flags = if payload, do: 0x4, else: 0x5
-    h = Frame.binary_frame(@headers, flags, stream.id, headers_payload)
-    Socket.send(stream.socket, h)
+    bin =
+      %Frame.Headers{
+        stream_id: stream.id,
+        header_block_fragment: headers_payload,
+        end_stream: is_nil(payload),
+        end_headers: true
+      }
+      |> Encodable.to_bin()
+
+    # h = Frame.binary_frame(@headers, flags, stream.id, headers_payload)
+    Socket.send(stream.socket, bin)
     # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
 
     # Reply early for better performance

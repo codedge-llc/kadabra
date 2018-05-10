@@ -129,7 +129,11 @@ defmodule Kadabra.Connection.FlowControl do
   """
   def remove_active(%{active_streams: active} = flow_control, pid)
       when is_pid(pid) do
-    updated = Enum.filter(active, fn {_, p} -> p != pid end) |> Enum.into(%{})
+    updated =
+      active
+      |> Enum.filter(fn {_, p} -> p != pid end)
+      |> Enum.into(%{})
+
     %{flow_control | active_streams: updated}
   end
 

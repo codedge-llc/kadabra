@@ -64,3 +64,17 @@ defmodule Kadabra.Frame.Headers do
     end
   end
 end
+
+defimpl Kadabra.Encodable, for: Kadabra.Frame.Headers do
+  alias Kadabra.Frame
+
+  @headers 0x1
+
+  def to_bin(%{header_block_fragment: block, stream_id: sid} = frame) do
+    flags = flags(frame)
+    Frame.binary_frame(@headers, flags, sid, block)
+  end
+
+  defp flags(%{end_headers: true, end_stream: false}), do: 0x4
+  defp flags(%{end_headers: true, end_stream: true}), do: 0x5
+end
