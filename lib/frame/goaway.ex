@@ -43,6 +43,13 @@ defmodule Kadabra.Frame.Goaway do
       debug_data: debug_data
     }
   end
+
+  def new(stream_id, error_code) when is_integer(stream_id) do
+    %__MODULE__{
+      last_stream_id: stream_id,
+      error_code: error_code
+    }
+  end
 end
 
 defimpl Kadabra.Encodable, for: Kadabra.Frame.Goaway do

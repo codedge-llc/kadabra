@@ -27,8 +27,8 @@ defimpl Kadabra.Encodable, for: Kadabra.Frame.Data do
 
   @data 0x0
 
-  def to_bin(frame) do
-    end_stream = if frame.end_stream, do: 0x1, else: 0x0
-    Frame.binary_frame(@data, end_stream, frame.stream_id, frame.data)
+  def to_bin(%{end_stream: end_stream, stream_id: stream_id, data: data}) do
+    flags = if end_stream, do: 0x1, else: 0x0
+    Frame.binary_frame(@data, flags, stream_id, data)
   end
 end

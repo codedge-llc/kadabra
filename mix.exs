@@ -1,7 +1,7 @@
 defmodule Kadabra.Mixfile do
   use Mix.Project
 
-  @version "0.4.0"
+  @version "0.4.1"
 
   def project do
     [
@@ -50,7 +50,6 @@ defmodule Kadabra.Mixfile do
       {:hpack, "~> 0.2.3", hex: :hpack_erl},
       {:gen_stage, "~> 0.13.1"},
       {:ex_doc, "~> 0.14", only: :dev},
-      {:dogma, "~> 0.1", only: :dev},
       {:excoveralls, "~> 0.7", only: :test},
       {:dialyxir, "~> 0.5", only: [:dev], runtime: false},
       {:credo, "~> 0.8", only: [:dev, :test], runtime: false}

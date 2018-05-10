@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.1
+- Send exactly number of allowed bytes on initial connection WINDOW_UPDATE
+- Default settings use maximum values for MAX_FRAME_SIZE and INITIAL_WINDOW_SIZE
+- Incoming PING and WINDOW_UPDATE frames are now validated, closing the
+  connection if an error is encountered
+- Fixed: can no longer accidentally send 0-size WINDOW_UPDATE frames
+- Fixed: don't send WINDOW_UPDATE frames larger than remote server's available
+  connection flow window
+
 ## v0.4.0
 - Support for `http` URIs
 - Requests are now buffered with GenStage

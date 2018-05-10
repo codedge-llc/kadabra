@@ -1,14 +1,15 @@
 defmodule Kadabra.Frame.Ping do
   @moduledoc false
 
-  defstruct [:data, ack: false]
+  defstruct [:data, stream_id: 0, ack: false]
 
   alias Kadabra.Frame
   alias Kadabra.Frame.Flags
 
   @type t :: %__MODULE__{
           ack: boolean,
-          data: <<_::64>>
+          data: <<_::64>>,
+          stream_id: integer
         }
 
   @doc ~S"""
@@ -18,13 +19,14 @@ defmodule Kadabra.Frame.Ping do
 
       iex> Kadabra.Frame.Ping.new
       %Kadabra.Frame.Ping{data: <<0, 0, 0, 0, 0, 0, 0, 0>>,
-      ack: false}
+      ack: false, stream_id: 0}
   """
   @spec new() :: t
   def new do
     %__MODULE__{
       ack: false,
-      data: <<0, 0, 0, 0, 0, 0, 0, 0>>
+      data: <<0, 0, 0, 0, 0, 0, 0, 0>>,
+      stream_id: 0
     }
   end
 
@@ -34,15 +36,17 @@ defmodule Kadabra.Frame.Ping do
   ## Examples
 
       iex> frame = %Kadabra.Frame{payload: <<0, 0, 0, 0, 0, 0, 0, 0>>,
-      ...> flags: 0x1, type: 0x6}
+      ...> flags: 0x1, type: 0x6, stream_id: 0}
       iex> Kadabra.Frame.Ping.new(frame)
-      %Kadabra.Frame.Ping{data: <<0, 0, 0, 0, 0, 0, 0, 0>>, ack: true}
+      %Kadabra.Frame.Ping{data: <<0, 0, 0, 0, 0, 0, 0, 0>>, ack: true,
+      stream_id: 0}
   """
   @spec new(Frame.t()) :: t
-  def new(%Frame{type: 0x6, payload: <<data::64>>, flags: flags}) do
+  def new(%Frame{type: 0x6, payload: <<data::64>>, flags: flags, stream_id: sid}) do
     %__MODULE__{
       ack: Flags.ack?(flags),
-      data: <<data::64>>
+      data: <<data::64>>,
+      stream_id: sid
     }
   end
 end
