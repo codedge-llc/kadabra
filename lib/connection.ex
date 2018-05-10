@@ -156,12 +156,12 @@ defmodule Kadabra.Connection do
   end
 
   def handle_info({:EXIT, _pid, {:shutdown, {:finished, stream_id}}}, state) do
+    GenStage.ask(state.queue, 1)
+
     flow =
       state.flow_control
       |> FlowControl.finish_stream(stream_id)
       |> FlowControl.process(state.config)
-
-    GenStage.ask(state.queue, 1)
 
     {:noreply, [], %{state | flow_control: flow}}
   end
@@ -180,7 +180,7 @@ defmodule Kadabra.Connection do
         code = Error.code(error)
 
         bin =
-          state.flow_control.stream_id
+          state.flow_control.stream_set.stream_id
           |> Goaway.new(code)
           |> Encodable.to_bin()
 
@@ -193,7 +193,7 @@ defmodule Kadabra.Connection do
 
   def send_goaway(%{config: config, flow_control: flow}, error) do
     bin =
-      flow.stream_id
+      flow.stream_set.stream_id
       |> Frame.Goaway.new(Error.code(error))
       |> Encodable.to_bin()
 

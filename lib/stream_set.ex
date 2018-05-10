@@ -23,8 +23,8 @@ defmodule Kadabra.StreamSet do
       %Kadabra.Connection.FlowControl{stream_id: 7}
   """
   @spec increment_stream_id(t) :: t
-  def increment_stream_id(flow_control) do
-    %{flow_control | stream_id: flow_control.stream_id + 2}
+  def increment_stream_id(stream_set) do
+    %{stream_set | stream_id: stream_set.stream_id + 2}
   end
 
   @doc ~S"""
@@ -37,8 +37,8 @@ defmodule Kadabra.StreamSet do
       %Kadabra.Connection.FlowControl{active_stream_count: 3}
   """
   @spec increment_active_stream_count(t) :: t
-  def increment_active_stream_count(flow_control) do
-    %{flow_control | active_stream_count: flow_control.active_stream_count + 1}
+  def increment_active_stream_count(stream_set) do
+    %{stream_set | active_stream_count: stream_set.active_stream_count + 1}
   end
 
   @doc ~S"""
@@ -51,8 +51,8 @@ defmodule Kadabra.StreamSet do
       %Kadabra.Connection.FlowControl{active_stream_count: 1}
   """
   @spec decrement_active_stream_count(t) :: t
-  def decrement_active_stream_count(flow_control) do
-    %{flow_control | active_stream_count: flow_control.active_stream_count - 1}
+  def decrement_active_stream_count(stream_set) do
+    %{stream_set | active_stream_count: stream_set.active_stream_count - 1}
   end
 
   @doc ~S"""
@@ -64,8 +64,8 @@ defmodule Kadabra.StreamSet do
       iex> flow.active_streams
       %{1 => :pid}
   """
-  def add_active(%{active_streams: active} = flow_control, stream_id, pid) do
-    %{flow_control | active_streams: Map.put(active, stream_id, pid)}
+  def add_active(%{active_streams: active} = stream_set, stream_id, pid) do
+    %{stream_set | active_streams: Map.put(active, stream_id, pid)}
   end
 
   @doc ~S"""
@@ -78,19 +78,19 @@ defmodule Kadabra.StreamSet do
       iex> flow.active_streams
       %{3 => :pid}
   """
-  def remove_active(%{active_streams: active} = flow_control, pid)
+  def remove_active(%{active_streams: active} = stream_set, pid)
       when is_pid(pid) do
     updated =
       active
       |> Enum.filter(fn {_, p} -> p != pid end)
       |> Enum.into(%{})
 
-    %{flow_control | active_streams: updated}
+    %{stream_set | active_streams: updated}
   end
 
-  def remove_active(%{active_streams: active} = flow_control, stream_id)
+  def remove_active(%{active_streams: active} = stream_set, stream_id)
       when is_integer(stream_id) do
-    %{flow_control | active_streams: Map.delete(active, stream_id)}
+    %{stream_set | active_streams: Map.delete(active, stream_id)}
   end
 
   @doc ~S"""

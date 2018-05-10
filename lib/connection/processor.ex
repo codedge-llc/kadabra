@@ -51,10 +51,11 @@ defmodule Kadabra.Connection.Processor do
 
   def process(%Data{stream_id: stream_id} = frame, %{config: config} = state) do
     available = FlowControl.window_max() - state.remote_window
-    size = min(available, byte_size(frame.data))
+    bin_size = byte_size(frame.data)
+    size = min(available, bin_size)
 
     send_window_update(config.socket, 0, size)
-    send_window_update(config.socket, stream_id, size)
+    send_window_update(config.socket, stream_id, bin_size)
 
     process_on_stream(state, stream_id, frame)
 
