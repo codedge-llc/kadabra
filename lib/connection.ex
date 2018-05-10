@@ -101,7 +101,7 @@ defmodule Kadabra.Connection do
       config: config
     } = state
 
-    bin = flow.stream_id |> Goaway.new() |> Encodable.to_bin()
+    bin = flow.stream_set.stream_id |> Goaway.new() |> Encodable.to_bin()
     Socket.send(config.socket, bin)
 
     Kernel.send(config.client, {:closed, config.supervisor})
@@ -155,35 +155,10 @@ defmodule Kadabra.Connection do
     {:noreply, [], state}
   end
 
-  def handle_info({:finished, stream_id}, %{flow_control: flow} = state) do
-    flow =
-      flow
-      |> FlowControl.decrement_active_stream_count()
-      |> FlowControl.remove_active(stream_id)
-      |> FlowControl.process(state.config)
-
-    GenStage.ask(state.queue, 1)
-
-    {:noreply, [], %{state | flow_control: flow}}
-  end
-
-  def handle_info({:DOWN, _ref, _type, pid, _info}, state) do
-    flow =
-      state.flow_control
-      |> FlowControl.decrement_active_stream_count()
-      |> FlowControl.remove_active(pid)
-      |> FlowControl.process(state.config)
-
-    GenStage.ask(state.queue, 1)
-
-    {:noreply, [], %{state | flow_control: flow}}
-  end
-
   def handle_info({:EXIT, _pid, {:shutdown, {:finished, stream_id}}}, state) do
     flow =
       state.flow_control
-      |> FlowControl.decrement_active_stream_count()
-      |> FlowControl.remove_active(stream_id)
+      |> FlowControl.finish_stream(stream_id)
       |> FlowControl.process(state.config)
 
     GenStage.ask(state.queue, 1)
@@ -214,14 +189,6 @@ defmodule Kadabra.Connection do
 
         {:noreply, [], state}
     end
-  end
-
-  def send_protocol_error(state) do
-    send_goaway(state, :PROTOCOL_ERROR)
-  end
-
-  def send_frame_size_error(state) do
-    send_goaway(state, :FRAME_SIZE_ERROR)
   end
 
   def send_goaway(%{config: config, flow_control: flow}, error) do

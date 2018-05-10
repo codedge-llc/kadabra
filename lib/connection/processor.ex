@@ -91,12 +91,12 @@ defmodule Kadabra.Connection.Processor do
     bin = Frame.Settings.ack() |> Encodable.to_bin()
     Socket.send(config.socket, bin)
 
-    case flow.max_concurrent_streams do
+    case flow.stream_set.max_concurrent_streams do
       :infinite ->
         GenStage.ask(state.queue, 2_000_000_000)
 
       max ->
-        to_ask = max - flow.active_stream_count
+        to_ask = max - flow.stream_set.active_stream_count
         GenStage.ask(state.queue, to_ask)
     end
 
@@ -125,7 +125,9 @@ defmodule Kadabra.Connection.Processor do
     bin = Frame.Settings.ack() |> Encodable.to_bin()
     Socket.send(config.socket, bin)
 
-    to_ask = settings.max_concurrent_streams - flow.active_stream_count
+    to_ask =
+      settings.max_concurrent_streams - flow.stream_set.active_stream_count
+
     GenStage.ask(state.queue, to_ask)
 
     {:ok, %{state | flow_control: flow, remote_settings: settings}}
@@ -237,7 +239,7 @@ defmodule Kadabra.Connection.Processor do
     send_window_update(socket, 0, available)
   end
 
-  def notify_settings_change(old_settings, new_settings, flow) do
+  def notify_settings_change(old_settings, new_settings, %{stream_set: set}) do
     old_settings = old_settings || Connection.Settings.default()
     %{initial_window_size: old_window} = old_settings
 
@@ -245,13 +247,13 @@ defmodule Kadabra.Connection.Processor do
     new_window = new_settings.initial_window_size
     window_diff = new_window - old_window
 
-    for {_stream_id, pid} <- flow.active_streams do
+    for {_stream_id, pid} <- set.active_streams do
       send(pid, {:settings_change, window_diff, max_frame_size})
     end
   end
 
   def process_on_stream(state, stream_id, frame) do
-    state.flow_control.active_streams
+    state.flow_control.stream_set.active_streams
     |> Map.get(stream_id)
     |> Stream.call_recv(frame)
   end

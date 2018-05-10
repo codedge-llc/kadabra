@@ -183,7 +183,6 @@ defmodule Kadabra.Stream do
   def handle_event(:enter, _old, @closed, stream) do
     response = Response.new(stream.id, stream.headers, stream.body)
     Tasks.run(stream.on_response, response)
-    send(stream.connection, {:finished, stream.id})
     send(stream.client, {:end_stream, response})
 
     {:stop, {:shutdown, {:finished, stream.id}}}

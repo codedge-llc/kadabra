@@ -25,7 +25,7 @@ defmodule Kadabra.ConnectionTest do
     Process.sleep(500)
 
     state = :sys.get_state(conn_pid).state
-    assert Enum.count(state.flow_control.active_streams) == 2
+    assert Enum.count(state.flow_control.stream_set.active_streams) == 2
 
     # frame = Kadabra.Frame.Goaway.new(1)
     # GenServer.cast(conn_pid, {:recv, frame})
