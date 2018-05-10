@@ -91,7 +91,7 @@ defmodule Kadabra.Connection.Processor do
     bin = Frame.Settings.ack() |> Encodable.to_bin()
     Socket.send(config.socket, bin)
 
-    case flow.settings.max_concurrent_streams do
+    case flow.max_concurrent_streams do
       :infinite ->
         GenStage.ask(state.queue, 2_000_000_000)
 
@@ -105,10 +105,18 @@ defmodule Kadabra.Connection.Processor do
 
   def process(%Frame.Settings{ack: false, settings: settings}, state) do
     %{flow_control: flow, config: config} = state
-    old_settings = flow.settings
-    flow = FlowControl.update_settings(flow, settings)
+    old_settings = state.remote_settings
+    settings = Connection.Settings.merge(old_settings, settings)
 
-    notify_settings_change(old_settings, flow)
+    flow =
+      FlowControl.update_settings(
+        flow,
+        settings.initial_window_size,
+        settings.max_frame_size,
+        settings.max_concurrent_streams
+      )
+
+    notify_settings_change(old_settings, settings, flow)
 
     config.ref
     |> Hpack.via_tuple(:encoder)
@@ -120,7 +128,7 @@ defmodule Kadabra.Connection.Processor do
     to_ask = settings.max_concurrent_streams - flow.active_stream_count
     GenStage.ask(state.queue, to_ask)
 
-    {:ok, %{state | flow_control: flow}}
+    {:ok, %{state | flow_control: flow, remote_settings: settings}}
   end
 
   def process(%Frame.Settings{ack: true}, %{config: c} = state) do
@@ -134,7 +142,7 @@ defmodule Kadabra.Connection.Processor do
     %{
       initial_window_size: window,
       max_frame_size: max_frame
-    } = flow_control.settings
+    } = flow_control
 
     stream = Stream.new(config, stream_id, window, max_frame)
 
@@ -229,12 +237,12 @@ defmodule Kadabra.Connection.Processor do
     send_window_update(socket, 0, available)
   end
 
-  def notify_settings_change(old_settings, flow) do
+  def notify_settings_change(old_settings, new_settings, flow) do
+    old_settings = old_settings || Connection.Settings.default()
     %{initial_window_size: old_window} = old_settings
-    %{settings: settings} = flow
 
-    max_frame_size = settings.max_frame_size
-    new_window = settings.initial_window_size
+    max_frame_size = new_settings.max_frame_size
+    new_window = new_settings.initial_window_size
     window_diff = new_window - old_window
 
     for {_stream_id, pid} <- flow.active_streams do

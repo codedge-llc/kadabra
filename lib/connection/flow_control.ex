@@ -4,34 +4,41 @@ defmodule Kadabra.Connection.FlowControl do
   @default_window_size round(:math.pow(2, 16) - 1)
   @max_window_size round(:math.pow(2, 31) - 1)
 
+  @default_initial_window_size round(:math.pow(2, 16) - 1)
+  @default_max_frame_size round(:math.pow(2, 14))
+
   defstruct queue: :queue.new(),
             stream_id: 1,
             active_stream_count: 0,
             active_streams: %{},
-            window: @default_window_size,
-            settings: %Kadabra.Connection.Settings{}
+            initial_window_size: @default_initial_window_size,
+            max_frame_size: @default_max_frame_size,
+            max_concurrent_streams: :infinite,
+            window: @default_window_size
 
-  alias Kadabra.{Config, Connection, Stream}
+  alias Kadabra.{Config, Stream}
 
   @type t :: %__MODULE__{
           queue: :queue.queue(),
           stream_id: pos_integer,
           active_stream_count: non_neg_integer,
           active_streams: %{},
-          window: integer,
-          settings: Connection.Settings.t()
+          initial_window_size: non_neg_integer,
+          max_frame_size: non_neg_integer,
+          max_concurrent_streams: non_neg_integer | :infinite,
+          window: integer
         }
 
   def window_default, do: @default_window_size
 
   def window_max, do: @max_window_size
 
-  @spec update_settings(t, Connection.Settings.t()) :: t
-  def update_settings(flow_control, nil), do: flow_control
-
-  def update_settings(%{settings: old_settings} = flow_control, settings) do
-    settings = Connection.Settings.merge(old_settings, settings)
-    %{flow_control | settings: settings}
+  @spec update_settings(t(), integer, integer, integer) :: t()
+  def update_settings(flow_control, initial_window, max_frame, max_streams) do
+    flow_control
+    |> Map.put(:initial_window_size, initial_window)
+    |> Map.put(:max_frame_size, max_frame)
+    |> Map.put(:max_concurrent_streams, max_streams)
   end
 
   @doc ~S"""
@@ -169,7 +176,7 @@ defmodule Kadabra.Connection.FlowControl do
       %{
         initial_window_size: window,
         max_frame_size: max_frame
-      } = flow.settings
+      } = flow
 
       stream = Stream.new(config, flow.stream_id, window, max_frame)
 
@@ -202,26 +209,29 @@ defmodule Kadabra.Connection.FlowControl do
 
   ## Examples
 
-      iex> settings = %Kadabra.Connection.Settings{max_concurrent_streams: 100}
       iex> flow = %Kadabra.Connection.FlowControl{active_stream_count: 3,
-      ...> window: 500, settings: settings}
+      ...> max_concurrent_streams: 100, window: 500}
       iex> can_send?(flow)
       true
 
-      iex> settings = %Kadabra.Connection.Settings{max_concurrent_streams: 100}
       iex> flow = %Kadabra.Connection.FlowControl{active_stream_count: 3,
-      ...> window: 0, settings: settings}
+      ...> max_concurrent_streams: 100, window: 0}
       iex> can_send?(flow)
       false
 
-      iex> settings = %Kadabra.Connection.Settings{max_concurrent_streams: 1}
       iex> flow = %Kadabra.Connection.FlowControl{active_stream_count: 3,
-      ...> window: 500, settings: settings}
+      ...> max_concurrent_streams: 1, window: 500}
       iex> can_send?(flow)
       false
   """
   @spec can_send?(t) :: boolean
-  def can_send?(%{active_stream_count: count, settings: s, window: bytes}) do
-    count < s.max_concurrent_streams and bytes > 0
-  end
+  def can_send?(%{
+        active_stream_count: count,
+        max_concurrent_streams: max,
+        window: bytes
+      })
+      when count < max and bytes > 0,
+      do: true
+
+  def can_send?(_else), do: false
 end

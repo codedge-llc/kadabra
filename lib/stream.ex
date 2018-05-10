@@ -246,7 +246,6 @@ defmodule Kadabra.Stream do
       }
       |> Encodable.to_bin()
 
-    # h = Frame.binary_frame(@headers, flags, stream.id, headers_payload)
     Socket.send(stream.socket, bin)
     # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
 

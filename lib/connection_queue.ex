@@ -34,7 +34,7 @@ defmodule Kadabra.ConnectionQueue do
     Enum.reduce(requests, queue, &enqueue(&2, &1))
   end
 
-  def enqueue(queue, %Kadabra.Request{} = request) do
+  def enqueue(queue, request) do
     :queue.in(request, queue)
   end
 

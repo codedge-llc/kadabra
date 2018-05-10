@@ -6,6 +6,7 @@ defmodule Kadabra.Config do
             ref: nil,
             uri: nil,
             socket: nil,
+            queue: nil,
             opts: []
 
   @type t :: %__MODULE__{

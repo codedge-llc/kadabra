@@ -54,3 +54,11 @@ defmodule Kadabra.Frame do
     <<header::bitstring, payload::bitstring>>
   end
 end
+
+defimpl Kadabra.Encodable, for: Kadabra.Frame do
+  alias Kadabra.Frame
+
+  def to_bin(%{type: type, flags: flags, stream_id: sid, payload: p}) do
+    Frame.binary_frame(type, flags, sid, p)
+  end
+end

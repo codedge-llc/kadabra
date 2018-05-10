@@ -5,6 +5,7 @@ defmodule Kadabra.Connection do
             config: nil,
             flow_control: nil,
             remote_window: 65_535,
+            remote_settings: nil,
             local_settings: nil,
             queue: nil
 
@@ -16,7 +17,6 @@ defmodule Kadabra.Connection do
   alias Kadabra.{
     Config,
     Connection,
-    ConnectionQueue,
     Encodable,
     Error,
     Frame,
@@ -47,19 +47,20 @@ defmodule Kadabra.Connection do
     {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
   end
 
-  def init(%Config{supervisor: sup} = config) do
+  def init(%Config{queue: queue} = config) do
     state = initial_state(config)
     Kernel.send(self(), :start)
     Process.flag(:trap_exit, true)
-    {:consumer, state, subscribe_to: [ConnectionQueue.via_tuple(sup)]}
+    {:consumer, state, subscribe_to: [queue]}
   end
 
-  defp initial_state(%Config{opts: opts} = config) do
+  defp initial_state(%Config{opts: opts, queue: queue} = config) do
     settings = Keyword.get(opts, :settings, Connection.Settings.fastest())
     socket = config.supervisor |> Socket.via_tuple()
 
     %__MODULE__{
       config: %{config | socket: socket},
+      queue: queue,
       local_settings: settings,
       flow_control: %FlowControl{}
     }

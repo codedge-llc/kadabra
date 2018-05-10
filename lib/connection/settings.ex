@@ -117,6 +117,8 @@ defmodule Kadabra.Connection.Settings do
 
   def put(settings, _else, _value), do: {:ok, settings}
 
+  def merge(nil, new_settings), do: new_settings
+
   def merge(old_settings, new_settings) do
     Map.merge(old_settings, new_settings, fn k, v1, v2 ->
       cond do

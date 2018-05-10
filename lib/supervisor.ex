@@ -22,7 +22,10 @@ defmodule Kadabra.Supervisor do
   end
 
   def init(%Kadabra.Config{ref: ref} = config) do
-    config = %{config | supervisor: self()}
+    config =
+      config
+      |> Map.put(:supervisor, self())
+      |> Map.put(:queue, ConnectionQueue.via_tuple(self()))
 
     children = [
       worker(ConnectionQueue, [self()], id: :connection_queue),
