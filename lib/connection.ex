@@ -5,6 +5,7 @@ defmodule Kadabra.Connection do
             config: nil,
             flow_control: nil,
             remote_window: 65_535,
+            local_settings: nil,
             queue: nil
 
   use GenStage
@@ -31,6 +32,7 @@ defmodule Kadabra.Connection do
           buffer: binary,
           config: term,
           flow_control: term,
+          local_settings: Connection.Settings.t(),
           queue: pid
         }
 
@@ -58,9 +60,8 @@ defmodule Kadabra.Connection do
 
     %__MODULE__{
       config: %{config | socket: socket},
-      flow_control: %Connection.FlowControl{
-        settings: settings
-      }
+      local_settings: settings,
+      flow_control: %FlowControl{}
     }
   end
 
@@ -130,13 +131,13 @@ defmodule Kadabra.Connection do
     %{state | flow_control: flow}
   end
 
-  def handle_info(:start, %{config: config, flow_control: flow} = state) do
+  def handle_info(:start, %{config: config} = state) do
     config.supervisor
     |> Socket.via_tuple()
     |> Socket.set_active()
 
     bin =
-      %Frame.Settings{settings: flow.settings}
+      %Frame.Settings{settings: state.local_settings}
       |> Encodable.to_bin()
 
     config.supervisor

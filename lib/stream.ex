@@ -131,7 +131,7 @@ defmodule Kadabra.Stream do
     end
   end
 
-  def recv(from, %RstStream{} = frame, state, stream)
+  def recv(from, %RstStream{} = _frame, state, stream)
       when state in [@open, @hc_local, @hc_remote, @closed] do
     # IO.inspect(frame, label: "Got RST_STREAM")
     {:next_state, :closed, stream, [{:reply, from, :ok}]}
