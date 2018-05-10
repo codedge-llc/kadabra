@@ -3,7 +3,7 @@ defmodule Kadabra.Socket do
 
   defstruct socket: nil, buffer: "", active_user: nil
 
-  alias Kadabra.{Config, Frame, FrameParser}
+  alias Kadabra.{Config, FrameParser}
 
   import Kernel, except: [send: 2]
 
@@ -16,6 +16,9 @@ defmodule Kadabra.Socket do
           | {:ok, pid}
           | {:error, :not_implmenented}
           | {:error, :bad_scheme}
+
+  @spec connection_preface() :: String.t()
+  def connection_preface, do: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
   def send(pid, bin) do
     GenServer.call(pid, {:send, bin})
@@ -33,7 +36,7 @@ defmodule Kadabra.Socket do
   def init(%{uri: uri, opts: opts}) do
     case connect(uri, opts) do
       {:ok, socket} ->
-        socket_send(socket, Frame.connection_preface())
+        socket_send(socket, connection_preface())
         {:ok, %__MODULE__{socket: socket}}
 
       error ->
@@ -159,7 +162,7 @@ defmodule Kadabra.Socket do
   # handle_info
 
   def handle_info(:send_preface, state) do
-    socket_send(state.socket, Frame.connection_preface())
+    socket_send(state.socket, connection_preface())
     {:noreply, state}
   end
 
