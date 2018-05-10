@@ -18,9 +18,9 @@ defmodule Kadabra.StreamSet do
 
   ## Examples
 
-      iex> flow = %Kadabra.Connection.FlowControl{stream_id: 5}
-      iex> increment_stream_id(flow)
-      %Kadabra.Connection.FlowControl{stream_id: 7}
+      iex> set = %Kadabra.StreamSet{stream_id: 5}
+      iex> increment_stream_id(set)
+      %Kadabra.StreamSet{stream_id: 7}
   """
   @spec increment_stream_id(t) :: t
   def increment_stream_id(stream_set) do
@@ -32,9 +32,9 @@ defmodule Kadabra.StreamSet do
 
   ## Examples
 
-      iex> flow = %Kadabra.Connection.FlowControl{active_stream_count: 2}
-      iex> increment_active_stream_count(flow)
-      %Kadabra.Connection.FlowControl{active_stream_count: 3}
+      iex> set = %Kadabra.StreamSet{active_stream_count: 2}
+      iex> increment_active_stream_count(set)
+      %Kadabra.StreamSet{active_stream_count: 3}
   """
   @spec increment_active_stream_count(t) :: t
   def increment_active_stream_count(stream_set) do
@@ -46,9 +46,9 @@ defmodule Kadabra.StreamSet do
 
   ## Examples
 
-      iex> flow = %Kadabra.Connection.FlowControl{active_stream_count: 2}
-      iex> decrement_active_stream_count(flow)
-      %Kadabra.Connection.FlowControl{active_stream_count: 1}
+      iex> set = %Kadabra.StreamSet{active_stream_count: 2}
+      iex> decrement_active_stream_count(set)
+      %Kadabra.StreamSet{active_stream_count: 1}
   """
   @spec decrement_active_stream_count(t) :: t
   def decrement_active_stream_count(stream_set) do
@@ -60,8 +60,8 @@ defmodule Kadabra.StreamSet do
 
   ## Examples
 
-      iex> flow = add_active(%Kadabra.Connection.FlowControl{}, 1, :pid)
-      iex> flow.active_streams
+      iex> set = add_active(%Kadabra.StreamSet{}, 1, :pid)
+      iex> set.active_streams
       %{1 => :pid}
   """
   def add_active(%{active_streams: active} = stream_set, stream_id, pid) do
@@ -73,10 +73,15 @@ defmodule Kadabra.StreamSet do
 
   ## Examples
 
-      iex> flow = remove_active(%Kadabra.Connection.FlowControl{
-      ...> active_streams: %{1 => :test, 3 => :pid}}, 1)
-      iex> flow.active_streams
-      %{3 => :pid}
+      iex> set = remove_active(%Kadabra.StreamSet{
+      ...> active_streams: %{1 => self(), 3 => self()}}, 1)
+      iex> set.active_streams
+      %{3 => self()}
+
+      iex> set = remove_active(%Kadabra.StreamSet{
+      ...> active_streams: %{1 => self()}}, self())
+      iex> set.active_streams
+      %{}
   """
   def remove_active(%{active_streams: active} = stream_set, pid)
       when is_pid(pid) do
