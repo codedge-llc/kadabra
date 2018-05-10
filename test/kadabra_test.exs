@@ -150,7 +150,7 @@ defmodule KadabraTest do
         {:end_stream, response} ->
           assert response.id == 1
           assert response.status == 200
-          assert byte_size(response.body) == 17668
+          assert byte_size(response.body) == 17_668
       after
         5_000 ->
           flunk("No stream response received.")
@@ -168,8 +168,7 @@ defmodule KadabraTest do
           assert byte_size(response.body) == 10_921_353
 
         other ->
-          IO.inspect(other)
-          flunk("Unexpected response")
+          flunk("Unexpected response: #{inspect(other)}")
       after
         45_000 ->
           flunk("No stream response received.")
