@@ -1,19 +1,18 @@
 defmodule Kadabra.Stream.FlowControl do
   @moduledoc false
 
-  @default_window_size 65_535
+  @default_max_frame round(:math.pow(2, 14))
+  @default_window round(:math.pow(2, 16) - 1)
 
   defstruct queue: :queue.new(),
             out_queue: :queue.new(),
-            window: @default_window_size,
-            max_frame_size: 16_384,
-            socket: nil,
-            stream_id: nil
+            window: @default_window,
+            max_frame_size: @default_max_frame
 
   @type t :: %__MODULE__{
           max_frame_size: non_neg_integer,
           queue: :queue.queue(binary),
-          socket: pid,
+          out_queue: :queue.queue({binary, boolean}),
           window: integer
         }
 
@@ -26,20 +25,17 @@ defmodule Kadabra.Stream.FlowControl do
 
   ## Examples
 
-      iex> new(stream_id: 1)
-      %Kadabra.Stream.FlowControl{stream_id: 1}
+      iex> new()
+      %Kadabra.Stream.FlowControl{}
 
-      iex> new(stream_id: 1, window: 20_000, max_frame_size: 18_000)
-      %Kadabra.Stream.FlowControl{stream_id: 1, window: 20_000,
-      max_frame_size: 18_000}
+      iex> new(window: 20_000, max_frame_size: 18_000)
+      %Kadabra.Stream.FlowControl{window: 20_000, max_frame_size: 18_000}
   """
   @spec new(Keyword.t()) :: t
   def new(opts \\ []) do
     %__MODULE__{
-      stream_id: Keyword.get(opts, :stream_id),
-      socket: Keyword.get(opts, :socket),
-      window: Keyword.get(opts, :window, @default_window_size),
-      max_frame_size: Keyword.get(opts, :max_frame_size, 16_384)
+      window: Keyword.get(opts, :window, @default_window),
+      max_frame_size: Keyword.get(opts, :max_frame_size, @default_max_frame)
     }
   end
 
@@ -109,10 +105,7 @@ defmodule Kadabra.Stream.FlowControl do
   end
 
   defp do_process(%{window: window} = flow_control, bin) do
-    %{
-      max_frame_size: max_size,
-      out_queue: out_queue
-    } = flow_control
+    %{max_frame_size: max_size, out_queue: out_queue} = flow_control
 
     payloads = split_packet(max_size, bin)
     out_queue = enqueue_complete(out_queue, payloads)
@@ -122,36 +115,6 @@ defmodule Kadabra.Stream.FlowControl do
     |> Map.put(:out_queue, out_queue)
     |> process()
   end
-
-  defp enqueue_complete(queue, []), do: queue
-
-  defp enqueue_complete(queue, [payload | []]) do
-    {payload, true}
-    |> :queue.in(queue)
-    |> enqueue_complete([])
-  end
-
-  defp enqueue_complete(queue, [payload | rest]) do
-    {payload, false}
-    |> :queue.in(queue)
-    |> enqueue_complete(rest)
-  end
-
-  defp enqueue_partial(queue, []), do: queue
-
-  defp enqueue_partial(queue, [payload | rest]) do
-    {payload, false}
-    |> :queue.in(queue)
-    |> enqueue_partial(rest)
-  end
-
-  def split_packet(size, p) when byte_size(p) >= size do
-    {chunk, rest} = :erlang.split_binary(p, size)
-    [chunk | split_packet(size, rest)]
-  end
-
-  def split_packet(_size, <<>>), do: []
-  def split_packet(_size, p), do: [p]
 
   @doc ~S"""
   Increments stream window by given increment.
@@ -179,4 +142,34 @@ defmodule Kadabra.Stream.FlowControl do
   def set_max_frame_size(flow_control, size) do
     %{flow_control | max_frame_size: size}
   end
+
+  defp enqueue_complete(queue, []), do: queue
+
+  defp enqueue_complete(queue, [payload | []]) do
+    {payload, true}
+    |> :queue.in(queue)
+    |> enqueue_complete([])
+  end
+
+  defp enqueue_complete(queue, [payload | rest]) do
+    {payload, false}
+    |> :queue.in(queue)
+    |> enqueue_complete(rest)
+  end
+
+  defp enqueue_partial(queue, []), do: queue
+
+  defp enqueue_partial(queue, [payload | rest]) do
+    {payload, false}
+    |> :queue.in(queue)
+    |> enqueue_partial(rest)
+  end
+
+  defp split_packet(size, p) when byte_size(p) >= size do
+    {chunk, rest} = :erlang.split_binary(p, size)
+    [chunk | split_packet(size, rest)]
+  end
+
+  defp split_packet(_size, <<>>), do: []
+  defp split_packet(_size, p), do: [p]
 end

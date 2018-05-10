@@ -3,17 +3,18 @@ defmodule Kadabra.Stream do
 
   defstruct id: nil,
             body: "",
-            config: nil,
+            client: nil,
             connection: nil,
-            settings: nil,
+            socket: nil,
+            ref: nil,
             flow: nil,
+            uri: nil,
             headers: [],
-            on_push_promise: nil,
             on_response: nil
 
   require Logger
 
-  alias Kadabra.{Config, Encodable, Frame, Hpack, Socket, Stream, Tasks}
+  alias Kadabra.{Encodable, Frame, Hpack, Socket, Stream, Tasks}
 
   alias Kadabra.Frame.{
     Continuation,
@@ -28,9 +29,10 @@ defmodule Kadabra.Stream do
 
   @type t :: %__MODULE__{
           id: pos_integer,
-          config: term,
+          client: pid,
           connection: pid,
-          settings: pid,
+          ref: term,
+          uri: URI.t(),
           flow: Kadabra.Stream.FlowControl.t(),
           headers: [...],
           body: binary
@@ -47,17 +49,18 @@ defmodule Kadabra.Stream do
   # @reserved_local :reserved_local
   @reserved_remote :reserved_remote
 
-  def new(%Config{} = config, stream_id, initial_window_size, max_frame_size) do
+  def new(config, stream_id, initial_window_size, max_frame_size) do
     flow_opts = [
-      stream_id: stream_id,
-      socket: config.socket,
       window: initial_window_size,
       max_frame_size: max_frame_size
     ]
 
     %__MODULE__{
       id: stream_id,
-      config: config,
+      client: config.client,
+      ref: config.ref,
+      uri: config.uri,
+      socket: config.socket,
       connection: self(),
       flow: Stream.FlowControl.new(flow_opts)
     }
@@ -90,7 +93,7 @@ defmodule Kadabra.Stream do
       stream.flow
       |> Stream.FlowControl.increment_window(inc)
       |> Stream.FlowControl.process()
-      |> send_data_frames(stream.config.socket, stream.id)
+      |> send_data_frames(stream.socket, stream.id)
 
     {:keep_state, %{stream | flow: flow}, [{:reply, from, :ok}]}
   end
@@ -115,7 +118,7 @@ defmodule Kadabra.Stream do
   end
 
   def recv(from, %Headers{end_stream: end_stream?} = frame, _state, stream) do
-    case Hpack.decode(stream.config.ref, frame.header_block_fragment) do
+    case Hpack.decode(stream.ref, frame.header_block_fragment) do
       {:ok, headers} ->
         :gen_statem.reply(from, :ok)
 
@@ -137,9 +140,9 @@ defmodule Kadabra.Stream do
     {:next_state, :closed, stream, [{:reply, from, :ok}]}
   end
 
-  def recv(from, %PushPromise{} = frame, state, %{config: config} = stream)
+  def recv(from, %PushPromise{} = frame, state, %{ref: ref} = stream)
       when state in [@idle] do
-    {:ok, headers} = Hpack.decode(config.ref, frame.header_block_fragment)
+    {:ok, headers} = Hpack.decode(ref, frame.header_block_fragment)
 
     stream = %Stream{stream | headers: stream.headers ++ headers}
 
@@ -150,8 +153,8 @@ defmodule Kadabra.Stream do
     {:next_state, @reserved_remote, stream}
   end
 
-  def recv(from, %Continuation{} = frame, _state, %{config: config} = stream) do
-    {:ok, headers} = Hpack.decode(config.ref, frame.header_block_fragment)
+  def recv(from, %Continuation{} = frame, _state, %{ref: ref} = stream) do
+    {:ok, headers} = Hpack.decode(ref, frame.header_block_fragment)
 
     :gen_statem.reply(from, :ok)
 
@@ -172,9 +175,9 @@ defmodule Kadabra.Stream do
 
   # Enter Events
 
-  def handle_event(:enter, _old, @hc_remote, %{config: config} = stream) do
+  def handle_event(:enter, _old, @hc_remote, %{socket: socket} = stream) do
     bin = stream.id |> RstStream.new() |> Encodable.to_bin()
-    Socket.send(config.socket, bin)
+    Socket.send(socket, bin)
 
     :gen_statem.cast(self(), :close)
     {:keep_state, stream}
@@ -184,7 +187,7 @@ defmodule Kadabra.Stream do
     response = Response.new(stream.id, stream.headers, stream.body)
     Tasks.run(stream.on_response, response)
     send(stream.connection, {:finished, stream.id})
-    send(stream.config.client, {:end_stream, response})
+    send(stream.client, {:end_stream, response})
 
     {:stop, {:shutdown, {:finished, stream.id}}}
   end
@@ -232,14 +235,14 @@ defmodule Kadabra.Stream do
   def handle_event({:call, from}, {:send_headers, request}, _state, stream) do
     %{headers: headers, body: payload, on_response: on_resp} = request
 
-    headers = add_headers(headers, stream.config)
+    headers = add_headers(headers, stream.uri)
 
-    {:ok, encoded} = Hpack.encode(stream.config.ref, headers)
+    {:ok, encoded} = Hpack.encode(stream.ref, headers)
     headers_payload = :erlang.iolist_to_binary(encoded)
 
     flags = if payload, do: 0x4, else: 0x5
     h = Frame.binary_frame(@headers, flags, stream.id, headers_payload)
-    Socket.send(stream.config.socket, h)
+    Socket.send(stream.socket, h)
     # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
 
     # Reply early for better performance
@@ -250,7 +253,7 @@ defmodule Kadabra.Stream do
         stream.flow
         |> Stream.FlowControl.add(payload)
         |> Stream.FlowControl.process()
-        |> send_data_frames(stream.config.socket, stream.id)
+        |> send_data_frames(stream.socket, stream.id)
       else
         stream.flow
       end
@@ -260,7 +263,7 @@ defmodule Kadabra.Stream do
     {:next_state, @open, stream}
   end
 
-  def add_headers(headers, %{uri: uri}) do
+  def add_headers(headers, uri) do
     h =
       headers ++
         [
@@ -276,14 +279,18 @@ defmodule Kadabra.Stream do
     flow_control.out_queue
     |> :queue.to_list()
     |> Enum.each(fn {data, end_stream?} ->
-      bin =
-        %Frame.Data{stream_id: stream_id, end_stream: end_stream?, data: data}
-        |> Encodable.to_bin()
-
-      Socket.send(socket, bin)
+      send_data_frame(socket, stream_id, end_stream?, data)
     end)
 
     %{flow_control | out_queue: :queue.new()}
+  end
+
+  defp send_data_frame(socket, stream_id, end_stream?, data) do
+    bin =
+      %Frame.Data{stream_id: stream_id, end_stream: end_stream?, data: data}
+      |> Encodable.to_bin()
+
+    Socket.send(socket, bin)
   end
 
   # Other Callbacks
