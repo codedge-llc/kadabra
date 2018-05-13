@@ -5,7 +5,10 @@ defmodule Kadabra.Request do
   Useful when queueing multiple requests at once through
   `Kadabra.request/2`
   """
+
   defstruct headers: [], body: nil, on_response: nil
+
+  alias Kadabra.Stream.Response
 
   @type t :: %__MODULE__{
           headers: [],

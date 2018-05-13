@@ -45,9 +45,14 @@ defmodule Kadabra.Frame.Goaway do
   end
 
   def new(stream_id, error_code) when is_integer(stream_id) do
+    new(stream_id, error_code, nil)
+  end
+
+  def new(stream_id, error_code, reason) when is_integer(stream_id) do
     %__MODULE__{
       last_stream_id: stream_id,
-      error_code: error_code
+      error_code: error_code,
+      debug_data: reason
     }
   end
 end

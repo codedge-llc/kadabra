@@ -38,15 +38,16 @@ defmodule Kadabra.Connection.Processor do
           | Continuation.t()
 
   @spec process(frame, Connection.t()) ::
-          {:ok, Connection.t()} | {:connection_error, atom, Connection.t()}
+          {:ok, Connection.t()}
+          | {:connection_error, atom, binary, Connection.t()}
   def process(bin, state) when is_binary(bin) do
     Logger.info("Got binary: #{inspect(bin)}")
     state
   end
 
   def process(%Data{stream_id: 0}, state) do
-    # This is an error
-    {:ok, state}
+    reason = "Recv DATA with stream ID of 0"
+    {:connection_error, :PROTOCOL_ERROR, reason, state}
   end
 
   def process(%Data{stream_id: stream_id} = frame, %{config: config} = state) do
@@ -70,7 +71,7 @@ defmodule Kadabra.Connection.Processor do
         {:ok, state}
 
       {:connection_error, error} ->
-        {:connection_error, error, state}
+        {:connection_error, error, nil, state}
     end
   end
 
@@ -163,11 +164,13 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%Ping{stream_id: sid}, state) when sid != 0 do
-    {:connection_error, :PROTOCOL_ERROR, state}
+    reason = "Recv PING with stream ID of #{sid}"
+    {:connection_error, :PROTOCOL_ERROR, reason, state}
   end
 
   def process(%Ping{data: data}, state) when byte_size(data) != 8 do
-    {:connection_error, :FRAME_SIZE_ERROR, state}
+    reason = "Recv PING with payload of #{byte_size(data)} bytes"
+    {:connection_error, :FRAME_SIZE_ERROR, reason, state}
   end
 
   def process(%Ping{ack: false}, %{config: config} = state) do
@@ -182,12 +185,13 @@ defmodule Kadabra.Connection.Processor do
 
   def process(%Goaway{} = frame, state) do
     log_goaway(frame)
-    {:connection_error, :NO_ERROR, state}
+    {:connection_error, :NO_ERROR, nil, state}
   end
 
   def process(%WindowUpdate{stream_id: 0, window_size_increment: inc}, state)
       when inc <= 0 do
-    {:connection_error, :PROTOCOL_ERROR, state}
+    reason = "Recv WINDOW_UPDATE with increment of #{inc}"
+    {:connection_error, :PROTOCOL_ERROR, reason, state}
   end
 
   def process(%WindowUpdate{stream_id: 0, window_size_increment: inc}, state) do

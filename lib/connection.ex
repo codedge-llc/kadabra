@@ -176,12 +176,12 @@ defmodule Kadabra.Connection do
       {:ok, state} ->
         {:noreply, [], state}
 
-      {:connection_error, error, state} ->
+      {:connection_error, error, reason, state} ->
         code = Error.code(error)
 
         bin =
           state.flow_control.stream_set.stream_id
-          |> Goaway.new(code)
+          |> Goaway.new(code, reason)
           |> Encodable.to_bin()
 
         Socket.send(config.socket, bin)
