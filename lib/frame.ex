@@ -12,37 +12,26 @@ defmodule Kadabra.Frame do
         }
 
   @spec new(binary) :: {:ok, t, binary} | {:error, binary}
-  def new(<<p_size::24, type::8, f::8, 0::1, s_id::31, p::bitstring>> = bin) do
+  # Common, return quickly
+  def new(""), do: {:error, ""}
+
+  def new(<<p_size::24, type::8, f::8, _::1, s_id::31, p::bitstring>>)
+      when byte_size(p) >= p_size do
     size = p_size * 8
+    <<payload::size(size), rest::bitstring>> = p
 
-    case parse_payload(size, p) do
-      {:ok, frame_payload, rest} ->
-        frame = %__MODULE__{
-          length: p_size,
-          type: type,
-          flags: f,
-          stream_id: s_id,
-          payload: frame_payload
-        }
+    frame = %__MODULE__{
+      length: p_size,
+      type: type,
+      flags: f,
+      stream_id: s_id,
+      payload: <<payload::size(size)>>
+    }
 
-        {:ok, frame, rest}
-
-      {:error, _bin} ->
-        {:error, bin}
-    end
+    {:ok, frame, rest}
   end
 
   def new(bin), do: {:error, bin}
-
-  defp parse_payload(size, bin) do
-    case bin do
-      <<frame_payload::size(size), rest::bitstring>> ->
-        {:ok, <<frame_payload::size(size)>>, <<rest::bitstring>>}
-
-      bin ->
-        {:error, <<bin::bitstring>>}
-    end
-  end
 
   @spec binary_frame(integer, integer, integer, binary) :: binary
   def binary_frame(frame_type, flags, stream_id, payload) do

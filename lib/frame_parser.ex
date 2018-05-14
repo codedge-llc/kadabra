@@ -15,17 +15,30 @@ defmodule Kadabra.FrameParser do
     Continuation
   }
 
-  def parse(bin) do
-    case Frame.new(bin) do
-      {:ok, %{type: type} = frame, rest} ->
-        mod = to_module(type)
-        f = mod.new(frame)
-        {:ok, f, rest}
+  # def parse(bin) do
+  #   case Frame.new(bin) do
+  #     {:ok, %{type: type} = frame, rest} ->
+  #       mod = to_module(type)
+  #       f = mod.new(frame)
+  #       {:ok, f, rest}
 
-      {:error, bin} ->
-        {:error, bin}
-    end
+  #     {:error, bin} ->
+  #       {:error, bin}
+  #   end
+  # end
+
+  def parse(""), do: {:error, ""}
+
+  def parse(<<p_size::24, type::8, f::8, r::1, s_id::31, p::bitstring>>)
+      when byte_size(p) >= p_size do
+    size = p_size * 8
+    <<payload::size(size), rest::bitstring>> = p
+
+    {:ok, <<p_size::24, type::8, f::8, r::1, s_id::31, payload::size(size)>>,
+     <<rest::bitstring>>}
   end
+
+  def parse(bin), do: {:error, bin}
 
   def to_module(0x0), do: Data
   def to_module(0x1), do: Headers

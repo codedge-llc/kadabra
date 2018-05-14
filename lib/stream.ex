@@ -38,6 +38,16 @@ defmodule Kadabra.Stream do
           body: binary
         }
 
+  @data 0x1
+  @headers 0x2
+  @rst_stream 0x3
+  @settings 0x4
+  @push_promise 0x5
+  @ping 0x6
+  @goaway 0x7
+  @window_update 0x8
+  @continuation 0x9
+
   @closed :closed
   @hc_local :half_closed_local
   @hc_remote :half_closed_remote
@@ -85,7 +95,12 @@ defmodule Kadabra.Stream do
     {:stop, :normal, [{:reply, from, :ok}]}
   end
 
-  def recv(from, %WindowUpdate{window_size_increment: inc}, _state, stream) do
+  def recv(
+        from,
+        <<_::24, @window_update::8, _::8, _::1, _::31, _r::1, inc::31>>,
+        _state,
+        stream
+      ) do
     flow =
       stream.flow
       |> Stream.FlowControl.increment_window(inc)
@@ -95,22 +110,40 @@ defmodule Kadabra.Stream do
     {:keep_state, %{stream | flow: flow}, [{:reply, from, :ok}]}
   end
 
-  def recv(from, %Data{end_stream: true, data: data}, state, stream)
+  # end_stream? TRUE
+  def recv(
+        from,
+        <<_::24, @data::8, _::3, 1::1, _::1, _::31, payload::bitstring>>,
+        state,
+        stream
+      )
       when state in [@hc_local] do
     :gen_statem.reply(from, :ok)
-    stream = %Stream{stream | body: stream.body <> data}
+    stream = %Stream{stream | body: stream.body <> payload}
     {:next_state, @closed, stream}
   end
 
-  def recv(from, %Data{end_stream: true, data: data}, _state, stream) do
+  # end_stream? TRUE
+  def recv(
+        from,
+        <<_::24, @data::8, _::3, 1::1, _::1, _::31, payload::bitstring>>,
+        _state,
+        stream
+      ) do
     :gen_statem.reply(from, :ok)
-    stream = %Stream{stream | body: stream.body <> data}
+    stream = %Stream{stream | body: stream.body <> payload}
     {:next_state, @hc_remote, stream}
   end
 
-  def recv(from, %Data{end_stream: false, data: data}, _state, stream) do
+  # end_stream? FALSE
+  def recv(
+        from,
+        <<_::24, @data::8, _::3, 0::1, _::1, _::31, payload::bitstring>>,
+        _state,
+        stream
+      ) do
     :gen_statem.reply(from, :ok)
-    stream = %Stream{stream | body: stream.body <> data}
+    stream = %Stream{stream | body: stream.body <> payload}
     {:keep_state, stream}
   end
 

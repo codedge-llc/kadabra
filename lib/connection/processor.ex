@@ -37,35 +37,48 @@ defmodule Kadabra.Connection.Processor do
           | WindowUpdate.t()
           | Continuation.t()
 
+  @data 0x1
+  @headers 0x2
+  @rst_stream 0x3
+  @settings 0x4
+  @push_promise 0x5
+  @ping 0x6
+  @goaway 0x7
+  @window_update 0x8
+  @continuation 0x9
+
   @spec process(frame, Connection.t()) ::
           {:ok, Connection.t()}
           | {:connection_error, atom, binary, Connection.t()}
-  def process(bin, state) when is_binary(bin) do
-    Logger.info("Got binary: #{inspect(bin)}")
-    state
-  end
 
-  def process(%Data{stream_id: 0}, state) do
+  def process(<<_::24, @data::8, _::8, _::1, 0::31, _rest::bitstring>>, state) do
     reason = "Recv DATA with stream ID of 0"
     {:connection_error, :PROTOCOL_ERROR, reason, state}
   end
 
-  def process(%Data{stream_id: stream_id} = frame, %{config: config} = state) do
+  def process(
+        <<_::24, @data::8, _::8, _::1, stream_id::31, payload::bitstring>> =
+          bin,
+        %{config: config} = state
+      ) do
     available = FlowControl.window_max() - state.remote_window
-    bin_size = byte_size(frame.data)
+    bin_size = byte_size(payload)
     size = min(available, bin_size)
 
     send_window_update(config.socket, 0, size)
     send_window_update(config.socket, stream_id, bin_size)
 
-    process_on_stream(state, stream_id, frame)
+    process_on_stream(state, stream_id, bin)
 
     {:ok, %{state | remote_window: state.remote_window + size}}
   end
 
-  def process(%Headers{stream_id: stream_id} = frame, state) do
+  def process(
+        <<_::24, @headers::8, _::8, _::1, stream_id::31, _::bitstring>> = bin,
+        state
+      ) do
     state
-    |> process_on_stream(stream_id, frame)
+    |> process_on_stream(stream_id, bin)
     |> case do
       :ok ->
         {:ok, state}
@@ -75,19 +88,30 @@ defmodule Kadabra.Connection.Processor do
     end
   end
 
-  def process(%RstStream{stream_id: 0}, state) do
+  def process(
+        <<_::24, @rst_stream::8, _::8, _::1, 0::31, _rest::bitstring>>,
+        state
+      ) do
     Logger.error("recv unstarted stream rst")
     {:ok, state}
   end
 
-  def process(%RstStream{stream_id: stream_id} = frame, state) do
-    process_on_stream(state, stream_id, frame)
+  def process(
+        <<_::24, @rst_stream::8, _::8, _::1, stream_id::31, _rest::bitstring>> =
+          bin,
+        state
+      ) do
+    process_on_stream(state, stream_id, bin)
 
     {:ok, state}
   end
 
+  # ack? false
   # nil settings means use default
-  def process(%Frame.Settings{ack: false, settings: nil}, state) do
+  def process(
+        <<_::24, @settings::8, 0::8, _::1, 0::31, _rest::bitstring>>,
+        state
+      ) do
     %{flow_control: flow, config: config} = state
 
     bin = Frame.Settings.ack() |> Encodable.to_bin()
@@ -105,10 +129,20 @@ defmodule Kadabra.Connection.Processor do
     {:ok, state}
   end
 
-  def process(%Frame.Settings{ack: false, settings: settings}, state) do
+  def process(
+        <<_::24, @settings::8, 0::8, _::1, 0::31, settings::bitstring>>,
+        state
+      ) do
     %{flow_control: flow, config: config} = state
     old_settings = state.remote_settings
-    settings = Connection.Settings.merge(old_settings, settings)
+
+    new_settings =
+      Frame.Settings.put_settings(
+        %Connection.Settings{},
+        Frame.Settings.parse_settings(settings)
+      )
+
+    settings = Connection.Settings.merge(old_settings, new_settings)
 
     flow =
       FlowControl.update_settings(
@@ -135,12 +169,28 @@ defmodule Kadabra.Connection.Processor do
     {:ok, %{state | flow_control: flow, remote_settings: settings}}
   end
 
-  def process(%Frame.Settings{ack: true}, %{config: c} = state) do
+  # ack? true
+  def process(
+        <<_::24, @settings::8, 1::8, _::1, stream_id::31, settings::bitstring>>,
+        %{config: c} = state
+      ) do
     send_huge_window_update(c.socket, state.remote_window)
     {:ok, %{state | remote_window: FlowControl.window_max()}}
   end
 
-  def process(%PushPromise{stream_id: stream_id} = frame, state) do
+  def process(
+        <<_::24, @push_promise::8, _::8, _::1, 0::31, _::bitstring>>,
+        state
+      ) do
+    reason = "Recv PUSH_PROMISE with stream ID of 0"
+    {:connection_error, :PROTOCOL_ERROR, reason, state}
+  end
+
+  def process(
+        <<_::24, @push_promise::8, _::8, _::1, stream_id::31, _rest::bitstring>> =
+          bin,
+        state
+      ) do
     %{config: config, flow_control: flow_control} = state
 
     %{
@@ -152,7 +202,7 @@ defmodule Kadabra.Connection.Processor do
 
     case Stream.start_link(stream) do
       {:ok, pid} ->
-        Stream.call_recv(pid, frame)
+        Stream.call_recv(pid, bin)
 
         flow = FlowControl.add_active(flow_control, stream_id, pid)
 
@@ -163,49 +213,73 @@ defmodule Kadabra.Connection.Processor do
     end
   end
 
-  def process(%Ping{stream_id: sid}, state) when sid != 0 do
+  # PING
+
+  def process(<<_::24, @ping::8, _::8, _::1, sid::31, _rest::bitstring>>, state)
+      when sid != 0 do
     reason = "Recv PING with stream ID of #{sid}"
     {:connection_error, :PROTOCOL_ERROR, reason, state}
   end
 
-  def process(%Ping{data: data}, state) when byte_size(data) != 8 do
+  def process(<<_::24, @ping::8, _::8, _::1, _::31, data::bitstring>>, state)
+      when byte_size(data) != 8 do
     reason = "Recv PING with payload of #{byte_size(data)} bytes"
     {:connection_error, :FRAME_SIZE_ERROR, reason, state}
   end
 
-  def process(%Ping{ack: false}, %{config: config} = state) do
-    Kernel.send(config.client, {:ping, self()})
+  # ack? FALSE
+  def process(<<_::24, @ping::8, 0::8, _::1, 0::31, _data::bitstring>>, state) do
+    Kernel.send(state.config.client, {:ping, self()})
     {:ok, state}
   end
 
-  def process(%Ping{ack: true}, %{config: config} = state) do
-    Kernel.send(config.client, {:pong, self()})
+  # ack? TRUE
+  def process(<<_::24, @ping::8, 1::8, _::1, 0::31, _data::bitstring>>, state) do
+    Kernel.send(state.config.client, {:pong, self()})
     {:ok, state}
   end
 
-  def process(%Goaway{} = frame, state) do
-    log_goaway(frame)
+  # GOAWAY
+
+  def process(<<_::24, @goaway::8, _::8, _::1, 0::31, _data::bitstring>>, state) do
+    # log_goaway(frame)
     {:connection_error, :NO_ERROR, nil, state}
   end
 
-  def process(%WindowUpdate{stream_id: 0, window_size_increment: inc}, state)
+  # WINDOW_UPDATE
+
+  def process(
+        <<_::24, @window_update::8, _::8, _::1, 0::31, _r::1, inc::bitstring>>,
+        state
+      )
       when inc <= 0 do
     reason = "Recv WINDOW_UPDATE with increment of #{inc}"
     {:connection_error, :PROTOCOL_ERROR, reason, state}
   end
 
-  def process(%WindowUpdate{stream_id: 0, window_size_increment: inc}, state) do
+  def process(
+        <<_::24, @window_update::8, _::8, _::1, 0::31, _r::1, inc::31>>,
+        state
+      ) do
     flow = FlowControl.increment_window(state.flow_control, inc)
     {:ok, %{state | flow_control: flow}}
   end
 
-  def process(%WindowUpdate{stream_id: stream_id} = frame, state) do
-    process_on_stream(state, stream_id, frame)
+  def process(
+        <<_::24, @window_update::8, _::8, _::1, stream_id::31,
+          _rest::bitstring>> = bin,
+        state
+      ) do
+    process_on_stream(state, stream_id, bin)
     {:ok, state}
   end
 
-  def process(%Continuation{stream_id: stream_id} = frame, state) do
-    process_on_stream(state, stream_id, frame)
+  def process(
+        <<_::24, @continuation::8, _::8, _::1, stream_id::31, _rest::bitstring>> =
+          bin,
+        state
+      ) do
+    process_on_stream(state, stream_id, bin)
     {:ok, state}
   end
 
@@ -257,9 +331,9 @@ defmodule Kadabra.Connection.Processor do
     end
   end
 
-  def process_on_stream(state, stream_id, frame) do
+  def process_on_stream(state, stream_id, bin) do
     state.flow_control.stream_set.active_streams
     |> Map.get(stream_id)
-    |> Stream.call_recv(frame)
+    |> Stream.call_recv(bin)
   end
 end

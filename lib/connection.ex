@@ -171,8 +171,8 @@ defmodule Kadabra.Connection do
     {:noreply, [], state}
   end
 
-  def handle_info({:recv, frame}, state) do
-    case Processor.process(frame, %{config: config} = state) do
+  def handle_info({:recv, bin}, state) do
+    case Processor.process(bin, %{config: config} = state) do
       {:ok, state} ->
         {:noreply, [], state}
 

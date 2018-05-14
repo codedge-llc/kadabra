@@ -39,8 +39,7 @@ defmodule Kadabra.Connection.Settings do
 
   def fastest do
     %__MODULE__{
-      initial_window_size: @max_initial_window_size,
-      max_frame_size: @max_max_frame_size
+      initial_window_size: @max_initial_window_size
     }
   end
 
