@@ -37,8 +37,8 @@ defmodule Kadabra.Connection.Processor do
           | WindowUpdate.t()
           | Continuation.t()
 
-  @data 0x1
-  @headers 0x2
+  @data 0x0
+  @headers 0x1
   @rst_stream 0x3
   @settings 0x4
   @push_promise 0x5
@@ -51,14 +51,17 @@ defmodule Kadabra.Connection.Processor do
           {:ok, Connection.t()}
           | {:connection_error, atom, binary, Connection.t()}
 
-  def process(<<_::24, @data::8, _::8, _::1, 0::31, _rest::bitstring>>, state) do
+  def process(
+        <<_length::24, @data::8, _flags::8, _r::1, 0::31, _rest::bitstring>>,
+        state
+      ) do
     reason = "Recv DATA with stream ID of 0"
     {:connection_error, :PROTOCOL_ERROR, reason, state}
   end
 
   def process(
-        <<_::24, @data::8, _::8, _::1, stream_id::31, payload::bitstring>> =
-          bin,
+        <<_length::24, @data::8, _flags::8, _r::1, stream_id::31,
+          payload::bitstring>> = bin,
         %{config: config} = state
       ) do
     available = FlowControl.window_max() - state.remote_window
@@ -108,10 +111,7 @@ defmodule Kadabra.Connection.Processor do
 
   # ack? false
   # nil settings means use default
-  def process(
-        <<_::24, @settings::8, 0::8, _::1, 0::31, _rest::bitstring>>,
-        state
-      ) do
+  def process(<<_::24, @settings::8, 0::8, _::1, 0::31>>, state) do
     %{flow_control: flow, config: config} = state
 
     bin = Frame.Settings.ack() |> Encodable.to_bin()
@@ -142,7 +142,7 @@ defmodule Kadabra.Connection.Processor do
         Frame.Settings.parse_settings(settings)
       )
 
-    settings = Connection.Settings.merge(old_settings, new_settings)
+    {:ok, settings} = Connection.Settings.merge(old_settings, new_settings)
 
     flow =
       FlowControl.update_settings(
@@ -171,7 +171,8 @@ defmodule Kadabra.Connection.Processor do
 
   # ack? true
   def process(
-        <<_::24, @settings::8, 1::8, _::1, stream_id::31, settings::bitstring>>,
+        <<_::24, @settings::8, 1::8, _::1, _stream_id::31,
+          _settings::bitstring>>,
         %{config: c} = state
       ) do
     send_huge_window_update(c.socket, state.remote_window)
@@ -284,9 +285,16 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(frame, state) do
+    <<length::24, type::8, flags::8, _r::1, stream_id::31, bin::bitstring>> =
+      frame
+
     """
     Unknown RECV on connection
-    Frame: #{inspect(frame)}
+    Length: #{length}
+    Type: #{type}
+    Flags: #{flags}
+    Stream ID: #{stream_id}
+    Payload: #{inspect(bin)}
     State: #{inspect(state)}
     """
     |> Logger.info()

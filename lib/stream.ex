@@ -38,8 +38,8 @@ defmodule Kadabra.Stream do
           body: binary
         }
 
-  @data 0x1
-  @headers 0x2
+  @data 0x0
+  @headers 0x1
   @rst_stream 0x3
   @settings 0x4
   @push_promise 0x5
@@ -97,7 +97,7 @@ defmodule Kadabra.Stream do
 
   def recv(
         from,
-        <<_::24, @window_update::8, _::8, _::1, _::31, _r::1, inc::31>>,
+        <<_::24, @window_update::8, _::8, _r::1, _::31, _res::1, inc::31>>,
         _state,
         stream
       ) do
@@ -113,7 +113,7 @@ defmodule Kadabra.Stream do
   # end_stream? TRUE
   def recv(
         from,
-        <<_::24, @data::8, _::3, 1::1, _::1, _::31, payload::bitstring>>,
+        <<_::24, @data::8, _::7, 1::1, _r::1, _::31, payload::bitstring>>,
         state,
         stream
       )
@@ -126,7 +126,7 @@ defmodule Kadabra.Stream do
   # end_stream? TRUE
   def recv(
         from,
-        <<_::24, @data::8, _::3, 1::1, _::1, _::31, payload::bitstring>>,
+        <<_::24, @data::8, _::7, 1::1, _r::1, _::31, payload::bitstring>>,
         _state,
         stream
       ) do
@@ -138,7 +138,7 @@ defmodule Kadabra.Stream do
   # end_stream? FALSE
   def recv(
         from,
-        <<_::24, @data::8, _::3, 0::1, _::1, _::31, payload::bitstring>>,
+        <<_::24, @data::8, _::7, 0::1, _r::1, _::31, payload::bitstring>>,
         _state,
         stream
       ) do
@@ -147,14 +147,21 @@ defmodule Kadabra.Stream do
     {:keep_state, stream}
   end
 
-  def recv(from, %Headers{end_stream: end_stream?} = frame, _state, stream) do
-    case Hpack.decode(stream.ref, frame.header_block_fragment) do
+  # HEADERS
+
+  def recv(
+        from,
+        <<_::24, @headers::8, _::7, es::1, _::1, _::31, fragment::bitstring>>,
+        _state,
+        stream
+      ) do
+    case Hpack.decode(stream.ref, fragment) do
       {:ok, headers} ->
         :gen_statem.reply(from, :ok)
 
         stream = %Stream{stream | headers: stream.headers ++ headers}
 
-        if end_stream?,
+        if es == 1,
           do: {:next_state, @hc_remote, stream},
           else: {:keep_state, stream}
 
@@ -164,27 +171,43 @@ defmodule Kadabra.Stream do
     end
   end
 
-  def recv(from, %RstStream{} = _frame, state, stream)
+  def recv(
+        from,
+        <<_::24, @rst_stream::8, _::8, _::1, _::31, error::32>>,
+        state,
+        stream
+      )
       when state in [@open, @hc_local, @hc_remote, @closed] do
-    # IO.inspect(frame, label: "Got RST_STREAM")
+    IO.inspect(error, label: "Got RST_STREAM")
     {:next_state, :closed, stream, [{:reply, from, :ok}]}
   end
 
-  def recv(from, %PushPromise{} = frame, state, %{ref: ref} = stream)
+  def recv(
+        from,
+        <<_::24, @push_promise::8, _::8, _::1, _::31, _::1, sid::31,
+          fragment::bitstring>>,
+        state,
+        %{ref: ref} = stream
+      )
       when state in [@idle] do
-    {:ok, headers} = Hpack.decode(ref, frame.header_block_fragment)
+    {:ok, headers} = Hpack.decode(ref, fragment)
 
     stream = %Stream{stream | headers: stream.headers ++ headers}
 
     :gen_statem.reply(from, :ok)
 
-    response = Response.new(stream.id, stream.headers, stream.body)
+    response = Response.new(sid, stream.headers, stream.body)
     send(stream.connection, {:push_promise, response})
     {:next_state, @reserved_remote, stream}
   end
 
-  def recv(from, %Continuation{} = frame, _state, %{ref: ref} = stream) do
-    {:ok, headers} = Hpack.decode(ref, frame.header_block_fragment)
+  def recv(
+        from,
+        <<_::24, @continuation::8, _::8, _::1, _::31, fragment::bitstring>>,
+        _state,
+        %{ref: ref} = stream
+      ) do
+    {:ok, headers} = Hpack.decode(ref, fragment)
 
     :gen_statem.reply(from, :ok)
 
