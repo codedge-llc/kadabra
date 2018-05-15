@@ -64,11 +64,13 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%Headers{stream_id: stream_id} = frame, state) do
+    {:ok, frame, new_dec} = Headers.decode(frame, state.decoder)
+
     state
     |> process_on_stream(stream_id, frame)
     |> case do
       :ok ->
-        {:ok, state}
+        {:ok, %{state | decoder: new_dec}}
 
       {:connection_error, error} ->
         {:connection_error, error, nil, state}
@@ -148,6 +150,8 @@ defmodule Kadabra.Connection.Processor do
       max_frame_size: max_frame
     } = flow_control
 
+    {:ok, frame, new_dec} = Headers.decode(frame, state.decoder)
+
     stream = Stream.new(config, stream_id, window, max_frame)
 
     case Stream.start_link(stream) do
@@ -156,7 +160,7 @@ defmodule Kadabra.Connection.Processor do
 
         flow = FlowControl.add_active(flow_control, stream_id, pid)
 
-        {:ok, %{state | flow_control: flow}}
+        {:ok, %{state | flow_control: flow, decoder: new_dec}}
 
       error ->
         raise "#{inspect(error)}"

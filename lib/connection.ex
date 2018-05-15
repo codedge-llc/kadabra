@@ -3,6 +3,7 @@ defmodule Kadabra.Connection do
 
   defstruct buffer: "",
             config: nil,
+            decoder: nil,
             flow_control: nil,
             remote_window: 65_535,
             remote_settings: nil,
@@ -62,7 +63,8 @@ defmodule Kadabra.Connection do
       config: %{config | socket: socket},
       queue: queue,
       local_settings: settings,
-      flow_control: %FlowControl{}
+      flow_control: %FlowControl{},
+      decoder: :hpack.new_context()
     }
   end
 
@@ -164,11 +166,6 @@ defmodule Kadabra.Connection do
       |> FlowControl.process(state.config)
 
     {:noreply, [], %{state | flow_control: flow}}
-  end
-
-  def handle_info({:push_promise, stream}, %{config: config} = state) do
-    Kernel.send(config.client, {:push_promise, stream})
-    {:noreply, [], state}
   end
 
   def handle_info({:recv, frame}, state) do

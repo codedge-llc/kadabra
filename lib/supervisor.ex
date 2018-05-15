@@ -31,7 +31,6 @@ defmodule Kadabra.Supervisor do
       worker(ConnectionQueue, [self()], id: :connection_queue),
       worker(Socket, [config], id: :socket),
       worker(Hpack, [ref, :encoder], id: :encoder),
-      worker(Hpack, [ref, :decoder], id: :decoder),
       worker(Connection, [config], id: :connection)
     ]
 

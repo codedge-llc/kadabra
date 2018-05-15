@@ -5,6 +5,7 @@ defmodule Kadabra.Frame.Headers do
             end_stream: false,
             exclusive: nil,
             header_block_fragment: nil,
+            headers: [],
             priority: false,
             stream_dependency: nil,
             stream_id: nil,
@@ -15,6 +16,7 @@ defmodule Kadabra.Frame.Headers do
           end_stream: boolean,
           exclusive: boolean,
           header_block_fragment: binary,
+          headers: [],
           priority: boolean,
           stream_dependency: pos_integer,
           stream_id: pos_integer,
@@ -62,6 +64,13 @@ defmodule Kadabra.Frame.Headers do
     else
       %{frame | header_block_fragment: p}
     end
+  end
+
+  def decode(frame, decoder) do
+    {:ok, {headers, new_decoder}} =
+      :hpack.decode(frame.header_block_fragment, decoder)
+
+    {:ok, %{frame | headers: headers}, new_decoder}
   end
 end
 

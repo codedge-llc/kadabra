@@ -3,6 +3,7 @@ defmodule Kadabra.Frame.PushPromise do
 
   defstruct end_headers: false,
             header_block_fragment: nil,
+            headers: [],
             stream_id: nil
 
   alias Kadabra.Frame

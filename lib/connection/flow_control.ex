@@ -107,6 +107,7 @@ defmodule Kadabra.Connection.FlowControl do
       case Stream.start_link(stream) do
         {:ok, pid} ->
           size = byte_size(request.body || <<>>)
+          request = add_headers(request, config.uri)
           :gen_statem.call(pid, {:send_headers, request})
 
           updated_set =
@@ -129,6 +130,19 @@ defmodule Kadabra.Connection.FlowControl do
       {:empty, _queue} -> flow
       {:can_send, false} -> flow
     end
+  end
+
+  def add_headers(request, uri) do
+    h =
+      request.headers ++
+        [
+          {":scheme", uri.scheme},
+          {":authority", uri.authority}
+        ]
+
+    # sorting headers to have pseudo headers first.
+    h = Enum.sort(h, fn {a, _b}, {c, _d} -> a < c end)
+    %{request | headers: h}
   end
 
   @spec finish_stream(t, non_neg_integer) :: t
