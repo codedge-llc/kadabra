@@ -236,17 +236,7 @@ defmodule Kadabra.Stream do
     {:ok, encoded} = Hpack.encode(stream.ref, headers)
     headers_payload = :erlang.iolist_to_binary(encoded)
 
-    bin =
-      %Frame.Headers{
-        stream_id: stream.id,
-        header_block_fragment: headers_payload,
-        end_stream: is_nil(payload),
-        end_headers: true
-      }
-      |> Encodable.to_bin()
-
-    Socket.send(stream.socket, bin)
-    # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
+    send_headers(stream.socket, stream.id, headers_payload, payload)
 
     # Reply early for better performance
     :gen_statem.reply(from, :ok)
@@ -264,6 +254,20 @@ defmodule Kadabra.Stream do
     stream = %{stream | flow: flow, on_response: on_resp}
 
     {:next_state, @open, stream}
+  end
+
+  defp send_headers(socket, stream_id, headers_payload, payload) do
+    bin =
+      %Frame.Headers{
+        stream_id: stream_id,
+        header_block_fragment: headers_payload,
+        end_stream: is_nil(payload),
+        end_headers: true
+      }
+      |> Encodable.to_bin()
+
+    Socket.send(socket, bin)
+    # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
   end
 
   def add_headers(headers, uri) do

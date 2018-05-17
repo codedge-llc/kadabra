@@ -24,5 +24,13 @@ defprotocol Kadabra.Encodable do
 end
 
 defimpl Kadabra.Encodable, for: Any do
+  @doc ~S"""
+  Encodes to binary.
+
+  ## Examples
+
+      iex> Kadabra.Encodable.to_bin(1234)
+      :error
+  """
   def to_bin(_), do: :error
 end

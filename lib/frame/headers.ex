@@ -46,22 +46,31 @@ defmodule Kadabra.Frame.Headers do
   def new(%Frame{stream_id: stream_id, flags: flags, payload: p}) do
     frame =
       %__MODULE__{}
-      |> Map.put(:end_stream, Flags.end_stream?(flags))
-      |> Map.put(:end_headers, Flags.end_headers?(flags))
-      |> Map.put(:priority, Flags.priority?(flags))
+      |> put_flags(flags)
       |> Map.put(:stream_id, stream_id)
 
     if Flags.priority?(flags) do
-      <<e::1, stream_dep::31, weight::8, headers::bitstring>> = p
-
-      frame
-      |> Map.put(:stream_dependency, stream_dep)
-      |> Map.put(:exclusive, e == 1)
-      |> Map.put(:weight, weight + 1)
-      |> Map.put(:header_block_fragment, headers)
+      put_priority(frame, p)
     else
-      %{frame | header_block_fragment: p}
+      Map.put(frame, :header_block_fragment, p)
     end
+  end
+
+  defp put_flags(frame, flags) do
+    frame
+    |> Map.put(:end_stream, Flags.end_stream?(flags))
+    |> Map.put(:end_headers, Flags.end_headers?(flags))
+    |> Map.put(:priority, Flags.priority?(flags))
+  end
+
+  defp put_priority(frame, payload) do
+    <<e::1, stream_dep::31, weight::8, headers::bitstring>> = payload
+
+    frame
+    |> Map.put(:stream_dependency, stream_dep)
+    |> Map.put(:exclusive, e == 1)
+    |> Map.put(:weight, weight + 1)
+    |> Map.put(:header_block_fragment, headers)
   end
 end
 

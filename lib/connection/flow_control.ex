@@ -109,11 +109,7 @@ defmodule Kadabra.Connection.FlowControl do
           size = byte_size(request.body || <<>>)
           :gen_statem.call(pid, {:send_headers, request})
 
-          updated_set =
-            stream_set
-            |> StreamSet.add_active(stream_id, pid)
-            |> StreamSet.increment_active_stream_count()
-            |> StreamSet.increment_stream_id()
+          updated_set = add_stream(stream_set, stream_id, pid)
 
           flow
           |> Map.put(:queue, queue)
@@ -129,6 +125,13 @@ defmodule Kadabra.Connection.FlowControl do
       {:empty, _queue} -> flow
       {:can_send, false} -> flow
     end
+  end
+
+  defp add_stream(stream_set, stream_id, pid) do
+    stream_set
+    |> StreamSet.add_active(stream_id, pid)
+    |> StreamSet.increment_active_stream_count()
+    |> StreamSet.increment_stream_id()
   end
 
   @spec finish_stream(t, non_neg_integer) :: t

@@ -172,23 +172,26 @@ defmodule Kadabra.Connection do
   end
 
   def handle_info({:recv, frame}, state) do
-    case Processor.process(frame, %{config: config} = state) do
+    case Processor.process(frame, state) do
       {:ok, state} ->
         {:noreply, [], state}
 
       {:connection_error, error, reason, state} ->
-        code = Error.code(error)
-
-        bin =
-          state.flow_control.stream_set.stream_id
-          |> Goaway.new(code, reason)
-          |> Encodable.to_bin()
-
-        Socket.send(config.socket, bin)
-        Tasks.run(fn -> Kadabra.Supervisor.stop(config.supervisor) end)
-
+        handle_connection_error(state, error, reason)
         {:noreply, [], state}
     end
+  end
+
+  defp handle_connection_error(%{config: config} = state, error, reason) do
+    code = Error.code(error)
+
+    bin =
+      state.flow_control.stream_set.stream_id
+      |> Goaway.new(code, reason)
+      |> Encodable.to_bin()
+
+    Socket.send(config.socket, bin)
+    Tasks.run(fn -> Kadabra.Supervisor.stop(config.supervisor) end)
   end
 
   def send_goaway(%{config: config, flow_control: flow}, error) do
