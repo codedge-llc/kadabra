@@ -91,16 +91,6 @@ defmodule Kadabra.Stream do
     {:stop, :normal, [{:reply, from, :ok}]}
   end
 
-  def recv(from, %WindowUpdate{window_size_increment: inc}, _state, stream) do
-    flow =
-      stream.flow
-      |> Stream.FlowControl.increment_window(inc)
-      |> Stream.FlowControl.process()
-      |> send_data_frames(stream.socket, stream.id)
-
-    {:keep_state, %{stream | flow: flow}, [{:reply, from, :ok}]}
-  end
-
   def recv(from, %Data{end_stream: true, data: data}, state, stream)
       when state in [@hc_local] do
     :gen_statem.reply(from, :ok)
@@ -154,6 +144,18 @@ defmodule Kadabra.Stream do
     response = Response.new(stream.id, stream.headers, stream.body)
     send(stream.connection, {:push_promise, response})
     {:next_state, @reserved_remote, stream}
+  end
+
+  def recv(from, %WindowUpdate{window_size_increment: inc}, _state, stream) do
+    :gen_statem.reply(from, :ok)
+
+    flow =
+      stream.flow
+      |> Stream.FlowControl.increment_window(inc)
+      |> Stream.FlowControl.process()
+      |> send_data_frames(stream.socket, stream.id)
+
+    {:keep_state, %{stream | flow: flow}}
   end
 
   def recv(from, %Continuation{} = frame, _state, %{ref: ref} = stream) do
@@ -312,7 +314,7 @@ defmodule Kadabra.Stream do
 
   def callback_mode, do: [:handle_event_function, :state_enter]
 
-  def terminate(_reason, _state, _data), do: :void
+  def terminate(_reason, _state, _stream), do: :void
 
   def code_change(_vsn, state, data, _extra), do: {:ok, state, data}
 end
