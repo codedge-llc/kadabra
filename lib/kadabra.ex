@@ -66,7 +66,7 @@ defmodule Kadabra do
   ```
   """
 
-  alias Kadabra.{Connection, ConnectionQueue, Request, Stream, Supervisor}
+  alias Kadabra.{ConnectionQueue, Request, Stream, Supervisor}
 
   @typedoc ~S"""
   Options for connections.
@@ -135,9 +135,7 @@ defmodule Kadabra do
   """
   @spec close(pid) :: :ok
   def close(pid) do
-    pid
-    |> Connection.via_tuple()
-    |> Connection.close()
+    Supervisor.close(pid)
   end
 
   @doc ~S"""
@@ -154,9 +152,7 @@ defmodule Kadabra do
   """
   @spec ping(pid) :: no_return
   def ping(pid) do
-    pid
-    |> Connection.via_tuple()
-    |> Connection.ping()
+    Supervisor.ping(pid)
   end
 
   @doc ~S"""

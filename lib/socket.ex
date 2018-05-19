@@ -172,7 +172,7 @@ defmodule Kadabra.Socket do
 
   def handle_info({:tcp_closed, _socket}, state) do
     Kernel.send(state.active_user, {:closed, self()})
-    {:noreply, state}
+    {:stop, :shutdown, state}
   end
 
   def handle_info({:ssl, _socket, bin}, state) do
@@ -181,6 +181,6 @@ defmodule Kadabra.Socket do
 
   def handle_info({:ssl_closed, _socket}, state) do
     Kernel.send(state.active_user, {:closed, self()})
-    {:noreply, state}
+    {:stop, :shutdown, state}
   end
 end

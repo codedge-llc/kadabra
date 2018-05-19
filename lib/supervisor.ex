@@ -2,9 +2,8 @@ defmodule Kadabra.Supervisor do
   @moduledoc false
 
   use Supervisor
-  import Supervisor.Spec
 
-  alias Kadabra.{Connection, ConnectionQueue, Hpack, Socket}
+  alias Kadabra.{Connection, ConnectionQueue, Hpack, Socket, StreamSupervisor}
 
   def start_link(uri, pid, opts) do
     config = %Kadabra.Config{
@@ -17,24 +16,42 @@ defmodule Kadabra.Supervisor do
     Supervisor.start_link(__MODULE__, config)
   end
 
-  def stop(pid) do
-    Supervisor.stop(pid)
+  def ping(pid) do
+    pid
+    |> Connection.via_tuple()
+    |> Connection.ping()
+  end
+
+  def close(pid) do
+    pid
+    |> Connection.via_tuple()
+    |> Connection.close()
+  end
+
+  def worker_opts(id) do
+    [id: id, restart: :permanent]
   end
 
   def init(%Kadabra.Config{ref: ref} = config) do
+    Process.flag(:trap_exit, true)
+
     config =
       config
       |> Map.put(:supervisor, self())
       |> Map.put(:queue, ConnectionQueue.via_tuple(self()))
 
+    IO.inspect(self(), label: "supervisor")
+
     children = [
-      worker(ConnectionQueue, [self()], id: :connection_queue),
-      worker(Socket, [config], id: :socket),
-      worker(Hpack, [ref, :encoder], id: :encoder),
-      worker(Hpack, [ref, :decoder], id: :decoder),
-      worker(Connection, [config], id: :connection)
+      supervisor(StreamSupervisor, [ref], worker_opts(:stream_supervisor)),
+      worker(ConnectionQueue, [self()], worker_opts(:connection_queue)),
+      worker(Socket, [config], worker_opts(:socket)),
+      worker(Hpack, [ref, :encoder], worker_opts(:encoder)),
+      worker(Hpack, [ref, :decoder], worker_opts(:decoder)),
+      worker(Connection, [config], worker_opts(:connection))
     ]
 
-    supervise(children, strategy: :one_for_all)
+    # If anything crashes, something really bad happened
+    supervise(children, strategy: :one_for_all, max_restarts: 0)
   end
 end

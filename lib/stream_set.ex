@@ -3,7 +3,7 @@ defmodule Kadabra.StreamSet do
 
   defstruct stream_id: 1,
             active_stream_count: 0,
-            active_streams: %{},
+            active_streams: MapSet.new(),
             max_concurrent_streams: :infinite
 
   @type t :: %__MODULE__{
@@ -60,12 +60,12 @@ defmodule Kadabra.StreamSet do
 
   ## Examples
 
-      iex> set = add_active(%Kadabra.StreamSet{}, 1, :pid)
+      iex> set = add_active(%Kadabra.StreamSet{}, 1)
       iex> set.active_streams
-      %{1 => :pid}
+      #MapSet<[1]>
   """
-  def add_active(%{active_streams: active} = stream_set, stream_id, pid) do
-    %{stream_set | active_streams: Map.put(active, stream_id, pid)}
+  def add_active(%{active_streams: active} = stream_set, stream_id) do
+    %{stream_set | active_streams: MapSet.put(active, stream_id)}
   end
 
   @doc ~S"""
@@ -73,29 +73,13 @@ defmodule Kadabra.StreamSet do
 
   ## Examples
 
-      iex> set = remove_active(%Kadabra.StreamSet{
-      ...> active_streams: %{1 => self(), 3 => self()}}, 1)
-      iex> set.active_streams
-      %{3 => self()}
-
-      iex> set = remove_active(%Kadabra.StreamSet{
-      ...> active_streams: %{1 => self()}}, self())
-      iex> set.active_streams
-      %{}
+      iex> set = %Kadabra.StreamSet{active_streams: MapSet.new([1, 3])}
+      iex> remove_active(set, 1).active_streams
+      #MapSet<[3]>
   """
-  def remove_active(%{active_streams: active} = stream_set, pid)
-      when is_pid(pid) do
-    updated =
-      active
-      |> Enum.filter(fn {_, p} -> p != pid end)
-      |> Enum.into(%{})
-
-    %{stream_set | active_streams: updated}
-  end
-
   def remove_active(%{active_streams: active} = stream_set, stream_id)
       when is_integer(stream_id) do
-    %{stream_set | active_streams: Map.delete(active, stream_id)}
+    %{stream_set | active_streams: MapSet.delete(active, stream_id)}
   end
 
   @doc ~S"""

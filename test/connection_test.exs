@@ -5,6 +5,7 @@ defmodule Kadabra.ConnectionTest do
     uri = 'https://http2.golang.org'
     {:ok, pid} = Kadabra.open(uri)
 
+    IO.inspect(self(), label: "unit test")
     ref = Process.monitor(pid)
 
     # Open two streams that send the time every second

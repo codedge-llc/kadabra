@@ -63,8 +63,14 @@ defmodule Kadabra.Stream do
     }
   end
 
-  def start_link(%Stream{} = stream) do
-    :gen_statem.start_link(__MODULE__, stream, [])
+  def start_link(%Stream{id: id, ref: ref} = stream) do
+    ref
+    |> via_tuple(id)
+    |> :gen_statem.start_link(__MODULE__, stream, [])
+  end
+
+  def via_tuple(ref, stream_id) do
+    {:via, Registry, {Registry.Kadabra, {ref, stream_id}}}
   end
 
   def close(pid) do

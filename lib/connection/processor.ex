@@ -10,7 +10,7 @@ defmodule Kadabra.Connection.Processor do
     Frame,
     Hpack,
     Socket,
-    Stream
+    StreamSupervisor
   }
 
   alias Kadabra.Connection.FlowControl
@@ -58,14 +58,14 @@ defmodule Kadabra.Connection.Processor do
     send_window_update(config.socket, 0, size)
     send_window_update(config.socket, stream_id, bin_size)
 
-    process_on_stream(state, stream_id, frame)
+    StreamSupervisor.send_frame(config.ref, stream_id, frame)
 
     {:ok, %{state | remote_window: state.remote_window + size}}
   end
 
   def process(%Headers{stream_id: stream_id} = frame, state) do
-    state
-    |> process_on_stream(stream_id, frame)
+    state.config.ref
+    |> StreamSupervisor.send_frame(stream_id, frame)
     |> case do
       :ok ->
         {:ok, state}
@@ -81,7 +81,7 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%RstStream{stream_id: stream_id} = frame, state) do
-    process_on_stream(state, stream_id, frame)
+    StreamSupervisor.send_frame(state.config.ref, stream_id, frame)
 
     {:ok, state}
   end
@@ -148,13 +148,10 @@ defmodule Kadabra.Connection.Processor do
       max_frame_size: max_frame
     } = flow_control
 
-    stream = Stream.new(config, stream_id, window, max_frame)
-
-    case Stream.start_link(stream) do
-      {:ok, pid} ->
-        Stream.call_recv(pid, frame)
-
-        flow = FlowControl.add_active(flow_control, stream_id, pid)
+    case StreamSupervisor.start_stream(config, stream_id, window, max_frame) do
+      {:ok, _pid} ->
+        StreamSupervisor.send_frame(config.ref, stream_id, frame)
+        flow = FlowControl.add_active(flow_control, stream_id)
 
         {:ok, %{state | flow_control: flow}}
 
@@ -200,12 +197,12 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%WindowUpdate{stream_id: stream_id} = frame, state) do
-    process_on_stream(state, stream_id, frame)
+    StreamSupervisor.send_frame(state.config.ref, stream_id, frame)
     {:ok, state}
   end
 
   def process(%Continuation{stream_id: stream_id} = frame, state) do
-    process_on_stream(state, stream_id, frame)
+    StreamSupervisor.send_frame(state.config.ref, stream_id, frame)
     {:ok, state}
   end
 
@@ -255,11 +252,5 @@ defmodule Kadabra.Connection.Processor do
     for {_stream_id, pid} <- set.active_streams do
       send(pid, {:settings_change, window_diff, max_frame_size})
     end
-  end
-
-  def process_on_stream(state, stream_id, frame) do
-    state.flow_control.stream_set.active_streams
-    |> Map.get(stream_id)
-    |> Stream.call_recv(frame)
   end
 end
