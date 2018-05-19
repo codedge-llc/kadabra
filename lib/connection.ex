@@ -51,7 +51,6 @@ defmodule Kadabra.Connection do
     state = initial_state(config)
     Kernel.send(self(), :start)
     Process.flag(:trap_exit, true)
-    IO.inspect(self(), label: "conn")
     {:consumer, state, subscribe_to: [queue]}
   end
 

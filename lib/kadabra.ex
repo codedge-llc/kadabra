@@ -66,7 +66,7 @@ defmodule Kadabra do
   ```
   """
 
-  alias Kadabra.{ConnectionQueue, Request, Stream, Supervisor}
+  alias Kadabra.{ConnectionQueue, Request, Stream}
 
   @typedoc ~S"""
   Options for connections.
@@ -114,7 +114,7 @@ defmodule Kadabra do
 
   def open(uri, opts) when is_binary(uri) do
     uri = URI.parse(uri)
-    Supervisor.start_link(uri, self(), opts)
+    Kadabra.Application.start_connection(uri, self(), opts)
   end
 
   def open(uri, opts) when is_list(uri) do
@@ -135,7 +135,7 @@ defmodule Kadabra do
   """
   @spec close(pid) :: :ok
   def close(pid) do
-    Supervisor.close(pid)
+    Kadabra.Application.close(pid)
   end
 
   @doc ~S"""
@@ -152,7 +152,7 @@ defmodule Kadabra do
   """
   @spec ping(pid) :: no_return
   def ping(pid) do
-    Supervisor.ping(pid)
+    Kadabra.Application.ping(pid)
   end
 
   @doc ~S"""

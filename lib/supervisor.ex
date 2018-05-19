@@ -16,18 +16,6 @@ defmodule Kadabra.Supervisor do
     Supervisor.start_link(__MODULE__, config)
   end
 
-  def ping(pid) do
-    pid
-    |> Connection.via_tuple()
-    |> Connection.ping()
-  end
-
-  def close(pid) do
-    pid
-    |> Connection.via_tuple()
-    |> Connection.close()
-  end
-
   def worker_opts(id) do
     [id: id, restart: :permanent]
   end
@@ -39,8 +27,6 @@ defmodule Kadabra.Supervisor do
       config
       |> Map.put(:supervisor, self())
       |> Map.put(:queue, ConnectionQueue.via_tuple(self()))
-
-    IO.inspect(self(), label: "supervisor")
 
     children = [
       supervisor(StreamSupervisor, [ref], worker_opts(:stream_supervisor)),

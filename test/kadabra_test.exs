@@ -77,7 +77,7 @@ defmodule KadabraTest do
       Kadabra.close(pid)
 
       assert_receive {:closed, ^pid}, 5_000
-      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
+      assert_receive {:DOWN, ^ref, :process, ^pid, :shutdown}, 5_000
     end
   end
 
@@ -256,10 +256,12 @@ defmodule KadabraTest do
     ref = Process.monitor(pid)
     socket = find_child(pid, :socket)
 
+    Process.sleep(500)
+
     send(socket, {:ssl_closed, nil})
 
     assert_receive {:closed, ^pid}, 5_000
-    assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
+    assert_receive {:DOWN, ^ref, :process, ^pid, :shutdown}, 5_000
   end
 
   defp find_child(pid, name) do
