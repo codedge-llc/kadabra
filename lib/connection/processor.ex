@@ -151,9 +151,8 @@ defmodule Kadabra.Connection.Processor do
     case StreamSupervisor.start_stream(config, stream_id, window, max_frame) do
       {:ok, _pid} ->
         StreamSupervisor.send_frame(config.ref, stream_id, frame)
-        flow = FlowControl.add_active(flow_control, stream_id)
-
-        {:ok, %{state | flow_control: flow}}
+        state = add_active(state, stream_id)
+        {:ok, state}
 
       error ->
         raise "#{inspect(error)}"
@@ -215,6 +214,11 @@ defmodule Kadabra.Connection.Processor do
     |> Logger.info()
 
     {:ok, state}
+  end
+
+  def add_active(state, stream_id) do
+    flow = FlowControl.add_active(state.flow_control, stream_id)
+    %{state | flow_control: flow}
   end
 
   def log_goaway(%Goaway{last_stream_id: id, error_code: c, debug_data: b}) do

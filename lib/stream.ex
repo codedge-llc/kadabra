@@ -239,29 +239,32 @@ defmodule Kadabra.Stream do
   def handle_event({:call, from}, {:send_headers, request}, _state, stream) do
     %{headers: headers, body: payload, on_response: on_resp} = request
 
-    headers = add_headers(headers, stream.uri)
-
-    {:ok, encoded} = Hpack.encode(stream.ref, headers)
-    headers_payload = :erlang.iolist_to_binary(encoded)
-
+    headers_payload = encode_headers(stream.ref, headers, stream.uri)
     send_headers(stream.socket, stream.id, headers_payload, payload)
 
     # Reply early for better performance
     :gen_statem.reply(from, :ok)
 
-    flow =
-      if payload do
-        stream.flow
-        |> Stream.FlowControl.add(payload)
-        |> Stream.FlowControl.process()
-        |> send_data_frames(stream.socket, stream.id)
-      else
-        stream.flow
-      end
-
-    stream = %{stream | flow: flow, on_response: on_resp}
+    stream =
+      stream
+      |> process_payload_if_needed(payload)
+      |> Map.put(:on_response, on_resp)
 
     {:next_state, @open, stream}
+  end
+
+  defp encode_headers(ref, headers, uri) do
+    headers = add_headers(headers, uri)
+
+    {:ok, encoded} = Hpack.encode(ref, headers)
+    :erlang.iolist_to_binary(encoded)
+  end
+
+  def add_headers(headers, %{scheme: scheme, authority: auth}) do
+    h = headers ++ [{":scheme", scheme}, {":authority", auth}]
+
+    # sorting headers to have pseudo headers first.
+    Enum.sort(h, fn {a, _b}, {c, _d} -> a < c end)
   end
 
   defp send_headers(socket, stream_id, headers_payload, payload) do
@@ -278,16 +281,17 @@ defmodule Kadabra.Stream do
     # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
   end
 
-  def add_headers(headers, uri) do
-    h =
-      headers ++
-        [
-          {":scheme", uri.scheme},
-          {":authority", uri.authority}
-        ]
+  @spec process_payload_if_needed(Stream.t(), binary | nil) :: Stream.t()
+  defp process_payload_if_needed(stream, nil), do: stream
 
-    # sorting headers to have pseudo headers first.
-    Enum.sort(h, fn {a, _b}, {c, _d} -> a < c end)
+  defp process_payload_if_needed(stream, payload) do
+    flow =
+      stream.flow
+      |> Stream.FlowControl.add(payload)
+      |> Stream.FlowControl.process()
+      |> send_data_frames(stream.socket, stream.id)
+
+    %{stream | flow: flow}
   end
 
   def send_data_frames(flow_control, socket, stream_id) do
