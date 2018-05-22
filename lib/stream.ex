@@ -14,7 +14,7 @@ defmodule Kadabra.Stream do
 
   require Logger
 
-  alias Kadabra.{Encodable, Frame, Hpack, Socket, Stream, Tasks}
+  alias Kadabra.{Encodable, Frame, Hpack, Packetizer, Socket, Stream, Tasks}
 
   alias Kadabra.Frame.{
     Continuation,
@@ -240,7 +240,8 @@ defmodule Kadabra.Stream do
     %{headers: headers, body: payload, on_response: on_resp} = request
 
     headers_payload = encode_headers(stream.ref, headers, stream.uri)
-    send_headers(stream.socket, stream.id, headers_payload, payload)
+    max_size = stream.flow.max_frame_size
+    send_headers(stream.socket, stream.id, headers_payload, payload, max_size)
 
     # Reply early for better performance
     :gen_statem.reply(from, :ok)
@@ -255,7 +256,6 @@ defmodule Kadabra.Stream do
 
   defp encode_headers(ref, headers, uri) do
     headers = add_headers(headers, uri)
-
     {:ok, encoded} = Hpack.encode(ref, headers)
     :erlang.iolist_to_binary(encoded)
   end
@@ -267,15 +267,11 @@ defmodule Kadabra.Stream do
     Enum.sort(h, fn {a, _b}, {c, _d} -> a < c end)
   end
 
-  defp send_headers(socket, stream_id, headers_payload, payload) do
+  defp send_headers(socket, stream_id, headers_payload, payload, max_size) do
     bin =
-      %Frame.Headers{
-        stream_id: stream_id,
-        header_block_fragment: headers_payload,
-        end_stream: is_nil(payload),
-        end_headers: true
-      }
-      |> Encodable.to_bin()
+      stream_id
+      |> Packetizer.headers(headers_payload, max_size, is_nil(payload))
+      |> Enum.reduce(<<>>, fn frame, bin -> bin <> Encodable.to_bin(frame) end)
 
     Socket.send(socket, bin)
     # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")

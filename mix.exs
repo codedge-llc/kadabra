@@ -47,7 +47,8 @@ defmodule Kadabra.Mixfile do
 
   defp deps do
     [
-      {:hpack, "~> 0.2.3", hex: :hpack_erl},
+      # {:hpack, "~> 0.2.3", hex: :hpack_erl},
+      {:hpack, github: "joedevivo/hpack"},
       {:gen_stage, "~> 0.13.1"},
       {:ex_doc, "~> 0.14", only: :dev},
       {:excoveralls, "~> 0.7", only: :test},

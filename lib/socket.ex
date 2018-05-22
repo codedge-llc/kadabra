@@ -133,6 +133,7 @@ defmodule Kadabra.Socket do
   # Internal socket helpers
 
   defp socket_send({:sslsocket, _, _} = pid, bin) do
+    # IO.puts("Sending #{byte_size(bin)} bytes")
     :ssl.send(pid, bin)
   end
 
@@ -154,9 +155,14 @@ defmodule Kadabra.Socket do
     {:reply, :ok, %{state | active_user: pid}}
   end
 
-  def handle_call({:send, bin}, _from, state) do
+  def handle_call({:send, bin}, _from, state) when is_binary(bin) do
     resp = socket_send(state.socket, bin)
     {:reply, resp, state}
+  end
+
+  def handle_call({:send, bins}, _from, state) when is_list(bins) do
+    for bin <- bins, do: socket_send(state.socket, bin)
+    {:reply, :ok, state}
   end
 
   # handle_info

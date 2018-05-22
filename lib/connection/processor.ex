@@ -121,7 +121,7 @@ defmodule Kadabra.Connection.Processor do
     notify_settings_change(old_settings, settings, flow)
 
     config.ref
-    |> Hpack.via_tuple(:encoder)
+    |> Hpack.via_tuple(:decoder)
     |> Hpack.update_max_table_size(settings.max_header_list_size)
 
     bin = Frame.Settings.ack() |> Encodable.to_bin()
@@ -136,7 +136,16 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%Frame.Settings{ack: true}, %{config: c} = state) do
+    c.ref
+    |> Hpack.via_tuple(:encoder)
+    |> Hpack.update_max_table_size(state.local_settings.max_header_list_size)
+
+    c.ref
+    |> Hpack.via_tuple(:decoder)
+    |> Hpack.update_max_table_size(state.local_settings.max_header_list_size)
+
     send_huge_window_update(c.socket, state.remote_window)
+
     {:ok, %{state | remote_window: FlowControl.window_max()}}
   end
 

@@ -1,6 +1,8 @@
 defmodule Kadabra.Stream.FlowControl do
   @moduledoc false
 
+  alias Kadabra.Packetizer
+
   @default_max_frame round(:math.pow(2, 14))
   @default_window round(:math.pow(2, 16) - 1)
 
@@ -92,7 +94,7 @@ defmodule Kadabra.Stream.FlowControl do
 
     {chunk, rem_bin} = :erlang.split_binary(bin, window)
 
-    payloads = split_packet(max_size, chunk)
+    payloads = Packetizer.split(max_size, chunk)
     out_queue = enqueue_partial(out_queue, payloads)
 
     queue = :queue.in_r(rem_bin, queue)
@@ -107,7 +109,7 @@ defmodule Kadabra.Stream.FlowControl do
   defp do_process(%{window: window} = flow_control, bin) do
     %{max_frame_size: max_size, out_queue: out_queue} = flow_control
 
-    payloads = split_packet(max_size, bin)
+    payloads = Packetizer.split(max_size, bin)
     out_queue = enqueue_complete(out_queue, payloads)
 
     flow_control
@@ -164,12 +166,4 @@ defmodule Kadabra.Stream.FlowControl do
     |> :queue.in(queue)
     |> enqueue_partial(rest)
   end
-
-  defp split_packet(size, p) when byte_size(p) >= size do
-    {chunk, rest} = :erlang.split_binary(p, size)
-    [chunk | split_packet(size, rest)]
-  end
-
-  defp split_packet(_size, <<>>), do: []
-  defp split_packet(_size, p), do: [p]
 end

@@ -270,4 +270,25 @@ defmodule KadabraTest do
     |> Enum.find(fn {n, _, _, _} -> n == name end)
     |> elem(1)
   end
+
+  @tag :golang
+  test "handles extremely large headers", _context do
+    pid =
+      "https://www.google.com"
+      |> Kadabra.open()
+      |> elem(1)
+
+    request =
+      Kadabra.Request.new(
+        headers: [
+          {":method", "GET"},
+          {":path", "/"},
+          {"whatever", String.duplicate("test", 20_000_000)}
+        ]
+      )
+
+    Kadabra.request(pid, request)
+
+    assert_receive {:end_stream, %Stream.Response{id: 1}}, 15_000
+  end
 end

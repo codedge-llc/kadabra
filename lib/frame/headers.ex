@@ -84,6 +84,7 @@ defimpl Kadabra.Encodable, for: Kadabra.Frame.Headers do
     Frame.binary_frame(@headers, flags, sid, block)
   end
 
+  defp flags(%{end_headers: false, end_stream: true}), do: 0x1
   defp flags(%{end_headers: true, end_stream: false}), do: 0x4
   defp flags(%{end_headers: true, end_stream: true}), do: 0x5
 end

@@ -20,6 +20,7 @@ defmodule Kadabra.Connection do
     Encodable,
     Error,
     Frame,
+    Hpack,
     Socket,
     StreamSupervisor
   }
@@ -51,6 +52,15 @@ defmodule Kadabra.Connection do
     state = initial_state(config)
     Kernel.send(self(), :start)
     Process.flag(:trap_exit, true)
+
+    # config.ref
+    # |> Hpack.via_tuple(:encoder)
+    # |> Hpack.update_max_table_size(state.local_settings.max_header_list_size)
+
+    # config.ref
+    # |> Hpack.via_tuple(:decoder)
+    # |> Hpack.update_max_table_size(state.local_settings.max_header_list_size)
+
     {:consumer, state, subscribe_to: [queue]}
   end
 
@@ -179,7 +189,7 @@ defmodule Kadabra.Connection do
   end
 
   defp handle_connection_error(%{config: config} = state, error, reason) do
-    code = Error.code(error)
+    code = <<Error.code(error)::32>>
 
     bin =
       state.flow_control.stream_set.stream_id
