@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.2
+- Fixed `{:closed, pid}` task race condition during connection cleanup
+- Everything is supervised under `Kadabra.Application` again, instead of
+  handling supervision yourself
+
 ## v0.4.1
 - Send exactly number of allowed bytes on initial connection WINDOW_UPDATE
 - Default settings use maximum values for MAX_FRAME_SIZE and INITIAL_WINDOW_SIZE
