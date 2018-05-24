@@ -155,6 +155,11 @@ defmodule Kadabra.Socket do
     {:reply, :ok, %{state | active_user: pid}}
   end
 
+  # Ignore if socket isn't established
+  def handle_call({:send, _bin}, _from, %{socket: nil} = state) do
+    {:reply, :ok, state}
+  end
+
   def handle_call({:send, bin}, _from, state) when is_binary(bin) do
     resp = socket_send(state.socket, bin)
     {:reply, resp, state}
@@ -178,7 +183,7 @@ defmodule Kadabra.Socket do
 
   def handle_info({:tcp_closed, _socket}, state) do
     Kernel.send(state.active_user, {:closed, self()})
-    {:stop, :shutdown, state}
+    {:noreply, %{state | socket: nil}}
   end
 
   def handle_info({:ssl, _socket, bin}, state) do
@@ -187,6 +192,6 @@ defmodule Kadabra.Socket do
 
   def handle_info({:ssl_closed, _socket}, state) do
     Kernel.send(state.active_user, {:closed, self()})
-    {:stop, :shutdown, state}
+    {:noreply, %{state | socket: nil}}
   end
 end

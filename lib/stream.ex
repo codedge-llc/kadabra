@@ -271,10 +271,14 @@ defmodule Kadabra.Stream do
     bin =
       stream_id
       |> Packetizer.headers(headers_payload, max_size, is_nil(payload))
-      |> Enum.reduce(<<>>, fn frame, bin -> bin <> Encodable.to_bin(frame) end)
+      |> encode_and_flatten()
 
     Socket.send(socket, bin)
     # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
+  end
+
+  defp encode_and_flatten(frames) do
+    Enum.reduce(frames, <<>>, &(&2 <> Encodable.to_bin(&1)))
   end
 
   @spec process_payload_if_needed(Stream.t(), binary | nil) :: Stream.t()
@@ -291,21 +295,17 @@ defmodule Kadabra.Stream do
   end
 
   def send_data_frames(flow_control, socket, stream_id) do
-    flow_control.out_queue
-    |> :queue.to_list()
-    |> Enum.each(fn {data, end_stream?} ->
-      send_data_frame(socket, stream_id, end_stream?, data)
-    end)
-
-    %{flow_control | out_queue: :queue.new()}
-  end
-
-  defp send_data_frame(socket, stream_id, end_stream?, data) do
     bin =
-      %Frame.Data{stream_id: stream_id, end_stream: end_stream?, data: data}
-      |> Encodable.to_bin()
+      flow_control.out_queue
+      |> :queue.to_list()
+      |> Enum.map(fn {data, end_stream?} ->
+        %Frame.Data{stream_id: stream_id, end_stream: end_stream?, data: data}
+      end)
+      |> encode_and_flatten()
 
     Socket.send(socket, bin)
+
+    %{flow_control | out_queue: :queue.new()}
   end
 
   # Other Callbacks

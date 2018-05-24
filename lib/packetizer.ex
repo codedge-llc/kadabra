@@ -1,6 +1,11 @@
 defmodule Kadabra.Packetizer do
-  alias Kadabra.Frame
+  @moduledoc false
 
+  alias Kadabra.Frame.{Continuation, Headers}
+
+  @type headers_result :: [Headers.t() | Continuation.t(), ...]
+
+  @spec headers(pos_integer, binary, pos_integer, boolean) :: headers_result
   def headers(stream_id, headers_payload, max_size, end_stream?) do
     headers([], stream_id, headers_payload, max_size, end_stream?)
   end
@@ -12,7 +17,7 @@ defmodule Kadabra.Packetizer do
   def headers([], stream_id, headers_payload, max_size, end_stream?)
       when byte_size(headers_payload) <= max_size do
     [
-      %Frame.Headers{
+      %Headers{
         stream_id: stream_id,
         header_block_fragment: headers_payload,
         end_stream: end_stream?,
@@ -24,7 +29,7 @@ defmodule Kadabra.Packetizer do
   def headers([], stream_id, headers_payload, max_size, end_stream?) do
     {chunk, rest} = :erlang.split_binary(headers_payload, max_size)
 
-    frame = %Frame.Headers{
+    frame = %Headers{
       stream_id: stream_id,
       header_block_fragment: chunk,
       end_stream: end_stream?,
@@ -36,7 +41,7 @@ defmodule Kadabra.Packetizer do
 
   def headers(frames, stream_id, headers_payload, max_size, _end_stream?)
       when byte_size(headers_payload) <= max_size do
-    frame = %Frame.Continuation{
+    frame = %Continuation{
       stream_id: stream_id,
       header_block_fragment: headers_payload,
       end_headers: true
@@ -46,10 +51,9 @@ defmodule Kadabra.Packetizer do
   end
 
   def headers(frames, stream_id, headers_payload, max_size, end_stream?) do
-    # IO.inspect(frames)
     {chunk, rest} = :erlang.split_binary(headers_payload, max_size)
 
-    frame = %Frame.Continuation{
+    frame = %Continuation{
       stream_id: stream_id,
       header_block_fragment: chunk,
       end_headers: rest == <<>>
