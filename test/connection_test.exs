@@ -32,6 +32,6 @@ defmodule Kadabra.ConnectionTest do
     send(socket_pid, {:ssl_closed, nil})
 
     assert_receive {:closed, ^pid}, 5_000
-    assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
+    assert_receive {:DOWN, ^ref, :process, ^pid, :shutdown}, 5_000
   end
 end

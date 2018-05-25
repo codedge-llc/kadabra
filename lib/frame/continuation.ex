@@ -31,3 +31,12 @@ defmodule Kadabra.Frame.Continuation do
     }
   end
 end
+
+defimpl Kadabra.Encodable, for: Kadabra.Frame.Continuation do
+  alias Kadabra.Frame
+
+  def to_bin(frame) do
+    f = if frame.end_headers, do: 0x4, else: 0x0
+    Frame.binary_frame(0x9, f, frame.stream_id, frame.header_block_fragment)
+  end
+end

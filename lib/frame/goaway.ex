@@ -1,7 +1,7 @@
 defmodule Kadabra.Frame.Goaway do
   @moduledoc false
 
-  defstruct [:last_stream_id, :error_code, :debug_data]
+  defstruct last_stream_id: nil, error_code: nil, debug_data: <<>>
 
   alias Kadabra.{Error, Frame}
 
@@ -18,7 +18,7 @@ defmodule Kadabra.Frame.Goaway do
 
       iex> Kadabra.Frame.Goaway.new(3)
       %Kadabra.Frame.Goaway{last_stream_id: 3, error_code: <<0, 0, 0, 0>>,
-      debug_data: nil}
+      debug_data: <<>>}
   """
   @spec new(non_neg_integer) :: t
   def new(stream_id) when is_integer(stream_id) do
@@ -29,25 +29,20 @@ defmodule Kadabra.Frame.Goaway do
   end
 
   @spec new(Frame.t()) :: t
-  def new(%Frame{payload: payload}) do
-    <<
-      _r::1,
-      last_stream_id::31,
-      error_code::32,
-      debug_data::bitstring
-    >> = payload
-
+  def new(%Frame{payload: <<_r::1, sid::31, error::32, debug::bitstring>>}) do
     %__MODULE__{
-      last_stream_id: last_stream_id,
-      error_code: error_code,
-      debug_data: debug_data
+      last_stream_id: sid,
+      error_code: <<error::32>>,
+      debug_data: debug
     }
   end
 
+  @spec new(non_neg_integer, <<_::32>>) :: t
   def new(stream_id, error_code) when is_integer(stream_id) do
-    new(stream_id, error_code, nil)
+    new(stream_id, error_code, <<>>)
   end
 
+  @spec new(non_neg_integer, <<_::32>>, bitstring) :: t
   def new(stream_id, error_code, reason) when is_integer(stream_id) do
     %__MODULE__{
       last_stream_id: stream_id,

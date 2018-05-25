@@ -77,7 +77,7 @@ defmodule KadabraTest do
       Kadabra.close(pid)
 
       assert_receive {:closed, ^pid}, 5_000
-      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
+      assert_receive {:DOWN, ^ref, :process, ^pid, :shutdown}, 5_000
     end
   end
 
@@ -256,10 +256,12 @@ defmodule KadabraTest do
     ref = Process.monitor(pid)
     socket = find_child(pid, :socket)
 
+    Process.sleep(500)
+
     send(socket, {:ssl_closed, nil})
 
     assert_receive {:closed, ^pid}, 5_000
-    assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
+    assert_receive {:DOWN, ^ref, :process, ^pid, :shutdown}, 5_000
   end
 
   defp find_child(pid, name) do
@@ -268,4 +270,30 @@ defmodule KadabraTest do
     |> Enum.find(fn {n, _, _, _} -> n == name end)
     |> elem(1)
   end
+
+  # @tag :golang
+  # test "handles extremely large headers", _context do
+  #   pid =
+  #     "https://www.google.com"
+  #     |> Kadabra.open()
+  #     |> elem(1)
+
+  #   big_str = String.duplicate("test", 5_000_000)
+
+  #   # val = :hpack_integer.encode(byte_size(str), 7) |> IO.inspect(label: "size")
+
+  #   request =
+  #     Kadabra.Request.new(
+  #       headers: [
+  #         {":method", "GET"},
+  #         {":path", "/"},
+  #         # {"whatever", "yeah"}
+  #         {"whatever", big_str}
+  #       ]
+  #     )
+
+  #   Kadabra.request(pid, request)
+
+  #   assert_receive {:end_stream, %Stream.Response{id: 1}}, 15_000
+  # end
 end

@@ -14,7 +14,7 @@ defmodule Kadabra.Stream do
 
   require Logger
 
-  alias Kadabra.{Encodable, Frame, Hpack, Socket, Stream, Tasks}
+  alias Kadabra.{Encodable, Frame, Hpack, Packetizer, Socket, Stream, Tasks}
 
   alias Kadabra.Frame.{
     Continuation,
@@ -63,8 +63,14 @@ defmodule Kadabra.Stream do
     }
   end
 
-  def start_link(%Stream{} = stream) do
-    :gen_statem.start_link(__MODULE__, stream, [])
+  def start_link(%Stream{id: id, ref: ref} = stream) do
+    ref
+    |> via_tuple(id)
+    |> :gen_statem.start_link(__MODULE__, stream, [])
+  end
+
+  def via_tuple(ref, stream_id) do
+    {:via, Registry, {Registry.Kadabra, {ref, stream_id}}}
   end
 
   def close(pid) do
@@ -83,16 +89,6 @@ defmodule Kadabra.Stream do
 
   def recv(from, :close, _state, _stream) do
     {:stop, :normal, [{:reply, from, :ok}]}
-  end
-
-  def recv(from, %WindowUpdate{window_size_increment: inc}, _state, stream) do
-    flow =
-      stream.flow
-      |> Stream.FlowControl.increment_window(inc)
-      |> Stream.FlowControl.process()
-      |> send_data_frames(stream.socket, stream.id)
-
-    {:keep_state, %{stream | flow: flow}, [{:reply, from, :ok}]}
   end
 
   def recv(from, %Data{end_stream: true, data: data}, state, stream)
@@ -148,6 +144,18 @@ defmodule Kadabra.Stream do
     response = Response.new(stream.id, stream.headers, stream.body)
     send(stream.connection, {:push_promise, response})
     {:next_state, @reserved_remote, stream}
+  end
+
+  def recv(from, %WindowUpdate{window_size_increment: inc}, _state, stream) do
+    :gen_statem.reply(from, :ok)
+
+    flow =
+      stream.flow
+      |> Stream.FlowControl.increment_window(inc)
+      |> Stream.FlowControl.process()
+      |> send_data_frames(stream.socket, stream.id)
+
+    {:keep_state, %{stream | flow: flow}}
   end
 
   def recv(from, %Continuation{} = frame, _state, %{ref: ref} = stream) do
@@ -231,73 +239,73 @@ defmodule Kadabra.Stream do
   def handle_event({:call, from}, {:send_headers, request}, _state, stream) do
     %{headers: headers, body: payload, on_response: on_resp} = request
 
-    headers = add_headers(headers, stream.uri)
-
-    {:ok, encoded} = Hpack.encode(stream.ref, headers)
-    headers_payload = :erlang.iolist_to_binary(encoded)
-
-    send_headers(stream.socket, stream.id, headers_payload, payload)
+    headers_payload = encode_headers(stream.ref, headers, stream.uri)
+    max_size = stream.flow.max_frame_size
+    send_headers(stream.socket, stream.id, headers_payload, payload, max_size)
 
     # Reply early for better performance
     :gen_statem.reply(from, :ok)
 
-    flow =
-      if payload do
-        stream.flow
-        |> Stream.FlowControl.add(payload)
-        |> Stream.FlowControl.process()
-        |> send_data_frames(stream.socket, stream.id)
-      else
-        stream.flow
-      end
-
-    stream = %{stream | flow: flow, on_response: on_resp}
+    stream =
+      stream
+      |> process_payload_if_needed(payload)
+      |> Map.put(:on_response, on_resp)
 
     {:next_state, @open, stream}
   end
 
-  defp send_headers(socket, stream_id, headers_payload, payload) do
-    bin =
-      %Frame.Headers{
-        stream_id: stream_id,
-        header_block_fragment: headers_payload,
-        end_stream: is_nil(payload),
-        end_headers: true
-      }
-      |> Encodable.to_bin()
-
-    Socket.send(socket, bin)
-    # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
+  defp encode_headers(ref, headers, uri) do
+    headers = add_headers(headers, uri)
+    {:ok, encoded} = Hpack.encode(ref, headers)
+    :erlang.iolist_to_binary(encoded)
   end
 
-  def add_headers(headers, uri) do
-    h =
-      headers ++
-        [
-          {":scheme", uri.scheme},
-          {":authority", uri.authority}
-        ]
+  def add_headers(headers, %{scheme: scheme, authority: auth}) do
+    h = headers ++ [{":scheme", scheme}, {":authority", auth}]
 
     # sorting headers to have pseudo headers first.
     Enum.sort(h, fn {a, _b}, {c, _d} -> a < c end)
   end
 
-  def send_data_frames(flow_control, socket, stream_id) do
-    flow_control.out_queue
-    |> :queue.to_list()
-    |> Enum.each(fn {data, end_stream?} ->
-      send_data_frame(socket, stream_id, end_stream?, data)
-    end)
-
-    %{flow_control | out_queue: :queue.new()}
-  end
-
-  defp send_data_frame(socket, stream_id, end_stream?, data) do
+  defp send_headers(socket, stream_id, headers_payload, payload, max_size) do
     bin =
-      %Frame.Data{stream_id: stream_id, end_stream: end_stream?, data: data}
-      |> Encodable.to_bin()
+      stream_id
+      |> Packetizer.headers(headers_payload, max_size, is_nil(payload))
+      |> encode_and_flatten()
 
     Socket.send(socket, bin)
+    # Logger.info("Sending, Stream ID: #{stream.id}, size: #{byte_size(h)}")
+  end
+
+  defp encode_and_flatten(frames) do
+    Enum.reduce(frames, <<>>, &(&2 <> Encodable.to_bin(&1)))
+  end
+
+  @spec process_payload_if_needed(Stream.t(), binary | nil) :: Stream.t()
+  defp process_payload_if_needed(stream, nil), do: stream
+
+  defp process_payload_if_needed(stream, payload) do
+    flow =
+      stream.flow
+      |> Stream.FlowControl.add(payload)
+      |> Stream.FlowControl.process()
+      |> send_data_frames(stream.socket, stream.id)
+
+    %{stream | flow: flow}
+  end
+
+  def send_data_frames(flow_control, socket, stream_id) do
+    bin =
+      flow_control.out_queue
+      |> :queue.to_list()
+      |> Enum.map(fn {data, end_stream?} ->
+        %Frame.Data{stream_id: stream_id, end_stream: end_stream?, data: data}
+      end)
+      |> encode_and_flatten()
+
+    Socket.send(socket, bin)
+
+    %{flow_control | out_queue: :queue.new()}
   end
 
   # Other Callbacks
@@ -306,7 +314,7 @@ defmodule Kadabra.Stream do
 
   def callback_mode, do: [:handle_event_function, :state_enter]
 
-  def terminate(_reason, _state, _data), do: :void
+  def terminate(_reason, _state, _stream), do: :void
 
   def code_change(_vsn, state, data, _extra), do: {:ok, state, data}
 end
