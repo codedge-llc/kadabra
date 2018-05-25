@@ -29,10 +29,6 @@ defmodule Kadabra.Application do
     [id: ref, restart: :transient]
   end
 
-  def stop_connection(pid) do
-    Supervisor.stop(pid)
-  end
-
   def ping(pid) do
     pid
     |> Connection.via_tuple()

@@ -190,15 +190,6 @@ defmodule Kadabra.Connection do
     Socket.send(config.socket, bin)
   end
 
-  def send_goaway(%{config: config, flow_control: flow}, error) do
-    bin =
-      flow.stream_set.stream_id
-      |> Frame.Goaway.new(Error.code(error))
-      |> Encodable.to_bin()
-
-    Socket.send(config.socket, bin)
-  end
-
   def terminate(_reason, %{config: config}) do
     Kernel.send(config.client, {:closed, config.supervisor})
     :ok

@@ -9,7 +9,7 @@ defmodule Kadabra.StreamSet do
   @type t :: %__MODULE__{
           stream_id: pos_integer,
           active_stream_count: non_neg_integer,
-          active_streams: %{},
+          active_streams: MapSet.t(),
           max_concurrent_streams: non_neg_integer | :infinite
         }
 
