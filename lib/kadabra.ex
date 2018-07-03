@@ -195,16 +195,17 @@ defmodule Kadabra do
   ## Examples
 
       iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
-      iex> Kadabra.head(pid, "/reqinfo")
+      iex> Kadabra.get(pid, "/reqinfo", params: [something: 123])
       :ok
       iex> response = receive do
       ...>   {:end_stream, response} -> response
       ...> end
-      iex> {response.id, response.status, response.body}
-      {1, 200, ""}
+      iex> {response.id, response.status}
+      {1, 200}
   """
   @spec get(pid, String.t(), Keyword.t()) :: no_return
   def get(pid, path, opts \\ []) do
+    path = encode_params(path, opts)
     request(pid, [{:headers, headers("GET", path)} | opts])
   end
 
@@ -224,6 +225,7 @@ defmodule Kadabra do
   """
   @spec head(pid, String.t(), Keyword.t()) :: no_return
   def head(pid, path, opts \\ []) do
+    path = encode_params(path, opts)
     request(pid, [{:headers, headers("HEAD", path)} | opts])
   end
 
@@ -243,6 +245,7 @@ defmodule Kadabra do
   """
   @spec post(pid, String.t(), Keyword.t()) :: no_return
   def post(pid, path, opts \\ []) do
+    path = encode_params(path, opts)
     request(pid, [{:headers, headers("POST", path)} | opts])
   end
 
@@ -264,6 +267,7 @@ defmodule Kadabra do
   """
   @spec put(pid, String.t(), Keyword.t()) :: no_return
   def put(pid, path, opts \\ []) do
+    path = encode_params(path, opts)
     request(pid, [{:headers, headers("PUT", path)} | opts])
   end
 
@@ -283,7 +287,15 @@ defmodule Kadabra do
   """
   @spec delete(pid, String.t(), Keyword.t()) :: no_return
   def delete(pid, path, opts \\ []) do
+    path = encode_params(path, opts)
     request(pid, [{:headers, headers("DELETE", path)} | opts])
+  end
+
+  defp encode_params(path, opts) do
+    case Keyword.get(opts, :params) do
+      nil -> path
+      params -> "#{path}?#{URI.encode_query(params)}"
+    end
   end
 
   defp headers(method, path) do

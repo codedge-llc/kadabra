@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.5.0
+- Request parameter encoding with new `:params` option
+
 ## v0.4.2
 - Fixed `{:closed, pid}` task race condition during connection cleanup
 - Everything is supervised under `Kadabra.Application` again, instead of
