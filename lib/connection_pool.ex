@@ -75,6 +75,10 @@ defmodule Kadabra.ConnectionPool do
     {:stop, :shutdown, state}
   end
 
+  def handle_info({:EXIT, _pid, {:shutdown, :connection_error}}, state) do
+    {:stop, :shutdown, state}
+  end
+
   def enqueue(queue, requests) when is_list(requests) do
     Enum.reduce(requests, queue, &enqueue(&2, &1))
   end
