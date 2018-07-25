@@ -90,4 +90,8 @@ defmodule Kadabra.ConnectionPool do
     GenServer.cast(state.connection, {:request, to_dispatch})
     %{state | pending_demand: new_pending, events: rest}
   end
+
+  def terminate(_reason, _state) do
+    :ok
+  end
 end
