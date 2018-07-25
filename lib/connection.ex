@@ -20,6 +20,7 @@ defmodule Kadabra.Connection do
     Encodable,
     Error,
     Frame,
+    Hpack,
     Socket
   }
 
@@ -47,7 +48,18 @@ defmodule Kadabra.Connection do
   end
 
   def init(%Config{queue: queue} = config) do
+    {:ok, encoder} = Hpack.start_link()
+    {:ok, decoder} = Hpack.start_link()
+    {:ok, socket} = Socket.start_link(config)
+
+    config =
+      config
+      |> Map.put(:encoder, encoder)
+      |> Map.put(:decoder, decoder)
+      |> Map.put(:socket, socket)
+
     state = initial_state(config)
+
     Kernel.send(self(), :start)
     Process.flag(:trap_exit, true)
 
@@ -56,10 +68,9 @@ defmodule Kadabra.Connection do
 
   defp initial_state(%Config{opts: opts, queue: queue} = config) do
     settings = Keyword.get(opts, :settings, Connection.Settings.fastest())
-    socket = config.supervisor |> Socket.via_tuple()
 
     %__MODULE__{
-      config: %{config | socket: socket},
+      config: config,
       queue: queue,
       local_settings: settings,
       flow_control: %FlowControl{}
@@ -129,18 +140,14 @@ defmodule Kadabra.Connection do
     %{state | flow_control: flow}
   end
 
-  def handle_info(:start, %{config: config} = state) do
-    config.supervisor
-    |> Socket.via_tuple()
-    |> Socket.set_active()
+  def handle_info(:start, %{config: %{socket: socket}} = state) do
+    Socket.set_active(socket)
 
     bin =
       %Frame.Settings{settings: state.local_settings}
       |> Encodable.to_bin()
 
-    config.supervisor
-    |> Socket.via_tuple()
-    |> Socket.send(bin)
+    Socket.send(socket, bin)
 
     {:noreply, [], state}
   end

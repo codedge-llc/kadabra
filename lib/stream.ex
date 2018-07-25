@@ -6,6 +6,8 @@ defmodule Kadabra.Stream do
             client: nil,
             connection: nil,
             socket: nil,
+            encoder: nil,
+            decoder: nil,
             ref: nil,
             flow: nil,
             uri: nil,
@@ -58,6 +60,8 @@ defmodule Kadabra.Stream do
       ref: config.ref,
       uri: config.uri,
       socket: config.socket,
+      encoder: config.encoder,
+      decoder: config.decoder,
       connection: self(),
       flow: Stream.FlowControl.new(flow_opts)
     }
@@ -105,7 +109,7 @@ defmodule Kadabra.Stream do
   end
 
   def recv(from, %Headers{end_stream: end_stream?} = frame, _state, stream) do
-    case Hpack.decode(stream.ref, frame.header_block_fragment) do
+    case Hpack.decode(stream.decoder, frame.header_block_fragment) do
       {:ok, headers} ->
         :gen_statem.reply(from, :ok)
 
@@ -127,9 +131,9 @@ defmodule Kadabra.Stream do
     {:next_state, :closed, stream, [{:reply, from, :ok}]}
   end
 
-  def recv(from, %PushPromise{} = frame, state, %{ref: ref} = stream)
+  def recv(from, %PushPromise{} = frame, state, stream)
       when state in [@idle] do
-    {:ok, headers} = Hpack.decode(ref, frame.header_block_fragment)
+    {:ok, headers} = Hpack.decode(stream.decoder, frame.header_block_fragment)
 
     stream = %Stream{stream | headers: stream.headers ++ headers}
 
@@ -153,7 +157,7 @@ defmodule Kadabra.Stream do
   end
 
   def recv(from, %Continuation{} = frame, _state, %{ref: ref} = stream) do
-    {:ok, headers} = Hpack.decode(ref, frame.header_block_fragment)
+    {:ok, headers} = Hpack.decode(stream.decoder, frame.header_block_fragment)
 
     :gen_statem.reply(from, :ok)
 
@@ -233,7 +237,7 @@ defmodule Kadabra.Stream do
   def handle_event({:call, from}, {:send_headers, request}, _state, stream) do
     %{headers: headers, body: payload, on_response: on_resp} = request
 
-    headers_payload = encode_headers(stream.ref, headers, stream.uri)
+    headers_payload = encode_headers(stream.encoder, headers, stream.uri)
     max_size = stream.flow.max_frame_size
     send_headers(stream.socket, stream.id, headers_payload, payload, max_size)
 
@@ -248,9 +252,9 @@ defmodule Kadabra.Stream do
     {:next_state, @open, stream}
   end
 
-  defp encode_headers(ref, headers, uri) do
+  defp encode_headers(pid, headers, uri) do
     headers = add_headers(headers, uri)
-    {:ok, encoded} = Hpack.encode(ref, headers)
+    {:ok, encoded} = Hpack.encode(pid, headers)
     :erlang.iolist_to_binary(encoded)
   end
 

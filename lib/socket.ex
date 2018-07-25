@@ -28,9 +28,8 @@ defmodule Kadabra.Socket do
     GenServer.call(pid, {:set_active, self()})
   end
 
-  def start_link(%Config{supervisor: sup} = config) do
-    name = via_tuple(sup)
-    GenServer.start_link(__MODULE__, config, name: name)
+  def start_link(%Config{} = config) do
+    GenServer.start_link(__MODULE__, config)
   end
 
   def init(%{uri: uri, opts: opts}) do
@@ -42,10 +41,6 @@ defmodule Kadabra.Socket do
       error ->
         error
     end
-  end
-
-  def via_tuple(ref) do
-    {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
   end
 
   @spec connect(URI.t(), Keyword.t()) :: connection_result

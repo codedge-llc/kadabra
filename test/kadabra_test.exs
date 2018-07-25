@@ -14,11 +14,6 @@ defmodule KadabraTest do
       |> Kadabra.open()
       |> elem(1)
 
-    # on_exit(fn ->
-    #   Process.sleep(500)
-    #   if Process.alive?(pid), do: Kadabra.close(pid)
-    # end)
-
     [conn: pid]
   end
 
@@ -254,11 +249,12 @@ defmodule KadabraTest do
       |> elem(1)
 
     ref = Process.monitor(pid)
-    socket = find_child(pid, :socket)
 
+    conn_pid = find_child(pid, :connection)
+    socket_pid = :sys.get_state(conn_pid).state.config.socket
     Process.sleep(500)
 
-    send(socket, {:ssl_closed, nil})
+    send(socket_pid, {:ssl_closed, nil})
 
     assert_receive {:closed, ^pid}, 5_000
     assert_receive {:DOWN, ^ref, :process, ^pid, :shutdown}, 5_000

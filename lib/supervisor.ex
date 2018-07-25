@@ -3,7 +3,7 @@ defmodule Kadabra.Supervisor do
 
   use Supervisor
 
-  alias Kadabra.{Connection, ConnectionQueue, Hpack, Socket}
+  alias Kadabra.{Connection, ConnectionQueue}
 
   def start_link(uri, pid, opts) do
     config = %Kadabra.Config{
@@ -20,7 +20,7 @@ defmodule Kadabra.Supervisor do
     [id: id, restart: :permanent]
   end
 
-  def init(%Kadabra.Config{ref: ref} = config) do
+  def init(%Kadabra.Config{} = config) do
     Process.flag(:trap_exit, true)
 
     config =
@@ -30,9 +30,6 @@ defmodule Kadabra.Supervisor do
 
     children = [
       worker(ConnectionQueue, [self()], worker_opts(:connection_queue)),
-      worker(Socket, [config], worker_opts(:socket)),
-      worker(Hpack, [ref, :encoder], worker_opts(:encoder)),
-      worker(Hpack, [ref, :decoder], worker_opts(:decoder)),
       worker(Connection, [config], worker_opts(:connection))
     ]
 

@@ -16,10 +16,7 @@ defmodule Kadabra.ConnectionTest do
       |> Supervisor.which_children()
       |> Enum.find(fn {name, _, _, _} -> name == :connection end)
 
-    {_, socket_pid, _, _} =
-      pid
-      |> Supervisor.which_children()
-      |> Enum.find(fn {name, _, _, _} -> name == :socket end)
+    socket_pid = :sys.get_state(conn_pid).state.config.socket
 
     # Wait to collect some data on the streams
     Process.sleep(500)

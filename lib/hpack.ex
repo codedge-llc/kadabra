@@ -3,25 +3,20 @@ defmodule Kadabra.Hpack do
 
   use GenServer
 
-  def start_link(ref, name) do
-    id = via_tuple(ref, name)
-    GenServer.start_link(__MODULE__, :ok, name: id)
-  end
-
-  def via_tuple(ref, name) do
-    {:via, Registry, {Registry.Kadabra, {ref, name}}}
+  def start_link do
+    GenServer.start_link(__MODULE__, :ok)
   end
 
   def init(:ok) do
     {:ok, :hpack.new_context()}
   end
 
-  def encode(ref, headers) do
-    GenServer.call(via_tuple(ref, :encoder), {:encode, headers})
+  def encode(pid, headers) do
+    GenServer.call(pid, {:encode, headers})
   end
 
-  def decode(ref, headers) do
-    GenServer.call(via_tuple(ref, :decoder), {:decode, headers})
+  def decode(pid, headers) do
+    GenServer.call(pid, {:decode, headers})
   end
 
   def update_max_table_size(pid, size) do
