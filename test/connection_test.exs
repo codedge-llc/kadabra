@@ -11,17 +11,13 @@ defmodule Kadabra.ConnectionTest do
     Kadabra.get(pid, "/clockstream", on_response: & &1)
     Kadabra.get(pid, "/clockstream", on_response: & &1)
 
-    {_, conn_pid, _, _} =
-      pid
-      |> Supervisor.which_children()
-      |> Enum.find(fn {name, _, _, _} -> name == :connection end)
-
-    socket_pid = :sys.get_state(conn_pid).state.config.socket
+    conn_pid = :sys.get_state(pid).connection
+    socket_pid = :sys.get_state(conn_pid).config.socket
 
     # Wait to collect some data on the streams
     Process.sleep(500)
 
-    state = :sys.get_state(conn_pid).state
+    state = :sys.get_state(conn_pid)
     assert Enum.count(state.flow_control.stream_set.active_streams) == 2
 
     # frame = Kadabra.Frame.Goaway.new(1)

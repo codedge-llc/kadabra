@@ -4,7 +4,7 @@ defmodule Kadabra.Application do
   use Application
   import Supervisor.Spec
 
-  alias Kadabra.Connection
+  alias Kadabra.ConnectionPool
 
   @app :kadabra
 
@@ -20,7 +20,7 @@ defmodule Kadabra.Application do
   def start_connection(uri, pid, opts) do
     Supervisor.start_child(
       @app,
-      supervisor(Kadabra.Supervisor, [uri, pid, opts], spec_opts())
+      worker(Kadabra.ConnectionPool, [uri, pid, opts], spec_opts())
     )
   end
 
@@ -30,14 +30,10 @@ defmodule Kadabra.Application do
   end
 
   def ping(pid) do
-    pid
-    |> Connection.via_tuple()
-    |> Connection.ping()
+    ConnectionPool.ping(pid)
   end
 
   def close(pid) do
-    pid
-    |> Connection.via_tuple()
-    |> Connection.close()
+    ConnectionPool.close(pid)
   end
 end

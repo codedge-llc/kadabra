@@ -9,7 +9,7 @@ defmodule Kadabra.Connection do
             local_settings: nil,
             queue: nil
 
-  use GenStage
+  use GenServer
   require Logger
 
   import Kernel, except: [send: 2]
@@ -38,16 +38,15 @@ defmodule Kadabra.Connection do
 
   @type sock :: {:sslsocket, any, pid | {any, any}}
 
-  def start_link(%Config{supervisor: sup} = config) do
-    name = via_tuple(sup)
-    GenStage.start_link(__MODULE__, config, name: name)
+  def start_link(%Config{} = config) do
+    GenServer.start_link(__MODULE__, config)
   end
 
   def via_tuple(ref) do
     {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
   end
 
-  def init(%Config{queue: queue} = config) do
+  def init(%Config{} = config) do
     {:ok, encoder} = Hpack.start_link()
     {:ok, decoder} = Hpack.start_link()
     {:ok, socket} = Socket.start_link(config)
@@ -63,7 +62,7 @@ defmodule Kadabra.Connection do
     Kernel.send(self(), :start)
     Process.flag(:trap_exit, true)
 
-    {:consumer, state, subscribe_to: [queue]}
+    {:ok, state}
   end
 
   defp initial_state(%Config{opts: opts, queue: queue} = config) do
@@ -78,11 +77,11 @@ defmodule Kadabra.Connection do
   end
 
   def close(pid) do
-    GenStage.call(pid, :close)
+    GenServer.call(pid, :close)
   end
 
   def ping(pid) do
-    GenStage.cast(pid, {:send, :ping})
+    GenServer.cast(pid, {:send, :ping})
   end
 
   # handle_cast
@@ -91,13 +90,18 @@ defmodule Kadabra.Connection do
     sendf(type, state)
   end
 
+  def handle_cast({:request, events}, state) do
+    state = do_send_headers(events, state)
+    {:noreply, state}
+  end
+
   def handle_cast(_msg, state) do
-    {:noreply, [], state}
+    {:noreply, state}
   end
 
   def handle_events(events, _from, state) do
     state = do_send_headers(events, state)
-    {:noreply, [], state}
+    {:noreply, state}
   end
 
   def handle_subscribe(:producer, _opts, from, state) do
@@ -120,15 +124,15 @@ defmodule Kadabra.Connection do
 
   # sendf
 
-  @spec sendf(:goaway | :ping, t) :: {:noreply, [], t}
+  @spec sendf(:goaway | :ping, t) :: {:noreply, t}
   def sendf(:ping, %Connection{config: config} = state) do
     bin = Ping.new() |> Encodable.to_bin()
     Socket.send(config.socket, bin)
-    {:noreply, [], state}
+    {:noreply, state}
   end
 
   def sendf(_else, state) do
-    {:noreply, [], state}
+    {:noreply, state}
   end
 
   defp do_send_headers(request, %{flow_control: flow} = state) do
@@ -149,7 +153,7 @@ defmodule Kadabra.Connection do
 
     Socket.send(socket, bin)
 
-    {:noreply, [], state}
+    {:noreply, state}
   end
 
   def handle_info({:closed, _pid}, state) do
@@ -157,36 +161,36 @@ defmodule Kadabra.Connection do
   end
 
   def handle_info({:EXIT, _pid, {:shutdown, {:finished, sid}}}, state) do
-    GenStage.ask(state.queue, 1)
+    GenServer.cast(state.queue, {:ask, 1})
 
     flow =
       state.flow_control
       |> FlowControl.finish_stream(sid)
       |> FlowControl.process(state.config)
 
-    {:noreply, [], %{state | flow_control: flow}}
+    {:noreply, %{state | flow_control: flow}}
   end
 
   def handle_info({:DOWN, _, _, _pid, {:shutdown, {:finished, sid}}}, state) do
-    GenStage.ask(state.queue, 1)
+    GenServer.cast(state.queue, {:ask, 1})
 
     flow =
       state.flow_control
       |> FlowControl.finish_stream(sid)
       |> FlowControl.process(state.config)
 
-    {:noreply, [], %{state | flow_control: flow}}
+    {:noreply, %{state | flow_control: flow}}
   end
 
   def handle_info({:push_promise, stream}, %{config: config} = state) do
     Kernel.send(config.client, {:push_promise, stream})
-    {:noreply, [], state}
+    {:noreply, state}
   end
 
   def handle_info({:recv, frame}, state) do
     case Processor.process(frame, state) do
       {:ok, state} ->
-        {:noreply, [], state}
+        {:noreply, state}
 
       {:connection_error, error, reason, state} ->
         handle_connection_error(state, error, reason)
@@ -206,7 +210,7 @@ defmodule Kadabra.Connection do
   end
 
   def terminate(_reason, %{config: config}) do
-    Kernel.send(config.client, {:closed, config.supervisor})
+    Kernel.send(config.client, {:closed, config.queue})
     :ok
   end
 end

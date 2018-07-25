@@ -156,7 +156,7 @@ defmodule Kadabra.Stream do
     {:keep_state, %{stream | flow: flow}}
   end
 
-  def recv(from, %Continuation{} = frame, _state, %{ref: ref} = stream) do
+  def recv(from, %Continuation{} = frame, _state, stream) do
     {:ok, headers} = Hpack.decode(stream.decoder, frame.header_block_fragment)
 
     :gen_statem.reply(from, :ok)

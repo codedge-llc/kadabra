@@ -66,7 +66,7 @@ defmodule Kadabra do
   ```
   """
 
-  alias Kadabra.{ConnectionQueue, Request, Stream}
+  alias Kadabra.{ConnectionPool, Request, Stream}
 
   @typedoc ~S"""
   Options for connections.
@@ -177,16 +177,16 @@ defmodule Kadabra do
   """
   @spec request(pid, Request.t() | [Request.t()] | request_opts) :: no_return
   def request(pid, %Request{} = request) do
-    ConnectionQueue.queue_request(pid, request)
+    ConnectionPool.request(pid, [request])
   end
 
   def request(pid, [%Request{} | _rest] = requests) do
-    ConnectionQueue.queue_request(pid, requests)
+    ConnectionPool.request(pid, requests)
   end
 
   def request(pid, opts) when is_list(opts) do
     request = Request.new(opts)
-    ConnectionQueue.queue_request(pid, request)
+    ConnectionPool.request(pid, request)
   end
 
   @doc ~S"""

@@ -1,0 +1,93 @@
+defmodule Kadabra.ConnectionPool do
+  defstruct connection: nil,
+            pending_demand: 0,
+            events: []
+
+  alias Kadabra.Connection
+
+  def start_link(uri, pid, opts) do
+    config = %Kadabra.Config{
+      ref: :erlang.make_ref(),
+      client: pid,
+      uri: uri,
+      opts: opts
+    }
+
+    GenServer.start_link(__MODULE__, config)
+  end
+
+  def init(config) do
+    config = %{config | queue: self()}
+
+    Process.flag(:trap_exit, true)
+
+    {:ok, connection} = Connection.start_link(config)
+    {:ok, %__MODULE__{connection: connection}}
+  end
+
+  def request(pid, requests) when is_list(requests) do
+    GenServer.call(pid, {:request, requests})
+  end
+
+  def request(pid, request) do
+    GenServer.call(pid, {:request, [request]})
+  end
+
+  def ping(pid) do
+    GenServer.call(pid, :ping)
+  end
+
+  def close(pid) do
+    GenServer.call(pid, :close)
+  end
+
+  def handle_cast({:ask, demand}, state) do
+    state =
+      state
+      |> Map.put(:pending_demand, state.pending_demand + demand)
+      |> dispatch_events()
+
+    {:noreply, state}
+  end
+
+  def handle_call(:close, _from, state) do
+    Connection.close(state.connection)
+    {:stop, :shutdown, :ok, state}
+  end
+
+  def handle_call(:ping, _from, state) do
+    Connection.ping(state.connection)
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:request, requests}, from, state) do
+    GenServer.reply(from, :ok)
+
+    state =
+      state
+      |> Map.put(:events, state.events ++ requests)
+      |> dispatch_events()
+
+    {:noreply, state}
+  end
+
+  def handle_info({:EXIT, _pid, :shutdown}, state) do
+    {:stop, :shutdown, state}
+  end
+
+  def enqueue(queue, requests) when is_list(requests) do
+    Enum.reduce(requests, queue, &enqueue(&2, &1))
+  end
+
+  def enqueue(queue, request) do
+    :queue.in(request, queue)
+  end
+
+  def dispatch_events(state) do
+    {to_dispatch, rest} = Enum.split(state.events, state.pending_demand)
+    new_pending = state.pending_demand - Enum.count(to_dispatch)
+
+    GenServer.cast(state.connection, {:request, to_dispatch})
+    %{state | pending_demand: new_pending, events: rest}
+  end
+end

@@ -98,11 +98,11 @@ defmodule Kadabra.Connection.Processor do
 
     case flow.stream_set.max_concurrent_streams do
       :infinite ->
-        GenStage.ask(state.queue, 2_000_000_000)
+        GenServer.cast(state.queue, {:ask, 2_000_000_000})
 
       max ->
         to_ask = max - flow.stream_set.active_stream_count
-        GenStage.ask(state.queue, to_ask)
+        GenServer.cast(state.queue, {:ask, to_ask})
     end
 
     {:ok, state}
@@ -134,7 +134,7 @@ defmodule Kadabra.Connection.Processor do
     to_ask =
       settings.max_concurrent_streams - flow.stream_set.active_stream_count
 
-    GenStage.ask(state.queue, to_ask)
+    GenServer.cast(state.queue, {:ask, to_ask})
 
     {:ok, %{state | flow_control: flow, remote_settings: settings}}
   end
