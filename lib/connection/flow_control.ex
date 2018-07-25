@@ -13,7 +13,7 @@ defmodule Kadabra.Connection.FlowControl do
             max_frame_size: @default_max_frame_size,
             window: @default_window_size
 
-  alias Kadabra.{Config, StreamSet, StreamSupervisor}
+  alias Kadabra.{Config, Stream, StreamSet}
 
   @type t :: %__MODULE__{
           queue: :queue.queue(),
@@ -86,8 +86,8 @@ defmodule Kadabra.Connection.FlowControl do
     %{flow_control | queue: queue}
   end
 
-  def add_active(%{stream_set: set} = flow_control, stream_id) do
-    new_set = StreamSet.add_active(set, stream_id)
+  def add_active(%{stream_set: set} = flow_control, stream_id, pid) do
+    new_set = StreamSet.add_active(set, stream_id, pid)
     %{flow_control | stream_set: new_set}
   end
 
@@ -102,14 +102,16 @@ defmodule Kadabra.Connection.FlowControl do
         max_frame_size: max_frame
       } = flow
 
-      case StreamSupervisor.start_stream(config, stream_id, window, max_frame) do
+      stream = Stream.new(config, stream_id, window, max_frame)
+
+      case Stream.start_link(stream) do
         {:ok, pid} ->
           Process.monitor(pid)
 
           size = byte_size(request.body || <<>>)
           :gen_statem.call(pid, {:send_headers, request})
 
-          updated_set = add_stream(stream_set, stream_id)
+          updated_set = add_stream(stream_set, stream_id, pid)
 
           flow
           |> Map.put(:queue, queue)
@@ -127,9 +129,9 @@ defmodule Kadabra.Connection.FlowControl do
     end
   end
 
-  defp add_stream(stream_set, stream_id) do
+  defp add_stream(stream_set, stream_id, pid) do
     stream_set
-    |> StreamSet.add_active(stream_id)
+    |> StreamSet.add_active(stream_id, pid)
     |> StreamSet.increment_active_stream_count()
     |> StreamSet.increment_stream_id()
   end

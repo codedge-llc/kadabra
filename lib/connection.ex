@@ -20,8 +20,7 @@ defmodule Kadabra.Connection do
     Encodable,
     Error,
     Frame,
-    Socket,
-    StreamSupervisor
+    Socket
   }
 
   alias Kadabra.Frame.{Goaway, Ping}
@@ -102,8 +101,6 @@ defmodule Kadabra.Connection do
       config: config
     } = state
 
-    StreamSupervisor.stop(state.config.ref)
-
     bin = flow.stream_set.stream_id |> Goaway.new() |> Encodable.to_bin()
     Socket.send(config.socket, bin)
 
@@ -150,6 +147,17 @@ defmodule Kadabra.Connection do
 
   def handle_info({:closed, _pid}, state) do
     {:stop, :shutdown, state}
+  end
+
+  def handle_info({:EXIT, _pid, {:shutdown, {:finished, sid}}}, state) do
+    GenStage.ask(state.queue, 1)
+
+    flow =
+      state.flow_control
+      |> FlowControl.finish_stream(sid)
+      |> FlowControl.process(state.config)
+
+    {:noreply, [], %{state | flow_control: flow}}
   end
 
   def handle_info({:DOWN, _, _, _pid, {:shutdown, {:finished, sid}}}, state) do

@@ -26,7 +26,7 @@ defmodule Kadabra.Application do
 
   defp spec_opts do
     ref = :erlang.make_ref()
-    [id: ref, restart: :temporary]
+    [id: ref, restart: :transient]
   end
 
   def ping(pid) do

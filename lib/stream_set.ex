@@ -3,7 +3,7 @@ defmodule Kadabra.StreamSet do
 
   defstruct stream_id: 1,
             active_stream_count: 0,
-            active_streams: MapSet.new(),
+            active_streams: %{},
             max_concurrent_streams: :infinite
 
   @type t :: %__MODULE__{
@@ -12,6 +12,10 @@ defmodule Kadabra.StreamSet do
           active_streams: MapSet.t(),
           max_concurrent_streams: non_neg_integer | :infinite
         }
+
+  def pid_for(set, stream_id) do
+    set.active_streams[stream_id]
+  end
 
   @doc ~S"""
   Increments current `stream_id`.
@@ -60,12 +64,12 @@ defmodule Kadabra.StreamSet do
 
   ## Examples
 
-      iex> set = add_active(%Kadabra.StreamSet{}, 1)
+      iex> set = add_active(%Kadabra.StreamSet{}, 1, :dummy)
       iex> set.active_streams
-      #MapSet<[1]>
+      %{1 => :dummy}
   """
-  def add_active(%{active_streams: active} = stream_set, stream_id) do
-    %{stream_set | active_streams: MapSet.put(active, stream_id)}
+  def add_active(%{active_streams: active} = stream_set, stream_id, pid) do
+    %{stream_set | active_streams: Map.put(active, stream_id, pid)}
   end
 
   @doc ~S"""
@@ -73,13 +77,13 @@ defmodule Kadabra.StreamSet do
 
   ## Examples
 
-      iex> set = %Kadabra.StreamSet{active_streams: MapSet.new([1, 3])}
+      iex> set = %Kadabra.StreamSet{active_streams: %{1 => :test, 3 => :dummy}}
       iex> remove_active(set, 1).active_streams
-      #MapSet<[3]>
+      %{3 => :dummy}
   """
   def remove_active(%{active_streams: active} = stream_set, stream_id)
       when is_integer(stream_id) do
-    %{stream_set | active_streams: MapSet.delete(active, stream_id)}
+    %{stream_set | active_streams: Map.delete(active, stream_id)}
   end
 
   @doc ~S"""
