@@ -38,43 +38,16 @@ defmodule Kadabra.Connection.FlowControl do
     |> Map.put(:stream_set, new_set)
   end
 
-  @doc ~S"""
-  Increments available window.
-
-  ## Examples
-
-      iex> flow = %Kadabra.Connection.FlowControl{window: 1_000}
-      iex> increment_window(flow, 500)
-      %Kadabra.Connection.FlowControl{window: 1_500}
-  """
   @spec increment_window(t, pos_integer) :: t
   def increment_window(%{window: window} = flow_control, amount) do
     %{flow_control | window: window + amount}
   end
 
-  @doc ~S"""
-  Decrements available window.
-
-  ## Examples
-
-      iex> flow = %Kadabra.Connection.FlowControl{window: 1_000}
-      iex> decrement_window(flow, 500)
-      %Kadabra.Connection.FlowControl{window: 500}
-  """
   @spec decrement_window(t, pos_integer) :: t
   def decrement_window(%{window: window} = flow_control, amount) do
     %{flow_control | window: window - amount}
   end
 
-  @doc ~S"""
-  Adds new sendable item to the queue.
-
-  ## Examples
-
-      iex> flow = add(%Kadabra.Connection.FlowControl{}, :dummy)
-      iex> :queue.len(flow.queue)
-      1
-  """
   @spec add(t, any) :: t
   def add(%{queue: queue} = flow_control, requests) when is_list(requests) do
     queue = Enum.reduce(requests, queue, &:queue.in(&1, &2))
@@ -146,20 +119,6 @@ defmodule Kadabra.Connection.FlowControl do
     %{flow_control | stream_set: new_set}
   end
 
-  @doc ~S"""
-  Returns true if window is positive.
-
-  ## Examples
-
-      iex> flow = %Kadabra.Connection.FlowControl{window: 500}
-      iex> can_send?(flow)
-      true
-
-      iex> flow = %Kadabra.Connection.FlowControl{window: 0}
-      iex> can_send?(flow)
-      false
-  """
-  @spec can_send?(t) :: boolean
-  def can_send?(%{window: bytes}) when bytes > 0, do: true
-  def can_send?(_else), do: false
+  defp can_send?(%{window: bytes}) when bytes > 0, do: true
+  defp can_send?(_else), do: false
 end
