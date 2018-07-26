@@ -99,15 +99,6 @@ defmodule Kadabra.Connection do
     {:noreply, state}
   end
 
-  def handle_events(events, _from, state) do
-    state = do_send_headers(events, state)
-    {:noreply, state}
-  end
-
-  def handle_subscribe(:producer, _opts, from, state) do
-    {:manual, %{state | queue: from}}
-  end
-
   # handle_call
 
   def handle_call(:close, _from, %Connection{} = state) do

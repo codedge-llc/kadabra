@@ -7,10 +7,6 @@ defmodule Kadabra.Hpack do
     GenServer.start_link(__MODULE__, :ok)
   end
 
-  def init(:ok) do
-    {:ok, :hpack.new_context()}
-  end
-
   def encode(pid, headers) do
     GenServer.call(pid, {:encode, headers})
   end
@@ -21,6 +17,12 @@ defmodule Kadabra.Hpack do
 
   def update_max_table_size(pid, size) do
     GenServer.call(pid, {:new_max_table_size, size})
+  end
+
+  ## Callbacks
+
+  def init(:ok) do
+    {:ok, :hpack.new_context()}
   end
 
   def handle_call({:encode, headers}, _pid, state) do

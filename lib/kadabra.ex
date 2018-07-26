@@ -66,6 +66,8 @@ defmodule Kadabra do
   ```
   """
 
+  import Supervisor.Spec
+
   alias Kadabra.{ConnectionPool, Request, Stream}
 
   @typedoc ~S"""
@@ -114,7 +116,10 @@ defmodule Kadabra do
 
   def open(uri, opts) when is_binary(uri) do
     uri = URI.parse(uri)
-    Kadabra.Application.start_connection(uri, self(), opts)
+    spec_opts = [id: :erlang.make_ref(), restart: :transient]
+    spec = worker(Kadabra.ConnectionPool, [uri, self(), opts], spec_opts)
+
+    Supervisor.start_child(:kadabra, spec)
   end
 
   def open(uri, opts) when is_list(uri) do
@@ -135,7 +140,7 @@ defmodule Kadabra do
   """
   @spec close(pid) :: :ok
   def close(pid) do
-    Kadabra.Application.close(pid)
+    Kadabra.ConnectionPool.close(pid)
   end
 
   @doc ~S"""
@@ -152,7 +157,7 @@ defmodule Kadabra do
   """
   @spec ping(pid) :: no_return
   def ping(pid) do
-    Kadabra.Application.ping(pid)
+    Kadabra.ConnectionPool.ping(pid)
   end
 
   @doc ~S"""

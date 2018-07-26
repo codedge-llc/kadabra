@@ -1,10 +1,19 @@
 defmodule Kadabra.ConnectionPool do
+  @moduledoc false
+
   defstruct connection: nil,
             pending_demand: 0,
             events: []
 
+  @type t :: %__MODULE__{
+          connection: pid,
+          pending_demand: non_neg_integer,
+          events: [any, ...]
+        }
+
   alias Kadabra.Connection
 
+  @spec start_link(URI.t(), pid, Keyword.t()) :: {:ok, pid}
   def start_link(uri, pid, opts) do
     config = %Kadabra.Config{
       ref: :erlang.make_ref(),
@@ -16,6 +25,20 @@ defmodule Kadabra.ConnectionPool do
     GenServer.start_link(__MODULE__, config)
   end
 
+  def request(pid, requests) when is_list(requests) do
+    GenServer.call(pid, {:request, requests})
+  end
+
+  def request(pid, request) do
+    GenServer.call(pid, {:request, [request]})
+  end
+
+  def ping(pid), do: GenServer.call(pid, :ping)
+
+  def close(pid), do: GenServer.call(pid, :close)
+
+  ## Callbacks
+
   def init(config) do
     config = %{config | queue: self()}
 
@@ -25,26 +48,10 @@ defmodule Kadabra.ConnectionPool do
     {:ok, %__MODULE__{connection: connection}}
   end
 
-  def request(pid, requests) when is_list(requests) do
-    GenServer.call(pid, {:request, requests})
-  end
-
-  def request(pid, request) do
-    GenServer.call(pid, {:request, [request]})
-  end
-
-  def ping(pid) do
-    GenServer.call(pid, :ping)
-  end
-
-  def close(pid) do
-    GenServer.call(pid, :close)
-  end
-
   def handle_cast({:ask, demand}, state) do
     state =
       state
-      |> Map.put(:pending_demand, state.pending_demand + demand)
+      |> increment_demand(demand)
       |> dispatch_events()
 
     {:noreply, state}
@@ -65,7 +72,7 @@ defmodule Kadabra.ConnectionPool do
 
     state =
       state
-      |> Map.put(:events, state.events ++ requests)
+      |> enqueue(requests)
       |> dispatch_events()
 
     {:noreply, state}
@@ -79,23 +86,27 @@ defmodule Kadabra.ConnectionPool do
     {:stop, :shutdown, state}
   end
 
-  def enqueue(queue, requests) when is_list(requests) do
-    Enum.reduce(requests, queue, &enqueue(&2, &1))
+  def terminate(_reason, _state) do
+    :ok
   end
 
-  def enqueue(queue, request) do
-    :queue.in(request, queue)
+  ## Private
+
+  defp increment_demand(state, demand) do
+    state
+    |> Map.put(:pending_demand, state.pending_demand + demand)
   end
 
-  def dispatch_events(state) do
+  defp enqueue(state, requests) do
+    state
+    |> Map.put(:events, state.events ++ requests)
+  end
+
+  defp dispatch_events(state) do
     {to_dispatch, rest} = Enum.split(state.events, state.pending_demand)
     new_pending = state.pending_demand - Enum.count(to_dispatch)
 
     GenServer.cast(state.connection, {:request, to_dispatch})
     %{state | pending_demand: new_pending, events: rest}
-  end
-
-  def terminate(_reason, _state) do
-    :ok
   end
 end
