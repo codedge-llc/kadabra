@@ -8,7 +8,6 @@ defmodule Kadabra.Stream do
             socket: nil,
             encoder: nil,
             decoder: nil,
-            ref: nil,
             flow: nil,
             uri: nil,
             headers: [],
@@ -33,7 +32,6 @@ defmodule Kadabra.Stream do
           id: pos_integer,
           client: pid,
           connection: pid,
-          ref: term,
           uri: URI.t(),
           flow: Kadabra.Stream.FlowControl.t(),
           headers: [...],
@@ -57,7 +55,6 @@ defmodule Kadabra.Stream do
     %__MODULE__{
       id: stream_id,
       client: config.client,
-      ref: config.ref,
       uri: config.uri,
       socket: config.socket,
       encoder: config.encoder,

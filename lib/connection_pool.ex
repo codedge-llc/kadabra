@@ -16,7 +16,6 @@ defmodule Kadabra.ConnectionPool do
   @spec start_link(URI.t(), pid, Keyword.t()) :: {:ok, pid}
   def start_link(uri, pid, opts) do
     config = %Kadabra.Config{
-      ref: :erlang.make_ref(),
       client: pid,
       uri: uri,
       opts: opts

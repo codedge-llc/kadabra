@@ -3,8 +3,9 @@ defmodule Kadabra.Frame.Data do
 
   defstruct [:stream_id, :data, end_stream: false]
 
+  use Bitwise
+
   alias Kadabra.Frame
-  alias Kadabra.Frame.Flags
 
   @type t :: %__MODULE__{
           data: binary,
@@ -17,18 +18,11 @@ defmodule Kadabra.Frame.Data do
     %__MODULE__{
       data: data,
       stream_id: stream_id,
-      end_stream: Flags.end_stream?(flags)
+      end_stream: end_stream?(flags)
     }
   end
-end
 
-defimpl Kadabra.Encodable, for: Kadabra.Frame.Data do
-  alias Kadabra.Frame
-
-  @data 0x0
-
-  def to_bin(%{end_stream: end_stream, stream_id: stream_id, data: data}) do
-    flags = if end_stream, do: 0x1, else: 0x0
-    Frame.binary_frame(@data, flags, stream_id, data)
-  end
+  @spec end_stream?(non_neg_integer) :: boolean
+  defp end_stream?(flags) when (flags &&& 1) == 1, do: true
+  defp end_stream?(_), do: false
 end

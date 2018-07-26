@@ -51,14 +51,3 @@ defmodule Kadabra.Frame.Goaway do
     }
   end
 end
-
-defimpl Kadabra.Encodable, for: Kadabra.Frame.Goaway do
-  alias Kadabra.Frame
-
-  @goaway 0x7
-
-  def to_bin(%{last_stream_id: id, error_code: error}) do
-    payload = <<0::1, id::31>> <> error
-    Frame.binary_frame(@goaway, 0x0, 0, payload)
-  end
-end

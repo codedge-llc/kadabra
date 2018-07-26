@@ -17,16 +17,11 @@ defmodule Kadabra.Connection do
   alias Kadabra.{
     Config,
     Connection,
-    Encodable,
-    Error,
-    Frame,
     Hpack,
     Socket
   }
 
-  alias Kadabra.Frame.{Goaway, Ping}
-
-  alias Kadabra.Connection.{FlowControl, Processor}
+  alias Kadabra.Connection.{Egress, FlowControl, Processor}
 
   @type t :: %__MODULE__{
           buffer: binary,
@@ -42,14 +37,10 @@ defmodule Kadabra.Connection do
     GenServer.start_link(__MODULE__, config)
   end
 
-  def via_tuple(ref) do
-    {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
-  end
-
   def init(%Config{} = config) do
     {:ok, encoder} = Hpack.start_link()
     {:ok, decoder} = Hpack.start_link()
-    {:ok, socket} = Socket.start_link(config)
+    {:ok, socket} = Socket.start_link(config.uri, config.opts)
 
     config =
       config
@@ -107,8 +98,7 @@ defmodule Kadabra.Connection do
       config: config
     } = state
 
-    bin = flow.stream_set.stream_id |> Goaway.new() |> Encodable.to_bin()
-    Socket.send(config.socket, bin)
+    Egress.send_goaway(config.socket, flow.stream_set.stream_id)
 
     {:stop, :shutdown, :ok, state}
   end
@@ -117,8 +107,7 @@ defmodule Kadabra.Connection do
 
   @spec sendf(:goaway | :ping, t) :: {:noreply, t}
   def sendf(:ping, %Connection{config: config} = state) do
-    bin = Ping.new() |> Encodable.to_bin()
-    Socket.send(config.socket, bin)
+    Egress.send_ping(config.socket)
     {:noreply, state}
   end
 
@@ -137,12 +126,7 @@ defmodule Kadabra.Connection do
 
   def handle_info(:start, %{config: %{socket: socket}} = state) do
     Socket.set_active(socket)
-
-    bin =
-      %Frame.Settings{settings: state.local_settings}
-      |> Encodable.to_bin()
-
-    Socket.send(socket, bin)
+    Egress.send_local_settings(socket, state.local_settings)
 
     {:noreply, state}
   end
@@ -184,20 +168,15 @@ defmodule Kadabra.Connection do
         {:noreply, state}
 
       {:connection_error, error, reason, state} ->
-        handle_connection_error(state, error, reason)
+        Egress.send_goaway(
+          state.config.socket,
+          state.flow_control.stream_set.stream_id,
+          error,
+          reason
+        )
+
         {:stop, {:shutdown, :connection_error}, state}
     end
-  end
-
-  defp handle_connection_error(%{config: config} = state, error, reason) do
-    code = <<Error.code(error)::32>>
-
-    bin =
-      state.flow_control.stream_set.stream_id
-      |> Goaway.new(code, reason)
-      |> Encodable.to_bin()
-
-    Socket.send(config.socket, bin)
   end
 
   def terminate(_reason, %{config: config}) do

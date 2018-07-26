@@ -3,7 +3,7 @@ defmodule Kadabra.Socket do
 
   defstruct socket: nil, buffer: "", active_user: nil
 
-  alias Kadabra.{Config, FrameParser}
+  alias Kadabra.FrameParser
 
   import Kernel, except: [send: 2]
 
@@ -28,11 +28,11 @@ defmodule Kadabra.Socket do
     GenServer.call(pid, {:set_active, self()})
   end
 
-  def start_link(%Config{} = config) do
-    GenServer.start_link(__MODULE__, config)
+  def start_link(uri, opts) do
+    GenServer.start_link(__MODULE__, {uri, opts})
   end
 
-  def init(%{uri: uri, opts: opts}) do
+  def init({uri, opts}) do
     case connect(uri, opts) do
       {:ok, socket} ->
         socket_send(socket, connection_preface())

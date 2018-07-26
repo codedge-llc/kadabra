@@ -5,7 +5,6 @@ defmodule Kadabra.Config do
             queue: nil,
             encoder: nil,
             decoder: nil,
-            ref: nil,
             uri: nil,
             socket: nil,
             queue: nil,
@@ -16,7 +15,6 @@ defmodule Kadabra.Config do
           queue: pid,
           encoder: pid,
           decoder: pid,
-          ref: term,
           uri: URI.t(),
           socket: pid,
           opts: Keyword.t()

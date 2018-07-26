@@ -71,11 +71,11 @@ defmodule Kadabra.Connection.FlowControl do
 
   ## Examples
 
-      iex> flow = add(%Kadabra.Connection.FlowControl{}, %Kadabra.Request{})
+      iex> flow = add(%Kadabra.Connection.FlowControl{}, :dummy)
       iex> :queue.len(flow.queue)
       1
   """
-  @spec add(t, Kadabra.Request.t()) :: t
+  @spec add(t, any) :: t
   def add(%{queue: queue} = flow_control, requests) when is_list(requests) do
     queue = Enum.reduce(requests, queue, &:queue.in(&1, &2))
     %{flow_control | queue: queue}

@@ -5,8 +5,9 @@ defmodule Kadabra.Frame.PushPromise do
             header_block_fragment: nil,
             stream_id: nil
 
+  use Bitwise
+
   alias Kadabra.Frame
-  alias Kadabra.Frame.Flags
 
   @type t :: %__MODULE__{
           end_headers: boolean,
@@ -29,7 +30,11 @@ defmodule Kadabra.Frame.PushPromise do
     %__MODULE__{
       stream_id: id,
       header_block_fragment: headers,
-      end_headers: Flags.end_headers?(f)
+      end_headers: end_headers?(f)
     }
   end
+
+  @spec end_headers?(non_neg_integer) :: boolean
+  defp end_headers?(flags) when (flags &&& 4) == 4, do: true
+  defp end_headers?(_), do: false
 end

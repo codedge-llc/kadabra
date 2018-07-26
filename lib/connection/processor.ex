@@ -5,16 +5,14 @@ defmodule Kadabra.Connection.Processor do
 
   alias Kadabra.{
     Connection,
-    Encodable,
     Error,
     Frame,
     Hpack,
-    Socket,
     Stream,
     StreamSet
   }
 
-  alias Kadabra.Connection.FlowControl
+  alias Kadabra.Connection.{Egress, FlowControl}
 
   alias Kadabra.Frame.{
     Continuation,
@@ -56,8 +54,8 @@ defmodule Kadabra.Connection.Processor do
     bin_size = byte_size(frame.data)
     size = min(available, bin_size)
 
-    send_window_update(config.socket, 0, size)
-    send_window_update(config.socket, stream_id, bin_size)
+    Egress.send_window_update(config.socket, 0, size)
+    Egress.send_window_update(config.socket, stream_id, bin_size)
 
     pid = StreamSet.pid_for(state.flow_control.stream_set, stream_id)
     Stream.call_recv(pid, frame)
@@ -93,8 +91,7 @@ defmodule Kadabra.Connection.Processor do
   def process(%Frame.Settings{ack: false, settings: nil}, state) do
     %{flow_control: flow, config: config} = state
 
-    bin = Frame.Settings.ack() |> Encodable.to_bin()
-    Socket.send(config.socket, bin)
+    Egress.send_settings_ack(config.socket)
 
     case flow.stream_set.max_concurrent_streams do
       :infinite ->
@@ -128,8 +125,7 @@ defmodule Kadabra.Connection.Processor do
       settings.max_header_list_size
     )
 
-    bin = Frame.Settings.ack() |> Encodable.to_bin()
-    Socket.send(config.socket, bin)
+    Egress.send_settings_ack(config.socket)
 
     to_ask =
       settings.max_concurrent_streams - flow.stream_set.active_stream_count
@@ -150,7 +146,8 @@ defmodule Kadabra.Connection.Processor do
       state.local_settings.max_header_list_size
     )
 
-    send_huge_window_update(c.socket, state.remote_window)
+    available = FlowControl.window_max() - state.remote_window
+    Egress.send_window_update(c.socket, 0, available)
 
     {:ok, %{state | remote_window: FlowControl.window_max()}}
   end
@@ -245,25 +242,6 @@ defmodule Kadabra.Connection.Processor do
   def log_goaway(%Goaway{last_stream_id: id, error_code: c, debug_data: b}) do
     error = Error.parse(c)
     Logger.error("Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{b}")
-  end
-
-  @spec send_window_update(pid, non_neg_integer, integer) :: no_return
-  def send_window_update(socket, stream_id, bytes)
-      when bytes > 0 and bytes < 2_147_483_647 do
-    bin =
-      stream_id
-      |> WindowUpdate.new(bytes)
-      |> Encodable.to_bin()
-
-    # Logger.info("Sending WINDOW_UPDATE on Stream #{stream_id} (#{bytes})")
-    Socket.send(socket, bin)
-  end
-
-  def send_window_update(_socket, _stream_id, _bytes), do: :ok
-
-  def send_huge_window_update(socket, remote_window) do
-    available = FlowControl.window_max() - remote_window
-    send_window_update(socket, 0, available)
   end
 
   def notify_settings_change(old_settings, new_settings, %{stream_set: set}) do
