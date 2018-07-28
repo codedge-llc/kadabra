@@ -4,7 +4,7 @@ defmodule KadabraTest do
 
   @moduletag report: [:pid]
 
-  alias Kadabra.{Connection, Stream}
+  alias Kadabra.Stream
 
   @golang_uri "https://http2.golang.org"
 
@@ -13,11 +13,6 @@ defmodule KadabraTest do
       @golang_uri
       |> Kadabra.open()
       |> elem(1)
-
-    # on_exit(fn ->
-    #   Process.sleep(500)
-    #   if Process.alive?(pid), do: Kadabra.close(pid)
-    # end)
 
     [conn: pid]
   end
@@ -28,12 +23,10 @@ defmodule KadabraTest do
       opts = [port: 443]
       {:ok, pid} = Kadabra.open(@golang_uri, opts)
 
-      consumer =
-        pid
-        |> Connection.via_tuple()
-        |> :sys.get_state()
+      conn_pid = :sys.get_state(pid).connection
+      conn = :sys.get_state(conn_pid)
 
-      assert consumer.state.config.opts[:port] == 443
+      assert conn.config.opts[:port] == 443
       Kadabra.close(pid)
     end
   end
@@ -254,21 +247,14 @@ defmodule KadabraTest do
       |> elem(1)
 
     ref = Process.monitor(pid)
-    socket = find_child(pid, :socket)
 
-    Process.sleep(500)
+    conn_pid = :sys.get_state(pid).connection
+    socket_pid = :sys.get_state(conn_pid).config.socket
 
-    send(socket, {:ssl_closed, nil})
+    send(socket_pid, {:ssl_closed, nil})
 
     assert_receive {:closed, ^pid}, 5_000
     assert_receive {:DOWN, ^ref, :process, ^pid, :shutdown}, 5_000
-  end
-
-  defp find_child(pid, name) do
-    pid
-    |> Supervisor.which_children()
-    |> Enum.find(fn {n, _, _, _} -> n == name end)
-    |> elem(1)
   end
 
   # @tag :golang

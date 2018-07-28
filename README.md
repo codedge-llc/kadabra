@@ -14,7 +14,7 @@ Add kadabra to your `mix.exs`:
   ```elixir
   def deps do
     [
-      {:kadabra, "~> 0.4.0"}
+      {:kadabra, "~> 0.4.3"}
     ]
   end
   ```

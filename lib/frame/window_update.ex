@@ -26,14 +26,3 @@ defmodule Kadabra.Frame.WindowUpdate do
     }
   end
 end
-
-defimpl Kadabra.Encodable, for: Kadabra.Frame.WindowUpdate do
-  alias Kadabra.Frame
-
-  @window_update 0x8
-
-  def to_bin(frame) do
-    size = <<frame.window_size_increment::32>>
-    Frame.binary_frame(@window_update, 0x0, frame.stream_id, size)
-  end
-end

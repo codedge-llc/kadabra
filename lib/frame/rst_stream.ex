@@ -36,13 +36,3 @@ defmodule Kadabra.Frame.RstStream do
     }
   end
 end
-
-defimpl Kadabra.Encodable, for: Kadabra.Frame.RstStream do
-  alias Kadabra.Frame
-
-  @rst_stream 0x3
-
-  def to_bin(frame) do
-    Frame.binary_frame(@rst_stream, 0x0, frame.stream_id, frame.error_code)
-  end
-end

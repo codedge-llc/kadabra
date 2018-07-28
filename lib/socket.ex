@@ -3,7 +3,7 @@ defmodule Kadabra.Socket do
 
   defstruct socket: nil, buffer: "", active_user: nil
 
-  alias Kadabra.{Config, FrameParser}
+  alias Kadabra.FrameParser
 
   import Kernel, except: [send: 2]
 
@@ -28,12 +28,11 @@ defmodule Kadabra.Socket do
     GenServer.call(pid, {:set_active, self()})
   end
 
-  def start_link(%Config{supervisor: sup} = config) do
-    name = via_tuple(sup)
-    GenServer.start_link(__MODULE__, config, name: name)
+  def start_link(uri, opts) do
+    GenServer.start_link(__MODULE__, {uri, opts})
   end
 
-  def init(%{uri: uri, opts: opts}) do
+  def init({uri, opts}) do
     case connect(uri, opts) do
       {:ok, socket} ->
         socket_send(socket, connection_preface())
@@ -42,10 +41,6 @@ defmodule Kadabra.Socket do
       error ->
         error
     end
-  end
-
-  def via_tuple(ref) do
-    {:via, Registry, {Registry.Kadabra, {ref, __MODULE__}}}
   end
 
   @spec connect(URI.t(), Keyword.t()) :: connection_result
