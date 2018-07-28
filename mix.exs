@@ -16,7 +16,12 @@ defmodule Kadabra.Mixfile do
       name: "Kadabra",
       description: description(),
       source_url: "https://github.com/codedge-llc/kadabra",
-      docs: [main: "Kadabra"],
+      docs: [
+        main: "Kadabra",
+        extras: [
+          "CHANGELOG.md"
+        ]
+      ],
       test_coverage: [tool: ExCoveralls],
       preferred_cli_env: [
         coveralls: :test,
@@ -48,11 +53,10 @@ defmodule Kadabra.Mixfile do
   defp deps do
     [
       {:hpack, "~> 0.2.3", hex: :hpack_erl},
-      {:ex_doc, "~> 0.14", only: :dev},
+      {:ex_doc, "~> 0.19", only: :dev},
       {:excoveralls, "~> 0.7", only: :test},
       {:dialyxir, "~> 0.5", only: [:dev], runtime: false},
-      {:credo, "~> 0.8", only: [:dev, :test], runtime: false},
-      {:inch_ex, only: :docs}
+      {:credo, "~> 0.8", only: [:dev, :test], runtime: false}
     ]
   end
 
