@@ -146,17 +146,6 @@ defmodule Kadabra.Connection do
     {:noreply, %{state | flow_control: flow}}
   end
 
-  def handle_info({:DOWN, _, _, _pid, {:shutdown, {:finished, sid}}}, state) do
-    GenServer.cast(state.queue, {:ask, 1})
-
-    flow =
-      state.flow_control
-      |> FlowControl.finish_stream(sid)
-      |> FlowControl.process(state.config)
-
-    {:noreply, %{state | flow_control: flow}}
-  end
-
   def handle_info({:push_promise, stream}, %{config: config} = state) do
     Kernel.send(config.client, {:push_promise, stream})
     {:noreply, state}

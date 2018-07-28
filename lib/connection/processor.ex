@@ -224,12 +224,14 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(frame, state) do
-    """
-    Unknown RECV on connection
-    Frame: #{inspect(frame)}
-    State: #{inspect(state)}
-    """
-    |> Logger.info()
+    if debug_log?() do
+      """
+      Unknown RECV on connection
+      Frame: #{inspect(frame)}
+      State: #{inspect(state)}
+      """
+      |> Logger.info()
+    end
 
     {:ok, state}
   end
@@ -240,8 +242,10 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def log_goaway(%Goaway{last_stream_id: id, error_code: c, debug_data: b}) do
-    error = Error.parse(c)
-    Logger.error("Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{b}")
+    if debug_log?() do
+      error = Error.parse(c)
+      Logger.error("Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{b}")
+    end
   end
 
   def notify_settings_change(old_settings, new_settings, %{stream_set: set}) do
@@ -256,4 +260,6 @@ defmodule Kadabra.Connection.Processor do
       send(pid, {:settings_change, window_diff, max_frame_size})
     end
   end
+
+  defp debug_log?, do: Application.get_env(:kadabra, :debug_log?)
 end

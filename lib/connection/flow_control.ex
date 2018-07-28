@@ -79,8 +79,6 @@ defmodule Kadabra.Connection.FlowControl do
 
       case Stream.start_link(stream) do
         {:ok, pid} ->
-          Process.monitor(pid)
-
           size = byte_size(request.body || <<>>)
           :gen_statem.call(pid, {:send_headers, request})
 

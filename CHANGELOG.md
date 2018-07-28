@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.3
+- Fixed supervisor crash report during normal connection shutdown
+- Removed `GenStage` dependency
+- GOAWAY error logger messages now disabled by default.
+  Re-enable with `config :kadabra, debug_log?: true`
+
 ## v0.4.2
 - Fixed `{:closed, pid}` task race condition during connection cleanup
 - Everything is supervised under `Kadabra.Application` again, instead of
