@@ -3,6 +3,8 @@ defmodule Kadabra.Frame.Continuation do
 
   defstruct [:header_block_fragment, :stream_id, end_headers: false]
 
+  use Bitwise
+
   @type t :: %__MODULE__{
           end_headers: boolean,
           header_block_fragment: bitstring,
@@ -10,7 +12,6 @@ defmodule Kadabra.Frame.Continuation do
         }
 
   alias Kadabra.Frame
-  alias Kadabra.Frame.Flags
 
   @doc ~S"""
   Initializes a new `Frame.Continuation` given a `Frame`.
@@ -26,17 +27,12 @@ defmodule Kadabra.Frame.Continuation do
   def new(%Frame{stream_id: id, payload: payload, flags: flags}) do
     %__MODULE__{
       header_block_fragment: payload,
-      end_headers: Flags.end_headers?(flags),
+      end_headers: end_headers?(flags),
       stream_id: id
     }
   end
-end
 
-defimpl Kadabra.Encodable, for: Kadabra.Frame.Continuation do
-  alias Kadabra.Frame
-
-  def to_bin(frame) do
-    f = if frame.end_headers, do: 0x4, else: 0x0
-    Frame.binary_frame(0x9, f, frame.stream_id, frame.header_block_fragment)
-  end
+  @spec end_headers?(non_neg_integer) :: boolean
+  defp end_headers?(flags) when (flags &&& 4) == 4, do: true
+  defp end_headers?(_), do: false
 end

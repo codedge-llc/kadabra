@@ -21,8 +21,9 @@ defmodule Kadabra.Frame.Headers do
           weight: non_neg_integer
         }
 
+  use Bitwise
+
   alias Kadabra.Frame
-  alias Kadabra.Frame.Flags
 
   @doc ~S"""
   Initializes a new `Frame.Headers` from given `Frame`.
@@ -49,7 +50,7 @@ defmodule Kadabra.Frame.Headers do
       |> put_flags(flags)
       |> Map.put(:stream_id, stream_id)
 
-    if Flags.priority?(flags) do
+    if priority?(flags) do
       put_priority(frame, p)
     else
       Map.put(frame, :header_block_fragment, p)
@@ -58,9 +59,9 @@ defmodule Kadabra.Frame.Headers do
 
   defp put_flags(frame, flags) do
     frame
-    |> Map.put(:end_stream, Flags.end_stream?(flags))
-    |> Map.put(:end_headers, Flags.end_headers?(flags))
-    |> Map.put(:priority, Flags.priority?(flags))
+    |> Map.put(:end_stream, end_stream?(flags))
+    |> Map.put(:end_headers, end_headers?(flags))
+    |> Map.put(:priority, priority?(flags))
   end
 
   defp put_priority(frame, payload) do
@@ -72,19 +73,16 @@ defmodule Kadabra.Frame.Headers do
     |> Map.put(:weight, weight + 1)
     |> Map.put(:header_block_fragment, headers)
   end
-end
 
-defimpl Kadabra.Encodable, for: Kadabra.Frame.Headers do
-  alias Kadabra.Frame
+  @spec end_stream?(non_neg_integer) :: boolean
+  defp end_stream?(flags) when (flags &&& 1) == 1, do: true
+  defp end_stream?(_), do: false
 
-  @headers 0x1
+  @spec end_headers?(non_neg_integer) :: boolean
+  defp end_headers?(flags) when (flags &&& 4) == 4, do: true
+  defp end_headers?(_), do: false
 
-  def to_bin(%{header_block_fragment: block, stream_id: sid} = frame) do
-    flags = flags(frame)
-    Frame.binary_frame(@headers, flags, sid, block)
-  end
-
-  defp flags(%{end_headers: false, end_stream: true}), do: 0x1
-  defp flags(%{end_headers: true, end_stream: false}), do: 0x4
-  defp flags(%{end_headers: true, end_stream: true}), do: 0x5
+  @spec priority?(non_neg_integer) :: boolean
+  defp priority?(flags) when (flags &&& 0x20) == 0x20, do: true
+  defp priority?(_), do: false
 end

@@ -9,64 +9,62 @@ defmodule Kadabra do
 
   ## Usage
 
-  ```elixir
-  {:ok, pid} = Kadabra.open("https://http2.golang.org")
-  Kadabra.get(pid, "/")
-  receive do
-    {:end_stream, %Kadabra.Stream.Response{} = stream} ->
-    IO.inspect stream
-  after 5_000 ->
-    IO.puts "Connection timed out."
-  end
+      {:ok, pid} = Kadabra.open("https://http2.golang.org")
+      Kadabra.get(pid, "/")
+      receive do
+        {:end_stream, %Kadabra.Stream.Response{} = stream} ->
+        IO.inspect stream
+      after 5_000 ->
+        IO.puts "Connection timed out."
+      end
 
-  %Kadabra.Stream.Response{
-    body: "<html>\\n<body>\\n<h1>Go + HTTP/2</h1>\\n\\n<p>Welcome to..."
-    headers: [
-      {":status", "200"},
-      {"content-type", "text/html; charset=utf-8"},
-      {"content-length", "1708"},
-      {"date", "Sun, 16 Oct 2016 21:20:47 GMT"}
-    ],
-    id: 1,
-    status: 200
-  }
-  ```
+      %Kadabra.Stream.Response{
+        body: "<html>\\n<body>\\n<h1>Go + HTTP/2</h1>\\n\\n<p>Welcome to..."
+        headers: [
+          {":status", "200"},
+          {"content-type", "text/html; charset=utf-8"},
+          {"content-length", "1708"},
+          {"date", "Sun, 16 Oct 2016 21:20:47 GMT"}
+        ],
+        id: 1,
+        status: 200
+      }
 
   ## Making Requests Manually
 
-  ```elixir
-  {:ok, pid} = Kadabra.open("https://http2.golang.org")
+      {:ok, pid} = Kadabra.open("https://http2.golang.org")
 
-  path = "/ECHO" # Route echoes PUT body in uppercase
-  body = "sample echo request"
-  headers = [
-    {":method", "PUT"},
-    {":path", path},
-  ]
+      path = "/ECHO" # Route echoes PUT body in uppercase
+      body = "sample echo request"
+      headers = [
+        {":method", "PUT"},
+        {":path", path},
+      ]
 
-  Kadabra.request(pid, headers, body)
+      Kadabra.request(pid, headers, body)
 
-  receive do
-    {:end_stream, %Kadabra.Stream.Response{} = stream} ->
-    IO.inspect stream
-  after 5_000 ->
-    IO.puts "Connection timed out."
-  end
+      receive do
+        {:end_stream, %Kadabra.Stream.Response{} = stream} ->
+        IO.inspect stream
+      after 5_000 ->
+        IO.puts "Connection timed out."
+      end
 
-  %Kadabra.Stream.Response{
-    body: "SAMPLE ECHO REQUEST",
-    headers: [
-      {":status", "200"},
-      {"content-type", "text/plain; charset=utf-8"},
-      {"date", "Sun, 16 Oct 2016 21:28:15 GMT"}
-    ],
-    id: 1,
-    status: 200
-  }
-  ```
+      %Kadabra.Stream.Response{
+        body: "SAMPLE ECHO REQUEST",
+        headers: [
+          {":status", "200"},
+          {"content-type", "text/plain; charset=utf-8"},
+          {"date", "Sun, 16 Oct 2016 21:28:15 GMT"}
+        ],
+        id: 1,
+        status: 200
+      }
   """
 
-  alias Kadabra.{ConnectionQueue, Request, Stream}
+  import Supervisor.Spec
+
+  alias Kadabra.{ConnectionPool, Request, Stream}
 
   @typedoc ~S"""
   Options for connections.
@@ -114,7 +112,10 @@ defmodule Kadabra do
 
   def open(uri, opts) when is_binary(uri) do
     uri = URI.parse(uri)
-    Kadabra.Application.start_connection(uri, self(), opts)
+    spec_opts = [id: :erlang.make_ref(), restart: :transient]
+    spec = worker(Kadabra.ConnectionPool, [uri, self(), opts], spec_opts)
+
+    Supervisor.start_child(:kadabra, spec)
   end
 
   def open(uri, opts) when is_list(uri) do
@@ -135,7 +136,7 @@ defmodule Kadabra do
   """
   @spec close(pid) :: :ok
   def close(pid) do
-    Kadabra.Application.close(pid)
+    Kadabra.ConnectionPool.close(pid)
   end
 
   @doc ~S"""
@@ -152,7 +153,7 @@ defmodule Kadabra do
   """
   @spec ping(pid) :: no_return
   def ping(pid) do
-    Kadabra.Application.ping(pid)
+    Kadabra.ConnectionPool.ping(pid)
   end
 
   @doc ~S"""
@@ -177,16 +178,16 @@ defmodule Kadabra do
   """
   @spec request(pid, Request.t() | [Request.t()] | request_opts) :: no_return
   def request(pid, %Request{} = request) do
-    ConnectionQueue.queue_request(pid, request)
+    ConnectionPool.request(pid, [request])
   end
 
   def request(pid, [%Request{} | _rest] = requests) do
-    ConnectionQueue.queue_request(pid, requests)
+    ConnectionPool.request(pid, requests)
   end
 
   def request(pid, opts) when is_list(opts) do
     request = Request.new(opts)
-    ConnectionQueue.queue_request(pid, request)
+    ConnectionPool.request(pid, request)
   end
 
   @doc ~S"""

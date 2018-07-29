@@ -5,15 +5,14 @@ defmodule Kadabra.Connection.Processor do
 
   alias Kadabra.{
     Connection,
-    Encodable,
     Error,
     Frame,
     Hpack,
-    Socket,
-    StreamSupervisor
+    Stream,
+    StreamSet
   }
 
-  alias Kadabra.Connection.FlowControl
+  alias Kadabra.Connection.{Egress, FlowControl}
 
   alias Kadabra.Frame.{
     Continuation,
@@ -55,18 +54,19 @@ defmodule Kadabra.Connection.Processor do
     bin_size = byte_size(frame.data)
     size = min(available, bin_size)
 
-    send_window_update(config.socket, 0, size)
-    send_window_update(config.socket, stream_id, bin_size)
+    Egress.send_window_update(config.socket, 0, size)
+    Egress.send_window_update(config.socket, stream_id, bin_size)
 
-    StreamSupervisor.send_frame(config.ref, stream_id, frame)
+    pid = StreamSet.pid_for(state.flow_control.stream_set, stream_id)
+    Stream.call_recv(pid, frame)
 
     {:ok, %{state | remote_window: state.remote_window + size}}
   end
 
   def process(%Headers{stream_id: stream_id} = frame, state) do
-    state.config.ref
-    |> StreamSupervisor.send_frame(stream_id, frame)
-    |> case do
+    pid = StreamSet.pid_for(state.flow_control.stream_set, stream_id)
+
+    case Stream.call_recv(pid, frame) do
       :ok ->
         {:ok, state}
 
@@ -81,7 +81,8 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%RstStream{stream_id: stream_id} = frame, state) do
-    StreamSupervisor.send_frame(state.config.ref, stream_id, frame)
+    pid = StreamSet.pid_for(state.flow_control.stream_set, stream_id)
+    Stream.call_recv(pid, frame)
 
     {:ok, state}
   end
@@ -90,16 +91,15 @@ defmodule Kadabra.Connection.Processor do
   def process(%Frame.Settings{ack: false, settings: nil}, state) do
     %{flow_control: flow, config: config} = state
 
-    bin = Frame.Settings.ack() |> Encodable.to_bin()
-    Socket.send(config.socket, bin)
+    Egress.send_settings_ack(config.socket)
 
     case flow.stream_set.max_concurrent_streams do
       :infinite ->
-        GenStage.ask(state.queue, 2_000_000_000)
+        GenServer.cast(state.queue, {:ask, 2_000_000_000})
 
       max ->
         to_ask = max - flow.stream_set.active_stream_count
-        GenStage.ask(state.queue, to_ask)
+        GenServer.cast(state.queue, {:ask, to_ask})
     end
 
     {:ok, state}
@@ -120,31 +120,34 @@ defmodule Kadabra.Connection.Processor do
 
     notify_settings_change(old_settings, settings, flow)
 
-    config.ref
-    |> Hpack.via_tuple(:decoder)
-    |> Hpack.update_max_table_size(settings.max_header_list_size)
+    Hpack.update_max_table_size(
+      state.config.decoder,
+      settings.max_header_list_size
+    )
 
-    bin = Frame.Settings.ack() |> Encodable.to_bin()
-    Socket.send(config.socket, bin)
+    Egress.send_settings_ack(config.socket)
 
     to_ask =
       settings.max_concurrent_streams - flow.stream_set.active_stream_count
 
-    GenStage.ask(state.queue, to_ask)
+    GenServer.cast(state.queue, {:ask, to_ask})
 
     {:ok, %{state | flow_control: flow, remote_settings: settings}}
   end
 
   def process(%Frame.Settings{ack: true}, %{config: c} = state) do
-    c.ref
-    |> Hpack.via_tuple(:encoder)
-    |> Hpack.update_max_table_size(state.local_settings.max_header_list_size)
+    Hpack.update_max_table_size(
+      c.encoder,
+      state.local_settings.max_header_list_size
+    )
 
-    c.ref
-    |> Hpack.via_tuple(:decoder)
-    |> Hpack.update_max_table_size(state.local_settings.max_header_list_size)
+    Hpack.update_max_table_size(
+      c.decoder,
+      state.local_settings.max_header_list_size
+    )
 
-    send_huge_window_update(c.socket, state.remote_window)
+    available = FlowControl.window_max() - state.remote_window
+    Egress.send_window_update(c.socket, 0, available)
 
     {:ok, %{state | remote_window: FlowControl.window_max()}}
   end
@@ -157,10 +160,12 @@ defmodule Kadabra.Connection.Processor do
       max_frame_size: max_frame
     } = flow_control
 
-    case StreamSupervisor.start_stream(config, stream_id, window, max_frame) do
-      {:ok, _pid} ->
-        StreamSupervisor.send_frame(config.ref, stream_id, frame)
-        state = add_active(state, stream_id)
+    stream = Stream.new(config, stream_id, window, max_frame)
+
+    case Stream.start_link(stream) do
+      {:ok, pid} ->
+        Stream.call_recv(pid, frame)
+        state = add_active(state, stream_id, pid)
         {:ok, state}
 
       error ->
@@ -205,53 +210,42 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%WindowUpdate{stream_id: stream_id} = frame, state) do
-    StreamSupervisor.send_frame(state.config.ref, stream_id, frame)
+    pid = StreamSet.pid_for(state.flow_control.stream_set, stream_id)
+    Stream.call_recv(pid, frame)
+
     {:ok, state}
   end
 
   def process(%Continuation{stream_id: stream_id} = frame, state) do
-    StreamSupervisor.send_frame(state.config.ref, stream_id, frame)
+    pid = StreamSet.pid_for(state.flow_control.stream_set, stream_id)
+    Stream.call_recv(pid, frame)
+
     {:ok, state}
   end
 
   def process(frame, state) do
-    """
-    Unknown RECV on connection
-    Frame: #{inspect(frame)}
-    State: #{inspect(state)}
-    """
-    |> Logger.info()
+    if debug_log?() do
+      """
+      Unknown RECV on connection
+      Frame: #{inspect(frame)}
+      State: #{inspect(state)}
+      """
+      |> Logger.info()
+    end
 
     {:ok, state}
   end
 
-  def add_active(state, stream_id) do
-    flow = FlowControl.add_active(state.flow_control, stream_id)
+  def add_active(state, stream_id, pid) do
+    flow = FlowControl.add_active(state.flow_control, stream_id, pid)
     %{state | flow_control: flow}
   end
 
   def log_goaway(%Goaway{last_stream_id: id, error_code: c, debug_data: b}) do
-    error = Error.parse(c)
-    Logger.error("Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{b}")
-  end
-
-  @spec send_window_update(pid, non_neg_integer, integer) :: no_return
-  def send_window_update(socket, stream_id, bytes)
-      when bytes > 0 and bytes < 2_147_483_647 do
-    bin =
-      stream_id
-      |> WindowUpdate.new(bytes)
-      |> Encodable.to_bin()
-
-    # Logger.info("Sending WINDOW_UPDATE on Stream #{stream_id} (#{bytes})")
-    Socket.send(socket, bin)
-  end
-
-  def send_window_update(_socket, _stream_id, _bytes), do: :ok
-
-  def send_huge_window_update(socket, remote_window) do
-    available = FlowControl.window_max() - remote_window
-    send_window_update(socket, 0, available)
+    if debug_log?() do
+      error = Error.parse(c)
+      Logger.error("Got GOAWAY, #{error}, Last Stream: #{id}, Rest: #{b}")
+    end
   end
 
   def notify_settings_change(old_settings, new_settings, %{stream_set: set}) do
@@ -266,4 +260,6 @@ defmodule Kadabra.Connection.Processor do
       send(pid, {:settings_change, window_diff, max_frame_size})
     end
   end
+
+  defp debug_log?, do: Application.get_env(:kadabra, :debug_log?)
 end

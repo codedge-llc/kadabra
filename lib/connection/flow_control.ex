@@ -13,7 +13,7 @@ defmodule Kadabra.Connection.FlowControl do
             max_frame_size: @default_max_frame_size,
             window: @default_window_size
 
-  alias Kadabra.{Config, StreamSet, StreamSupervisor}
+  alias Kadabra.{Config, Stream, StreamSet}
 
   @type t :: %__MODULE__{
           queue: :queue.queue(),
@@ -38,44 +38,17 @@ defmodule Kadabra.Connection.FlowControl do
     |> Map.put(:stream_set, new_set)
   end
 
-  @doc ~S"""
-  Increments available window.
-
-  ## Examples
-
-      iex> flow = %Kadabra.Connection.FlowControl{window: 1_000}
-      iex> increment_window(flow, 500)
-      %Kadabra.Connection.FlowControl{window: 1_500}
-  """
   @spec increment_window(t, pos_integer) :: t
   def increment_window(%{window: window} = flow_control, amount) do
     %{flow_control | window: window + amount}
   end
 
-  @doc ~S"""
-  Decrements available window.
-
-  ## Examples
-
-      iex> flow = %Kadabra.Connection.FlowControl{window: 1_000}
-      iex> decrement_window(flow, 500)
-      %Kadabra.Connection.FlowControl{window: 500}
-  """
   @spec decrement_window(t, pos_integer) :: t
   def decrement_window(%{window: window} = flow_control, amount) do
     %{flow_control | window: window - amount}
   end
 
-  @doc ~S"""
-  Adds new sendable item to the queue.
-
-  ## Examples
-
-      iex> flow = add(%Kadabra.Connection.FlowControl{}, %Kadabra.Request{})
-      iex> :queue.len(flow.queue)
-      1
-  """
-  @spec add(t, Kadabra.Request.t()) :: t
+  @spec add(t, any) :: t
   def add(%{queue: queue} = flow_control, requests) when is_list(requests) do
     queue = Enum.reduce(requests, queue, &:queue.in(&1, &2))
     %{flow_control | queue: queue}
@@ -86,8 +59,8 @@ defmodule Kadabra.Connection.FlowControl do
     %{flow_control | queue: queue}
   end
 
-  def add_active(%{stream_set: set} = flow_control, stream_id) do
-    new_set = StreamSet.add_active(set, stream_id)
+  def add_active(%{stream_set: set} = flow_control, stream_id, pid) do
+    new_set = StreamSet.add_active(set, stream_id, pid)
     %{flow_control | stream_set: new_set}
   end
 
@@ -102,14 +75,14 @@ defmodule Kadabra.Connection.FlowControl do
         max_frame_size: max_frame
       } = flow
 
-      case StreamSupervisor.start_stream(config, stream_id, window, max_frame) do
-        {:ok, pid} ->
-          Process.monitor(pid)
+      stream = Stream.new(config, stream_id, window, max_frame)
 
+      case Stream.start_link(stream) do
+        {:ok, pid} ->
           size = byte_size(request.body || <<>>)
           :gen_statem.call(pid, {:send_headers, request})
 
-          updated_set = add_stream(stream_set, stream_id)
+          updated_set = add_stream(stream_set, stream_id, pid)
 
           flow
           |> Map.put(:queue, queue)
@@ -127,9 +100,9 @@ defmodule Kadabra.Connection.FlowControl do
     end
   end
 
-  defp add_stream(stream_set, stream_id) do
+  defp add_stream(stream_set, stream_id, pid) do
     stream_set
-    |> StreamSet.add_active(stream_id)
+    |> StreamSet.add_active(stream_id, pid)
     |> StreamSet.increment_active_stream_count()
     |> StreamSet.increment_stream_id()
   end
@@ -144,20 +117,6 @@ defmodule Kadabra.Connection.FlowControl do
     %{flow_control | stream_set: new_set}
   end
 
-  @doc ~S"""
-  Returns true if window is positive.
-
-  ## Examples
-
-      iex> flow = %Kadabra.Connection.FlowControl{window: 500}
-      iex> can_send?(flow)
-      true
-
-      iex> flow = %Kadabra.Connection.FlowControl{window: 0}
-      iex> can_send?(flow)
-      false
-  """
-  @spec can_send?(t) :: boolean
-  def can_send?(%{window: bytes}) when bytes > 0, do: true
-  def can_send?(_else), do: false
+  defp can_send?(%{window: bytes}) when bytes > 0, do: true
+  defp can_send?(_else), do: false
 end

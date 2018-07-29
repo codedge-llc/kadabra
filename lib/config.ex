@@ -2,8 +2,9 @@ defmodule Kadabra.Config do
   @moduledoc false
 
   defstruct client: nil,
-            supervisor: nil,
-            ref: nil,
+            queue: nil,
+            encoder: nil,
+            decoder: nil,
             uri: nil,
             socket: nil,
             queue: nil,
@@ -11,8 +12,9 @@ defmodule Kadabra.Config do
 
   @type t :: %__MODULE__{
           client: pid,
-          supervisor: pid,
-          ref: term,
+          queue: pid,
+          encoder: pid,
+          decoder: pid,
           uri: URI.t(),
           socket: pid,
           opts: Keyword.t()
