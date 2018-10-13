@@ -6,6 +6,7 @@ defmodule Kadabra.Connection do
             flow_control: nil,
             remote_window: 65_535,
             remote_settings: nil,
+            requested_streams: 0,
             local_settings: nil,
             queue: nil
 

@@ -3,6 +3,10 @@
 ## v0.5.0
 - Request parameter encoding with new `:params` option
 
+## v0.4.4
+- Fixed ArithmeticError when calculating how many streams to request
+  on infinite stream sets
+
 ## v0.4.3
 - Fixed supervisor crash report during normal connection shutdown
 - Removed `GenStage` dependency
