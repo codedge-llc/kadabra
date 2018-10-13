@@ -93,14 +93,7 @@ defmodule Kadabra.Connection.Processor do
 
     Egress.send_settings_ack(config.socket)
 
-    case flow.stream_set.max_concurrent_streams do
-      :infinite ->
-        GenServer.cast(state.queue, {:ask, 2_000_000_000})
-
-      max ->
-        to_ask = max - flow.stream_set.active_stream_count
-        GenServer.cast(state.queue, {:ask, to_ask})
-    end
+    state = request_more_streams(flow.stream_set.max_concurrent_streams, state)
 
     {:ok, state}
   end
@@ -127,10 +120,7 @@ defmodule Kadabra.Connection.Processor do
 
     Egress.send_settings_ack(config.socket)
 
-    to_ask =
-      settings.max_concurrent_streams - flow.stream_set.active_stream_count
-
-    GenServer.cast(state.queue, {:ask, to_ask})
+    state = request_more_streams(settings.max_concurrent_streams, state)
 
     {:ok, %{state | flow_control: flow, remote_settings: settings}}
   end
@@ -234,6 +224,19 @@ defmodule Kadabra.Connection.Processor do
     end
 
     {:ok, state}
+  end
+
+  defp request_more_streams(:infinite, state) do
+    # A client can request slightly more than this on a
+    # connection, but let's be conservative.
+    request_more_streams(1_000_000_000, state)
+  end
+
+  defp request_more_streams(max_count, state) do
+    to_ask = max_count - state.requested_streams
+    GenServer.cast(state.queue, {:ask, to_ask})
+
+    %{state | requested_streams: state.requested_streams + to_ask}
   end
 
   def add_active(state, stream_id, pid) do
