@@ -227,9 +227,8 @@ defmodule Kadabra.Connection.Processor do
   end
 
   defp request_more_streams(:infinite, state) do
-    # A client can request slightly more than this on a
-    # connection, but let's be conservative.
-    request_more_streams(1_000_000_000, state)
+    # Any more than this and you exhaust usable stream identifiers
+    request_more_streams(1_073_741_823, state)
   end
 
   defp request_more_streams(max_count, state) do
