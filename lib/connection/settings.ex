@@ -12,7 +12,7 @@ defmodule Kadabra.Connection.Settings do
             max_frame_size: @default_max_frame_size,
             max_header_list_size: nil
 
-  alias Kadabra.Error
+  alias Kadabra.Connection.Error
 
   @type t :: %__MODULE__{
           header_table_size: non_neg_integer,
@@ -54,23 +54,23 @@ defmodule Kadabra.Connection.Settings do
       iex> Kadabra.Connection.Settings.put(s, enable_push, 1)
       {:ok, %Kadabra.Connection.Settings{enable_push: true}}
       iex> Kadabra.Connection.Settings.put(s, enable_push, :bad)
-      {:error, Kadabra.Error.protocol_error, s}
+      {:error, Kadabra.Connection.Error.protocol_error, s}
 
       iex> s = %Kadabra.Connection.Settings{}
       iex> init_window_size = 0x4
       iex> Kadabra.Connection.Settings.put(s, init_window_size, 70_000)
       {:ok, %Kadabra.Connection.Settings{initial_window_size: 70_000}}
       iex> Kadabra.Connection.Settings.put(s, init_window_size, 5_000_000_000)
-      {:error, Kadabra.Error.flow_control_error, s}
+      {:error, Kadabra.Connection.Error.flow_control_error, s}
 
       iex> s = %Kadabra.Connection.Settings{}
       iex> max_frame_size = 0x5
       iex> Kadabra.Connection.Settings.put(s, max_frame_size, 20_000)
       {:ok, %Kadabra.Connection.Settings{max_frame_size: 20_000}}
       iex> Kadabra.Connection.Settings.put(s, max_frame_size, 20_000_000)
-      {:error, Kadabra.Error.protocol_error, s}
+      {:error, Kadabra.Connection.Error.protocol_error, s}
       iex> Kadabra.Connection.Settings.put(s, max_frame_size, 2_000)
-      {:error, Kadabra.Error.protocol_error, s}
+      {:error, Kadabra.Connection.Error.protocol_error, s}
   """
   @spec put(t, non_neg_integer, term) :: {:ok, t} | {:error, binary, t}
   def put(settings, @table_header_size, value) do

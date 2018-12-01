@@ -5,14 +5,13 @@ defmodule Kadabra.Connection.Processor do
 
   alias Kadabra.{
     Connection,
-    Error,
     Frame,
     Hpack,
     Stream,
     StreamSet
   }
 
-  alias Kadabra.Connection.{Egress, FlowControl}
+  alias Kadabra.Connection.{Egress, Error, FlowControl}
 
   alias Kadabra.Frame.{
     Continuation,
