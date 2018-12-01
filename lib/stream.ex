@@ -11,7 +11,7 @@ defmodule Kadabra.Stream do
             flow: nil,
             uri: nil,
             headers: [],
-            on_response: nil
+            request: nil
 
   require Logger
 
@@ -46,7 +46,7 @@ defmodule Kadabra.Stream do
   # @reserved_local :reserved_local
   @reserved_remote :reserved_remote
 
-  def new(config, stream_id, initial_window_size, max_frame_size) do
+  def new(config, stream_id, initial_window_size, max_frame_size, request) do
     flow_opts = [
       window: initial_window_size,
       max_frame_size: max_frame_size
@@ -60,7 +60,8 @@ defmodule Kadabra.Stream do
       encoder: config.encoder,
       decoder: config.decoder,
       connection: self(),
-      flow: Stream.FlowControl.new(flow_opts)
+      flow: Stream.FlowControl.new(flow_opts),
+      request: request
     }
   end
 
@@ -185,8 +186,10 @@ defmodule Kadabra.Stream do
 
   def handle_event(:enter, _old, @closed, stream) do
     response = Response.new(stream.id, stream.headers, stream.body)
-    Tasks.run(stream.on_response, response)
-    send(stream.client, {:end_stream, response})
+
+    if stream.request do
+      Tasks.run(stream.request.on_response, response)
+    end
 
     {:stop, {:shutdown, {:finished, stream.id}}}
   end

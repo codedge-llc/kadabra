@@ -81,8 +81,10 @@ defmodule Kadabra.Connection.Processor do
   end
 
   def process(%RstStream{stream_id: stream_id} = frame, state) do
-    pid = StreamSet.pid_for(state.flow_control.stream_set, stream_id)
-    Stream.call_recv(pid, frame)
+    case StreamSet.pid_for(state.flow_control.stream_set, stream_id) do
+      nil -> nil
+      pid -> Stream.call_recv(pid, frame)
+    end
 
     {:ok, state}
   end
@@ -150,7 +152,7 @@ defmodule Kadabra.Connection.Processor do
       max_frame_size: max_frame
     } = flow_control
 
-    stream = Stream.new(config, stream_id, window, max_frame)
+    stream = Stream.new(config, stream_id, window, max_frame, nil)
 
     case Stream.start_link(stream) do
       {:ok, pid} ->

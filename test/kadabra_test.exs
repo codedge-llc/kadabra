@@ -8,18 +8,9 @@ defmodule KadabraTest do
 
   @golang_uri "https://http2.golang.org"
 
-  setup do
-    pid =
-      @golang_uri
-      |> Kadabra.open()
-      |> elem(1)
-
-    [conn: pid]
-  end
-
   describe "open/2" do
     @tag :golang
-    test "sets port if specified", _context do
+    test "sets port if specified" do
       opts = [port: 443]
       {:ok, pid} = Kadabra.open(@golang_uri, opts)
 
@@ -31,17 +22,23 @@ defmodule KadabraTest do
     end
   end
 
+  def send_msg do
+    p = self()
+    fn response -> send(p, {:end_stream, response}) end
+  end
+
   describe "request/2" do
     @tag :golang
-    test "can take a list of requests", context do
+    test "can take a list of requests" do
       headers = [
         {":method", "GET"},
         {":path", "/"}
       ]
 
-      request = Kadabra.Request.new(headers: headers)
+      {:ok, pid} = Kadabra.open("https://http2.golang.org")
+      request = Kadabra.Request.new(headers: headers, on_response: send_msg())
 
-      Kadabra.request(context[:conn], [request, request])
+      Kadabra.request(pid, [request, request])
 
       for x <- [1, 3] do
         assert_receive {:end_stream, %Stream.Response{id: ^x}}, 5_000
@@ -49,23 +46,24 @@ defmodule KadabraTest do
     end
 
     @tag :golang
-    test "can take a single request", context do
+    test "can take a single request" do
       headers = [
         {":method", "GET"},
         {":path", "/"}
       ]
 
-      request = Kadabra.Request.new(headers: headers)
+      {:ok, pid} = Kadabra.open("https://http2.golang.org")
+      request = Kadabra.Request.new(headers: headers, on_response: send_msg())
 
-      Kadabra.request(context[:conn], request)
+      Kadabra.request(pid, request)
 
       assert_receive {:end_stream, %Stream.Response{id: 1}}, 5_000
     end
   end
 
   describe "close/1" do
-    test "sends close message and stops supervisor", context do
-      pid = context[:conn]
+    test "sends close message and stops supervisor" do
+      {:ok, pid} = Kadabra.open("https://http2.golang.org")
       ref = Process.monitor(pid)
       Kadabra.close(pid)
 
@@ -76,171 +74,138 @@ defmodule KadabraTest do
 
   describe "GET" do
     @tag :golang
-    test "can take an options keyword list", context do
+    test "can take an options keyword list" do
       headers = [
         {":method", "GET"},
         {":path", "/"}
       ]
 
-      Kadabra.request(context[:conn], headers: headers, on_response: & &1)
+      {:ok, pid} = Kadabra.open("https://http2.golang.org")
 
-      assert_receive {:end_stream, %Stream.Response{id: 1}}, 5_000
+      response = Kadabra.request(pid, headers: headers)
+      assert response.id == 1
+      assert response.body
+      assert response.headers
     end
 
     @tag :golang
-    test "https://http2.golang.org/reqinfo", context do
-      Kadabra.get(context[:conn], "/reqinfo")
+    test "https://http2.golang.org/reqinfo" do
+      uri = "https://http2.golang.org/reqinfo"
+      response = Kadabra.get(uri)
 
-      receive do
-        {:end_stream, response} ->
-          assert response.id == 1
-          assert response.status == 200
-      after
-        5_000 ->
-          flunk("No stream response received.")
-      end
+      assert response.status == 200
     end
 
     @tag :golang
-    test "https://http2.golang.org/reqinfo a lot", context do
+    test "https://http2.golang.org/reqinfo a lot" do
       count = 5_000
 
       for _x <- 1..count do
-        Kadabra.get(context[:conn], "/reqinfo")
+        pid = self()
+
+        Kadabra.get("https://http2.golang.org/reqinfo",
+          on_response: fn response ->
+            send(pid, {:end_stream, response})
+          end
+        )
       end
 
       is_odd = fn x -> rem(x, 2) == 1 end
       streams = 1..(2 * count) |> Enum.filter(&is_odd.(&1))
 
-      for x <- streams do
-        assert_receive {:end_stream, %Stream.Response{id: ^x}}, 30_000
+      for _x <- streams do
+        assert_receive {:end_stream, %Stream.Response{}}, 30_000
       end
     end
 
     @tag :golang
-    test "https://http2.golang.org/redirect", context do
-      Kadabra.get(context[:conn], "/redirect")
+    test "https://http2.golang.org/redirect" do
+      uri = "https://http2.golang.org/redirect"
+      response = Kadabra.get(uri)
 
       expected_body = "<a href=\"/\">Found</a>.\n\n"
-      expected_status = 302
 
-      receive do
-        {:end_stream, response} ->
-          assert response.id == 1
-          assert response.status == expected_status
-          assert response.body == expected_body
-      after
-        5_000 ->
-          flunk("No stream response received.")
-      end
+      assert response.status == 302
+      assert response.body == expected_body
     end
 
     @tag :golang
-    test "https://http2.golang.org/file/gopher.png", context do
-      Kadabra.get(context[:conn], "/file/gopher.png")
+    test "https://http2.golang.org/file/gopher.png" do
+      response = Kadabra.get("https://http2.golang.org/file/gopher.png")
 
-      receive do
-        {:end_stream, response} ->
-          assert response.id == 1
-          assert response.status == 200
-          assert byte_size(response.body) == 17_668
-      after
-        5_000 ->
-          flunk("No stream response received.")
-      end
+      assert response.status == 200
+      assert byte_size(response.body) == 17_668
     end
 
     @tag :golang
-    test "https://http2.golang.org/file/go.src.tar.gz", context do
-      Kadabra.get(context[:conn], "/file/go.src.tar.gz")
+    test "https://http2.golang.org/file/go.src.tar.gz" do
+      response =
+        Kadabra.get("https://http2.golang.org/file/go.src.tar.gz",
+          timeout: 45_000
+        )
 
-      receive do
-        {:end_stream, response} ->
-          assert response.id == 1
-          assert response.status == 200
-          assert byte_size(response.body) == 10_921_353
-
-        other ->
-          flunk("Unexpected response: #{inspect(other)}")
-      after
-        45_000 ->
-          flunk("No stream response received.")
-      end
+      assert response.status == 200
+      assert byte_size(response.body) == 10_921_353
     end
 
-    @tag :golang
-    test "https://http2.golang.org/serverpush", context do
-      Kadabra.get(context[:conn], "/serverpush")
+    # @tag :golang
+    # test "https://http2.golang.org/serverpush" do
+    #   response =
+    #     Kadabra.get("https://http2.golang.org/serverpush")
+    #     |> IO.inspect()
 
-      receive do
-        {:push_promise, response} ->
-          assert response.id == 2
-          refute response.status
-          assert Stream.Response.get_header(response.headers, ":path")
-      after
-        5_000 ->
-          flunk("No push promise received.")
-      end
-    end
+    #   refute response.status
+    #   assert rem(response.id, 2) == 0
+    #   assert Stream.Response.get_header(response.headers, ":path")
+    # end
   end
 
   describe "PUT" do
     @tag :golang
-    test "https://http2.golong.org/ECHO", context do
+    test "https://http2.golong.org/ECHO" do
       payload = String.duplicate("test", 10)
-      Kadabra.put(context[:conn], "/ECHO", body: payload)
+
+      resp =
+        Kadabra.put("https://http2.golang.org/ECHO",
+          body: payload,
+          timeout: 15_000
+        )
 
       expected_body = String.upcase(payload)
 
-      receive do
-        {:end_stream, response} ->
-          assert response.id == 1
-          assert response.status == 200
-          assert response.body == expected_body
-      after
-        15_000 ->
-          flunk("No stream response received.")
-      end
+      assert resp.status == 200
+      assert resp.body == expected_body
     end
 
     @tag :golang
-    test "https://http2.golong.org/ECHO with large payload", context do
+    test "https://http2.golong.org/ECHO with large payload" do
       payload = String.duplicate("test", 1_000_000)
-      Kadabra.put(context[:conn], "/ECHO", body: payload)
+      opts = [body: payload, timeout: 45_000]
 
-      expected_body = String.upcase(payload)
-
-      receive do
-        {:end_stream, response} ->
-          assert response.id == 1
-          assert response.status == 200
-          assert response.body == expected_body
-      after
-        45_000 ->
+      case Kadabra.put("https://http2.golang.org/ECHO", opts) do
+        :timeout ->
           flunk("No stream response received.")
+
+        response ->
+          assert response.status == 200
+          assert response.body == String.upcase(payload)
       end
     end
 
     @tag :golang
-    test "https://http2.golong.org/crc32", context do
+    test "https://http2.golong.org/crc32" do
       payload = "test"
-      Kadabra.put(context[:conn], "/crc32", body: payload)
+
+      response = Kadabra.put("https://http2.golang.org/crc32", body: payload)
 
       expected_body = "bytes=4, CRC32=d87f7e0c"
 
-      receive do
-        {:end_stream, response} ->
-          assert response.id == 1
-          assert response.status == 200
-          assert response.body == expected_body
-      after
-        5_000 ->
-          flunk("No stream response received.")
-      end
+      assert response.status == 200
+      assert response.body == expected_body
     end
   end
 
-  test "socket close message closes connection", _context do
+  test "socket close message closes connection" do
     pid =
       @golang_uri
       |> Kadabra.open()
