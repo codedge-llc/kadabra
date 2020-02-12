@@ -168,7 +168,9 @@ defmodule Kadabra do
       ...>   {":method", "PUT"},
       ...>   {":path", path},
       ...> ]
-      iex> Kadabra.request(pid, headers: headers, body: body)
+      iex> me = self()
+      iex> resp = & send(me, {:end_stream, &1})
+      iex> Kadabra.request(pid, headers: headers, body: body, on_response: resp)
       iex> response = receive do
       ...>   {:end_stream, %Kadabra.Stream.Response{} = response} -> response
       ...> after 5_000 -> :timed_out
@@ -185,9 +187,30 @@ defmodule Kadabra do
     ConnectionPool.request(pid, requests)
   end
 
-  def request(pid, opts) when is_list(opts) do
-    request = Request.new(opts)
-    ConnectionPool.request(pid, request)
+  def request(uri, opts) when is_list(opts) do
+    timeout = Keyword.get(opts, :timeout, 5_000)
+    sync? = not Keyword.has_key?(opts, :on_response)
+
+    request =
+      opts
+      |> Request.new()
+      |> put_sync_response(sync?)
+
+    case opts[:to] do
+      nil -> Kadabra.Application.route_request(uri, request)
+      pid -> Kadabra.Application.route_request(pid, request)
+    end
+
+    if sync? do
+      receive do
+        {:end_stream, response} -> response
+        {:push_promise, response} -> response
+      after
+        timeout -> :timeout
+      end
+    else
+      :ok
+    end
   end
 
   @doc ~S"""
@@ -195,18 +218,16 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
-      iex> Kadabra.head(pid, "/reqinfo")
-      :ok
-      iex> response = receive do
-      ...>   {:end_stream, response} -> response
-      ...> end
-      iex> {response.id, response.status, response.body}
-      {1, 200, ""}
+      iex> response = Kadabra.get("https://http2.golang.org/reqinfo",
+      ...> params: [something: 123])
+      iex> response.status
+      200
   """
-  @spec get(pid, String.t(), Keyword.t()) :: no_return
-  def get(pid, path, opts \\ []) do
-    request(pid, [{:headers, headers("GET", path)} | opts])
+  @spec get(String.t(), Keyword.t()) :: no_return
+  def get(uri, opts \\ []) do
+    uri = URI.parse(uri)
+    path = encode_params(uri.path, opts)
+    request(uri, [{:headers, headers("GET", path)} | opts])
   end
 
   @doc ~S"""
@@ -214,18 +235,15 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
-      iex> Kadabra.head(pid, "/")
-      :ok
-      iex> response = receive do
-      ...>   {:end_stream, response} -> response
-      ...> end
-      iex> {response.id, response.status, response.body}
-      {1, 200, ""}
+      iex> response = Kadabra.head("https://http2.golang.org")
+      iex> {response.status, response.body}
+      {200, ""}
   """
-  @spec head(pid, String.t(), Keyword.t()) :: no_return
-  def head(pid, path, opts \\ []) do
-    request(pid, [{:headers, headers("HEAD", path)} | opts])
+  @spec head(String.t(), Keyword.t()) :: no_return
+  def head(uri, opts \\ []) do
+    uri = URI.parse(uri)
+    path = encode_params(uri.path, opts)
+    request(uri, [{:headers, headers("HEAD", path)} | opts])
   end
 
   @doc ~S"""
@@ -233,18 +251,15 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
-      iex> Kadabra.post(pid, "/", body: "test=123")
-      :ok
-      iex> response = receive do
-      ...>   {:end_stream, response} -> response
-      ...> end
-      iex> {response.id, response.status}
-      {1, 200}
+      iex> response = Kadabra.post("https://http2.golang.org/", body: "test=123")
+      iex> response.status
+      200
   """
-  @spec post(pid, String.t(), Keyword.t()) :: no_return
-  def post(pid, path, opts \\ []) do
-    request(pid, [{:headers, headers("POST", path)} | opts])
+  @spec post(String.t(), Keyword.t()) :: no_return
+  def post(uri, opts \\ []) do
+    uri = URI.parse(uri)
+    path = encode_params(uri.path, opts)
+    request(uri, [{:headers, headers("POST", path)} | opts])
   end
 
   @doc ~S"""
@@ -252,20 +267,15 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
-      iex> Kadabra.put(pid, "/crc32", body: "test")
-      :ok
-      iex> stream = receive do
-      ...>   {:end_stream, stream} -> stream
-      ...> end
-      iex> stream.status
-      200
-      iex> stream.body
-      "bytes=4, CRC32=d87f7e0c"
+      iex> response = Kadabra.put("https://http2.golang.org/crc32", body: "test")
+      iex> {response.status, response.body}
+      {200, "bytes=4, CRC32=d87f7e0c"}
   """
-  @spec put(pid, String.t(), Keyword.t()) :: no_return
-  def put(pid, path, opts \\ []) do
-    request(pid, [{:headers, headers("PUT", path)} | opts])
+  @spec put(String.t(), Keyword.t()) :: no_return
+  def put(uri, opts \\ []) do
+    uri = URI.parse(uri)
+    path = encode_params(uri.path, opts)
+    request(uri, [{:headers, headers("PUT", path)} | opts])
   end
 
   @doc ~S"""
@@ -273,18 +283,31 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
-      iex> Kadabra.delete(pid, "/")
-      :ok
-      iex> stream = receive do
-      ...>   {:end_stream, stream} -> stream
-      ...> end
-      iex> stream.status
+      iex> response = Kadabra.delete("https://http2.golang.org/")
+      iex> response.status
       200
   """
-  @spec delete(pid, String.t(), Keyword.t()) :: no_return
-  def delete(pid, path, opts \\ []) do
-    request(pid, [{:headers, headers("DELETE", path)} | opts])
+  @spec delete(String.t(), Keyword.t()) :: no_return
+  def delete(uri, opts \\ []) do
+    uri = URI.parse(uri)
+    path = encode_params(uri.path, opts)
+    request(uri, [{:headers, headers("DELETE", path)} | opts])
+  end
+
+  defp put_sync_response(request, true) do
+    pid = self()
+    Map.put(request, :on_response, &send(pid, {:end_stream, &1}))
+  end
+
+  defp put_sync_response(request, false), do: request
+
+  defp encode_params(nil, opts), do: encode_params("/", opts)
+
+  defp encode_params(path, opts) do
+    case Keyword.get(opts, :params) do
+      nil -> path
+      params -> "#{path}?#{URI.encode_query(params)}"
+    end
   end
 
   defp headers(method, path) do

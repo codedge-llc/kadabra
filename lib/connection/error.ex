@@ -1,4 +1,4 @@
-defmodule Kadabra.Error do
+defmodule Kadabra.Connection.Error do
   @moduledoc false
 
   @type error ::
@@ -26,7 +26,7 @@ defmodule Kadabra.Error do
 
   ## Examples
 
-      iex> Kadabra.Error.no_error
+      iex> Kadabra.Connection.Error.no_error
       <<0, 0, 0, 0>>
   """
   @spec no_error :: <<_::32>>
@@ -40,7 +40,7 @@ defmodule Kadabra.Error do
 
   ## Examples
 
-      iex> Kadabra.Error.protocol_error
+      iex> Kadabra.Connection.Error.protocol_error
       <<0, 0, 0, 1>>
   """
   @spec protocol_error :: <<_::32>>
@@ -53,7 +53,7 @@ defmodule Kadabra.Error do
 
   ## Examples
 
-      iex> Kadabra.Error.flow_control_error
+      iex> Kadabra.Connection.Error.flow_control_error
       <<0, 0, 0, 3>>
   """
   @spec flow_control_error :: <<_::32>>
@@ -64,7 +64,7 @@ defmodule Kadabra.Error do
 
   ## Examples
 
-      iex> Kadabra.Error.frame_size_error
+      iex> Kadabra.Connection.Error.frame_size_error
       <<0, 0, 0, 6>>
   """
   @spec frame_size_error :: <<_::32>>
@@ -75,7 +75,7 @@ defmodule Kadabra.Error do
 
   ## Examples
 
-      iex> Kadabra.Error.compression_error
+      iex> Kadabra.Connection.Error.compression_error
       <<0, 0, 0, 9>>
   """
   @spec compression_error :: <<_::32>>
@@ -86,9 +86,9 @@ defmodule Kadabra.Error do
 
   ## Examples
 
-      iex> Kadabra.Error.parse(0x1)
+      iex> Kadabra.Connection.Error.parse(0x1)
       :PROTOCOL_ERROR
-      iex> Kadabra.Error.parse(0xfff)
+      iex> Kadabra.Connection.Error.parse(0xfff)
       0xfff
   """
   @spec parse(integer) :: error | integer
@@ -113,9 +113,9 @@ defmodule Kadabra.Error do
 
   ## Examples
 
-      iex> Kadabra.Error.code(:PROTOCOL_ERROR)
+      iex> Kadabra.Connection.Error.code(:PROTOCOL_ERROR)
       0x1
-      iex> Kadabra.Error.code(:NOT_AN_ERROR)
+      iex> Kadabra.Connection.Error.code(:NOT_AN_ERROR)
       :NOT_AN_ERROR
   """
   @spec code(error) :: integer

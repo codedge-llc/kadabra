@@ -3,7 +3,8 @@ defmodule Kadabra.Frame.Goaway do
 
   defstruct last_stream_id: nil, error_code: nil, debug_data: <<>>
 
-  alias Kadabra.{Error, Frame}
+  alias Kadabra.Connection.Error
+  alias Kadabra.Frame
 
   @type t :: %__MODULE__{
           debug_data: bitstring,

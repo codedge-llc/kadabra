@@ -8,7 +8,11 @@ defmodule Kadabra.RequestTest do
     on_resp = fn _resp -> send(pid, :done) end
 
     {:ok, pid} = Kadabra.open(uri)
-    Kadabra.get(pid, "/reqinfo", on_response: on_resp)
+
+    Kadabra.request("https://http2.golang.org/reqinfo",
+      on_response: on_resp,
+      to: pid
+    )
 
     receive do
       :done -> :ok

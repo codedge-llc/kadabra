@@ -3,7 +3,8 @@ defmodule Kadabra.Frame.RstStream do
 
   defstruct [:stream_id, :error_code]
 
-  alias Kadabra.{Error, Frame}
+  alias Kadabra.Connection.Error
+  alias Kadabra.Frame
 
   @type t :: %__MODULE__{
           error_code: <<_::32>>,

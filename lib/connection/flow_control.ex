@@ -75,7 +75,7 @@ defmodule Kadabra.Connection.FlowControl do
         max_frame_size: max_frame
       } = flow
 
-      stream = Stream.new(config, stream_id, window, max_frame)
+      stream = Stream.new(config, stream_id, window, max_frame, request)
 
       case Stream.start_link(stream) do
         {:ok, pid} ->

@@ -1,7 +1,8 @@
 defmodule Kadabra.Connection.Egress do
   @moduledoc false
 
-  alias Kadabra.{Encodable, Error, Frame, Socket}
+  alias Kadabra.{Encodable, Frame, Socket}
+  alias Kadabra.Connection.Error
 
   alias Kadabra.Frame.{
     Goaway,

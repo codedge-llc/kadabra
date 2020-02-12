@@ -21,7 +21,10 @@ defmodule Kadabra.ConnectionPool do
       opts: opts
     }
 
-    GenServer.start_link(__MODULE__, config)
+    case opts[:name] do
+      nil -> GenServer.start_link(__MODULE__, config)
+      name -> GenServer.start_link(__MODULE__, config, name: name)
+    end
   end
 
   def request(pid, requests) when is_list(requests) do
