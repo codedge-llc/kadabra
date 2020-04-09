@@ -6,34 +6,34 @@ defmodule Kadabra.Mixfile do
   def project do
     [
       app: :kadabra,
-      version: @version,
-      elixir: "~> 1.4",
       build_embedded: Mix.env() == :prod,
-      start_permanent: Mix.env() == :prod,
       consolidate_protocols: Mix.env() != :test,
       deps: deps(),
-      package: package(),
-      name: "Kadabra",
       description: description(),
-      source_url: "https://github.com/codedge-llc/kadabra",
+      dialyzer: [
+        plt_add_deps: true,
+        plt_add_apps: [:ssl],
+        ignore_warnings: "config/dialyzer.ignore-warnings"
+      ],
       docs: [
         main: "Kadabra",
         extras: [
           "CHANGELOG.md"
         ]
       ],
-      test_coverage: [tool: ExCoveralls],
+      elixir: "~> 1.4",
+      name: "Kadabra",
+      package: package(),
       preferred_cli_env: [
         coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.post": :test,
         "coveralls.html": :test
       ],
-      dialyzer: [
-        plt_add_deps: true,
-        plt_add_apps: [:ssl],
-        ignore_warnings: "config/dialyzer.ignore-warnings"
-      ]
+      source_url: "https://github.com/codedge-llc/kadabra",
+      start_permanent: Mix.env() == :prod,
+      test_coverage: [tool: ExCoveralls],
+      version: @version
     ]
   end
 
@@ -63,9 +63,9 @@ defmodule Kadabra.Mixfile do
   defp package do
     [
       files: ["lib", "mix.exs", "README*", "LICENSE*"],
-      maintainers: ["Henry Popp"],
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/codedge-llc/kadabra"}
+      links: %{"GitHub" => "https://github.com/codedge-llc/kadabra"},
+      maintainers: ["Henry Popp"]
     ]
   end
 end
