@@ -21,7 +21,8 @@ defmodule Kadabra.Mixfile do
           "CHANGELOG.md"
         ]
       ],
-      elixir: "~> 1.4",
+      elixir: "~> 1.6",
+      elixirc_options: [warnings_as_errors: true],
       name: "Kadabra",
       package: package(),
       preferred_cli_env: [
@@ -39,7 +40,7 @@ defmodule Kadabra.Mixfile do
 
   def application do
     [
-      extra_applications: [:logger],
+      extra_applications: [:logger, :ssl],
       mod: {Kadabra.Application, []}
     ]
   end

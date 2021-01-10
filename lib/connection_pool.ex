@@ -24,6 +24,19 @@ defmodule Kadabra.ConnectionPool do
     GenServer.start_link(__MODULE__, config)
   end
 
+  def child_spec(opts) do
+    uri = Keyword.get(opts, :uri)
+    pid = Keyword.get(opts, :pid)
+    opts = Keyword.get(opts, :opts)
+
+    %{
+      id: :erlang.make_ref(),
+      restart: :transient,
+      start: {__MODULE__, :start_link, [uri, pid, opts]},
+      type: :worker
+    }
+  end
+
   def request(pid, requests) when is_list(requests) do
     GenServer.call(pid, {:request, requests})
   end
