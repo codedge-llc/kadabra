@@ -1,4 +1,7 @@
-[![Build Status](https://travis-ci.org/codedge-llc/kadabra.svg?branch=master)](https://travis-ci.org/codedge-llc/kadabra) [![Coverage Status](https://coveralls.io/repos/github/codedge-llc/kadabra/badge.svg?branch=master)](https://coveralls.io/github/codedge-llc/kadabra?branch=master) [![Hex.pm](http://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra) [![Hex.pm](http://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
+[![Build Status](https://travis-ci.org/codedge-llc/kadabra.svg?branch=master)](https://travis-ci.org/codedge-llc/kadabra)
+[![Coverage Status](https://coveralls.io/repos/github/codedge-llc/kadabra/badge.svg?branch=master)](https://coveralls.io/github/codedge-llc/kadabra?branch=master)
+[![Hex.pm](http://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra)
+[![Hex.pm](http://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
 
 # Kadabra
 
@@ -8,18 +11,20 @@ Written to manage HTTP/2 connections for [pigeon](https://github.com/codedge-llc
 
 ## Installation
 
-*Requires Elixir 1.4/OTP 19.2 or later.*
- 
+_Requires Elixir 1.6/OTP 19.2 or later._
+
 Add kadabra to your `mix.exs`:
-  ```elixir
-  def deps do
-    [
-      {:kadabra, "~> 0.4.5"}
-    ]
-  end
-  ```
+
+```elixir
+def deps do
+  [
+    {:kadabra, "~> 0.5.0"}
+  ]
+end
+```
 
 ## Usage
+
 ```elixir
 {:ok, pid} = Kadabra.open("https://http2.golang.org")
 Kadabra.get(pid, "/")
@@ -39,6 +44,7 @@ end
 ```
 
 ## Making Requests Manually
+
 ```elixir
 {:ok, pid} = Kadabra.open("https://http2.golang.org")
 
