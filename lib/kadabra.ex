@@ -62,8 +62,6 @@ defmodule Kadabra do
       }
   """
 
-  import Supervisor.Spec
-
   alias Kadabra.{ConnectionPool, Request, Stream}
 
   @typedoc ~S"""
@@ -111,11 +109,13 @@ defmodule Kadabra do
   def open(uri, opts \\ [])
 
   def open(uri, opts) when is_binary(uri) do
-    uri = URI.parse(uri)
-    spec_opts = [id: :erlang.make_ref(), restart: :transient]
-    spec = worker(Kadabra.ConnectionPool, [uri, self(), opts], spec_opts)
+    pool_opts = [
+      uri: URI.parse(uri),
+      pid: self(),
+      opts: opts
+    ]
 
-    Supervisor.start_child(:kadabra, spec)
+    Supervisor.start_child(:kadabra, {Kadabra.ConnectionPool, pool_opts})
   end
 
   def open(uri, opts) when is_list(uri) do
