@@ -83,6 +83,9 @@ defmodule Kadabra.Socket do
         {:active, :once},
         {:packet, :raw},
         {:reuseaddr, false},
+        {:verify, :verify_peer},
+        {:depth, 99},
+        {:cacerts, :certifi.cacerts()},
         {:alpn_advertised_protocols, [<<"h2">>]},
         :binary
       ]

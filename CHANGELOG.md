@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.0
+
+**Security**
+
+- Verify CA certificates with `:certifi` (~> 2.5) by default. This is considered a breaking change
+  for anyone using Kadabra for anything other than [Pigeon](https://github.com/codedge-llc/pigeon).
+
 ## v0.5.0
 
 **Changed**
