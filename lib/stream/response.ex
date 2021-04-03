@@ -5,7 +5,9 @@ defmodule Kadabra.Stream.Response do
   If received as a push promise, `:status` and `:body` will
   most likely be empty.
 
-  *Sample response for a `PUT` request*
+  ## Examples
+
+  Sample response for a `PUT` request:
 
       %Kadabra.Stream.Response{
         body: "SAMPLE ECHO REQUEST",
@@ -17,6 +19,7 @@ defmodule Kadabra.Stream.Response do
         id: 1,
         status: 200
       }
+
   """
 
   defstruct [:id, :headers, :body, :status]
