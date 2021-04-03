@@ -1,19 +1,24 @@
-[![Build Status](https://travis-ci.org/codedge-llc/kadabra.svg?branch=master)](https://travis-ci.org/codedge-llc/kadabra)
-[![Coverage Status](https://coveralls.io/repos/github/codedge-llc/kadabra/badge.svg?branch=master)](https://coveralls.io/github/codedge-llc/kadabra?branch=master)
-[![Hex.pm](http://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra)
-[![Hex.pm](http://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
-
 # Kadabra
 
-HTTP/2 client for Elixir
+[![Build Status](https://travis-ci.org/codedge-llc/kadabra.svg?branch=master)](https://travis-ci.org/codedge-llc/kadabra)
+[![Coverage Status](https://coveralls.io/repos/github/codedge-llc/kadabra/badge.svg?branch=master)](https://coveralls.io/github/codedge-llc/kadabra?branch=master)
+[![Module Version](https://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/kadabra/)
+[![Total Download](https://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
+[![License](https://img.shields.io/hexpm/l/kadabra.svg)](https://github.com/codedge-llc/kadabra/blob/master/LICENSE)
+[![Last Updated](https://img.shields.io/github/last-commit/codedge-llc/kadabra.svg)](https://github.com/codedge-llc/kadabra/commits/master)
 
-Written to manage HTTP/2 connections for [pigeon](https://github.com/codedge-llc/pigeon). Very much a work in progress.
+<!-- MDOC !-->
+
+HTTP/2 client for Elixir.
+
+Written to manage HTTP/2 connections for [Pigeon](https://github.com/codedge-llc/pigeon). Very much a work in progress.
 
 ## Installation
 
 _Requires Elixir 1.6/OTP 19.2 or later._
 
-Add kadabra to your `mix.exs`:
+Add `:kadabra` to your `mix.exs`:
 
 ```elixir
 def deps do
@@ -24,6 +29,8 @@ end
 ```
 
 ## Usage
+
+### Simple Requests
 
 ```elixir
 {:ok, pid} = Kadabra.open("https://http2.golang.org")
@@ -43,7 +50,7 @@ end
 }
 ```
 
-## Making Requests Manually
+### Making Requests Manually
 
 ```elixir
 {:ok, pid} = Kadabra.open("https://http2.golang.org")
@@ -71,3 +78,11 @@ end
   status: 200
 }
 ```
+
+<!-- MDOC !-->
+
+## Copyright and License
+
+Copyright (c) 2016-2021 Codedge LLC (https://www.codedge.io/)
+
+Released under the MIT License, which can be found in [LICENSE.md](./LICENSE.md).

@@ -1,66 +1,9 @@
 defmodule Kadabra do
-  @moduledoc ~S"""
-  HTTP/2 client for Elixir.
-
-  Written to manage HTTP/2 connections for
-  [pigeon](https://github.com/codedge-llc/pigeon).
-
-  *Requires Elixir 1.4/OTP 19.2 or later.*
-
-  ## Usage
-
-      {:ok, pid} = Kadabra.open("https://http2.golang.org")
-      Kadabra.get(pid, "/")
-      receive do
-        {:end_stream, %Kadabra.Stream.Response{} = stream} ->
-        IO.inspect stream
-      after 5_000 ->
-        IO.puts "Connection timed out."
-      end
-
-      %Kadabra.Stream.Response{
-        body: "<html>\\n<body>\\n<h1>Go + HTTP/2</h1>\\n\\n<p>Welcome to..."
-        headers: [
-          {":status", "200"},
-          {"content-type", "text/html; charset=utf-8"},
-          {"content-length", "1708"},
-          {"date", "Sun, 16 Oct 2016 21:20:47 GMT"}
-        ],
-        id: 1,
-        status: 200
-      }
-
-  ## Making Requests Manually
-
-      {:ok, pid} = Kadabra.open("https://http2.golang.org")
-
-      path = "/ECHO" # Route echoes PUT body in uppercase
-      body = "sample echo request"
-      headers = [
-        {":method", "PUT"},
-        {":path", path},
-      ]
-
-      Kadabra.request(pid, headers, body)
-
-      receive do
-        {:end_stream, %Kadabra.Stream.Response{} = stream} ->
-        IO.inspect stream
-      after 5_000 ->
-        IO.puts "Connection timed out."
-      end
-
-      %Kadabra.Stream.Response{
-        body: "SAMPLE ECHO REQUEST",
-        headers: [
-          {":status", "200"},
-          {"content-type", "text/plain; charset=utf-8"},
-          {"date", "Sun, 16 Oct 2016 21:28:15 GMT"}
-        ],
-        id: 1,
-        status: 200
-      }
-  """
+  @external_resource "README.md"
+  @moduledoc "README.md"
+             |> File.read!()
+             |> String.split("<!-- MDOC !-->")
+             |> Enum.fetch!(1)
 
   alias Kadabra.{ConnectionPool, Request, Stream}
 
