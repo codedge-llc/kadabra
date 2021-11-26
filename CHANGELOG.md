@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.6.1
+
+- Added handle_info for :ssl_error
+
 ## v0.6.0
 
 **Security**
