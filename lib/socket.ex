@@ -196,4 +196,9 @@ defmodule Kadabra.Socket do
     Kernel.send(state.active_user, {:closed, self()})
     {:noreply, %{state | socket: nil}}
   end
+
+  def handle_info({:ssl_error, _socket, reason}, state) do
+    Kernel.send(state.active_user, {:tls_error, self(), reason})
+    {:noreply, %{state | socket: nil}}
+  end
 end

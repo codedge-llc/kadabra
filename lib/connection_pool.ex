@@ -13,6 +13,8 @@ defmodule Kadabra.ConnectionPool do
 
   alias Kadabra.Connection
 
+  require Logger
+
   @spec start_link(URI.t(), pid, Keyword.t()) :: {:ok, pid}
   def start_link(uri, pid, opts) do
     config = %Kadabra.Config{
