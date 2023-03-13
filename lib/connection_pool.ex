@@ -11,6 +11,8 @@ defmodule Kadabra.ConnectionPool do
           events: [any, ...]
         }
 
+  require Logger
+
   alias Kadabra.Connection
 
   @spec start_link(URI.t(), pid, Keyword.t()) :: {:ok, pid}
@@ -96,6 +98,18 @@ defmodule Kadabra.ConnectionPool do
 
   def handle_info({:EXIT, _pid, {:shutdown, :connection_error}}, state) do
     {:stop, :shutdown, state}
+  end
+
+  def handle_info({:EXIT, _pid, {:ssl_error, _}}, state) do
+    Logger.warning(
+      'TLS client: In state connection received SERVER ALERT: Fatal - Certificate Expired'
+    )
+
+    {:noreply, state}
+  end
+
+  def handle_info(_, state) do
+    {:noreply, state}
   end
 
   def terminate(_reason, _state) do

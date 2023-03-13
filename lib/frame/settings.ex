@@ -3,7 +3,7 @@ defmodule Kadabra.Frame.Settings do
 
   defstruct [:settings, ack: false]
 
-  use Bitwise
+  import Bitwise
 
   alias Kadabra.Connection
 
