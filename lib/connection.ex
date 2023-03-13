@@ -169,10 +169,6 @@ defmodule Kadabra.Connection do
     end
   end
 
-  def handle_info(_, state) do
-    {:noreply, state}
-  end
-
   def terminate(_reason, %{config: config}) do
     Kernel.send(config.client, {:closed, config.queue})
     :ok

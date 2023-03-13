@@ -3,7 +3,7 @@ defmodule Kadabra.Frame.Data do
 
   defstruct [:stream_id, :data, end_stream: false]
 
-  use Bitwise
+  import Bitwise
 
   alias Kadabra.Frame
 
