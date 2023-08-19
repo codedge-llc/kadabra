@@ -2,7 +2,7 @@ defmodule Kadabra.ConnectionTest do
   use ExUnit.Case
 
   test "closes active streams on socket close" do
-    uri = 'https://http2.golang.org'
+    uri = 'https://http2.codedge.dev'
     {:ok, pid} = Kadabra.open(uri)
 
     ref = Process.monitor(pid)
