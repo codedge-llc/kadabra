@@ -3,7 +3,7 @@ defmodule Kadabra.Frame.Ping do
 
   defstruct [:data, stream_id: 0, ack: false]
 
-  use Bitwise
+  import Bitwise
 
   alias Kadabra.Frame
 
