@@ -39,22 +39,25 @@ defmodule Kadabra.Connection do
   end
 
   def init(%Config{} = config) do
-    {:ok, encoder} = Hpack.start_link()
-    {:ok, decoder} = Hpack.start_link()
-    {:ok, socket} = Socket.start_link(config.uri, config.opts)
+    with {:ok, encoder} <- Hpack.start_link(),
+         {:ok, decoder} <- Hpack.start_link(),
+         {:ok, socket} <- Socket.start_link(config.uri, config.opts) do
+      config =
+        config
+        |> Map.put(:encoder, encoder)
+        |> Map.put(:decoder, decoder)
+        |> Map.put(:socket, socket)
 
-    config =
-      config
-      |> Map.put(:encoder, encoder)
-      |> Map.put(:decoder, decoder)
-      |> Map.put(:socket, socket)
+      state = initial_state(config)
 
-    state = initial_state(config)
+      Kernel.send(self(), :start)
+      Process.flag(:trap_exit, true)
 
-    Kernel.send(self(), :start)
-    Process.flag(:trap_exit, true)
-
-    {:ok, state}
+      {:ok, state}
+    else
+      {:error, reason} ->
+        {:stop, reason}
+    end
   end
 
   defp initial_state(%Config{opts: opts, queue: queue} = config) do

@@ -38,8 +38,8 @@ defmodule Kadabra.Socket do
         socket_send(socket, connection_preface())
         {:ok, %__MODULE__{socket: socket}}
 
-      error ->
-        error
+      {:error, reason} ->
+        {:stop, reason}
     end
   end
 
