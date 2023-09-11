@@ -56,8 +56,12 @@ defmodule Kadabra.ConnectionPool do
 
     Process.flag(:trap_exit, true)
 
-    {:ok, connection} = Connection.start_link(config)
-    {:ok, %__MODULE__{connection: connection}}
+    with {:ok, connection} <- Connection.start_link(config) do
+      {:ok, %__MODULE__{connection: connection}}
+    else
+      {:error, reason} ->
+        {:stop, reason}
+    end
   end
 
   def handle_cast({:ask, demand}, state) do

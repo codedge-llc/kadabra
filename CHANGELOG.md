@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+**Fixed**
+
+- Fix crashes due to missing error handling
+
 ## v0.6.0
 
 **Security**
