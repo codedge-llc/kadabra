@@ -21,7 +21,7 @@ defmodule Kadabra.Frame.Headers do
           weight: non_neg_integer
         }
 
-  use Bitwise
+  import Bitwise
 
   alias Kadabra.Frame
 

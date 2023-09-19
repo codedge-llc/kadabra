@@ -5,7 +5,7 @@ defmodule Kadabra.Frame.PushPromise do
             header_block_fragment: nil,
             stream_id: nil
 
-  use Bitwise
+  import Bitwise
 
   alias Kadabra.Frame
 
