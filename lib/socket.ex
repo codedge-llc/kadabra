@@ -120,6 +120,7 @@ defmodule Kadabra.Socket do
   def parse_bin(socket, bin, state) do
     case FrameParser.parse(bin) do
       {:ok, frame, rest} ->
+        :telemetry.execute([:kadabra, :socket, :recv_frame], %{}, %{frame: frame, socket: socket})
         Kernel.send(state.active_user, {:recv, frame})
         parse_bin(socket, rest, state)
 
@@ -131,11 +132,12 @@ defmodule Kadabra.Socket do
   # Internal socket helpers
 
   defp socket_send({:sslsocket, _, _} = pid, bin) do
-    # IO.puts("Sending #{byte_size(bin)} bytes")
+    :telemetry.execute([:kadabra, :socket, :send], %{}, %{type: :ssl, bin: bin, socket: pid})
     :ssl.send(pid, bin)
   end
 
   defp socket_send(pid, bin) do
+    :telemetry.execute([:kadabra, :socket, :send], %{}, %{type: :tcp, bin: bin, socket: pid})
     :gen_tcp.send(pid, bin)
   end
 
@@ -179,7 +181,8 @@ defmodule Kadabra.Socket do
     do_recv_bin(bin, state)
   end
 
-  def handle_info({:tcp_closed, _socket}, state) do
+  def handle_info({:tcp_closed, socket}, state) do
+    :telemetry.execute([:kadabra, :socket, :closed], %{}, %{type: :tcp, socket: socket})
     Kernel.send(state.active_user, {:closed, self()})
     {:noreply, %{state | socket: nil}}
   end
@@ -188,7 +191,8 @@ defmodule Kadabra.Socket do
     do_recv_bin(bin, state)
   end
 
-  def handle_info({:ssl_closed, _socket}, state) do
+  def handle_info({:ssl_closed, socket}, state) do
+    :telemetry.execute([:kadabra, :socket, :closed], %{}, %{type: :ssl, socket: socket})
     Kernel.send(state.active_user, {:closed, self()})
     {:noreply, %{state | socket: nil}}
   end

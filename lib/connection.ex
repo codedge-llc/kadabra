@@ -8,7 +8,8 @@ defmodule Kadabra.Connection do
             remote_settings: nil,
             requested_streams: 0,
             local_settings: nil,
-            queue: nil
+            queue: nil,
+            start_time: nil
 
   use GenServer
   require Logger
@@ -29,7 +30,8 @@ defmodule Kadabra.Connection do
           config: term,
           flow_control: term,
           local_settings: Connection.Settings.t(),
-          queue: pid
+          queue: pid,
+          start_time: integer()
         }
 
   @type sock :: {:sslsocket, any, pid | {any, any}}
@@ -64,7 +66,8 @@ defmodule Kadabra.Connection do
       config: config,
       queue: queue,
       local_settings: settings,
-      flow_control: %FlowControl{}
+      flow_control: %FlowControl{},
+      start_time: System.monotonic_time()
     }
   end
 
@@ -169,7 +172,15 @@ defmodule Kadabra.Connection do
     end
   end
 
-  def terminate(_reason, %{config: config}) do
+  def terminate(reason, %{config: config, start_time: start_time}) do
+    duration = System.monotonic_time() - start_time
+    :telemetry.execute([:kadabra, :connection, :stop],
+      %{duration: duration},
+      %{
+        uri: config.uri,
+        reason: reason,
+        connection: self()
+      })
     Kernel.send(config.client, {:closed, config.queue})
     :ok
   end
