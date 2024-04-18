@@ -156,6 +156,11 @@ defmodule Kadabra do
     Kadabra.ConnectionPool.ping(pid)
   end
 
+  @spec ping(pid, <<_::64>>) :: no_return
+  def ping(pid, data) when byte_size(data) == 8 do
+    Kadabra.ConnectionPool.ping(pid, data)
+  end
+
   @doc ~S"""
   Makes a request with given headers and optional body.
 

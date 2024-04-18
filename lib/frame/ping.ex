@@ -31,6 +31,15 @@ defmodule Kadabra.Frame.Ping do
     }
   end
 
+  @spec new(<<_::64>>) :: t
+  def new(<<data::64>>) do
+    %__MODULE__{
+      ack: false,
+      data: <<data::64>>,
+      stream_id: 0
+    }
+  end
+
   @doc ~S"""
   Initializes a new `Frame.Ping` given a `Frame`.
 

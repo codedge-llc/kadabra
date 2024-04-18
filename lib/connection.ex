@@ -79,6 +79,11 @@ defmodule Kadabra.Connection do
     GenServer.cast(pid, {:send, :ping})
   end
 
+  def ping(pid, data) do
+    GenServer.cast(pid, {:send, {:ping, data}})
+  end
+
+
   # handle_cast
 
   def handle_cast({:send, type}, state) do
@@ -109,9 +114,14 @@ defmodule Kadabra.Connection do
 
   # sendf
 
-  @spec sendf(:goaway | :ping, t) :: {:noreply, t}
+  @spec sendf(:goaway | :ping | {:ping, <<_::64>>}, t) :: {:noreply, t}
   def sendf(:ping, %Connection{config: config} = state) do
     Egress.send_ping(config.socket)
+    {:noreply, state}
+  end
+
+  def sendf({:ping, data}, %Connection{config: config} = state) do
+    Egress.send_ping(config.socket, data)
     {:noreply, state}
   end
 

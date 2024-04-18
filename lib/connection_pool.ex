@@ -46,6 +46,7 @@ defmodule Kadabra.ConnectionPool do
   end
 
   def ping(pid), do: GenServer.call(pid, :ping)
+  def ping(pid, data), do: GenServer.call(pid, {:ping, data})
 
   def close(pid), do: GenServer.call(pid, :close)
 
@@ -76,6 +77,11 @@ defmodule Kadabra.ConnectionPool do
 
   def handle_call(:ping, _from, state) do
     Connection.ping(state.connection)
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:ping, data}, _from, state) do
+    Connection.ping(state.connection, data)
     {:reply, :ok, state}
   end
 
