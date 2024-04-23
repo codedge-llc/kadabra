@@ -13,25 +13,24 @@ defmodule Kadabra.Frame.Ping do
           stream_id: integer
         }
 
+  @empty_payload <<0, 0, 0, 0, 0, 0, 0, 0>>
+
   @doc ~S"""
-  Returns new unacked ping frame.
+  Returns new unacked ping frame. Optionally takes a payload of 8 bytes, which
+  can be used to help calculate RTT times of pings that your application sends.
 
   ## Examples
 
       iex> Kadabra.Frame.Ping.new
       %Kadabra.Frame.Ping{data: <<0, 0, 0, 0, 0, 0, 0, 0>>,
       ack: false, stream_id: 0}
+      iex> Kadabra.Frame.Ping.new(payload: <<1, 2, 3, 4, 5, 6, 7, 8>>)
+      %Kadabra.Frame.Ping{data: <<1, 2, 3, 4, 5, 6, 7, 8>>,
+      ack: false, stream_id: 0}
   """
-  @spec new() :: t
-  def new do
-    %__MODULE__{
-      ack: false,
-      data: <<0, 0, 0, 0, 0, 0, 0, 0>>,
-      stream_id: 0
-    }
-  end
+  @spec new(<<_::64>> | none()) :: t
+  def new(nil), do: new(@empty_payload)
 
-  @spec new(<<_::64>>) :: t
   def new(<<data::64>>) do
     %__MODULE__{
       ack: false,

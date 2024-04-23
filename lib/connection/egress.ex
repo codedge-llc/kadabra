@@ -25,11 +25,6 @@ defmodule Kadabra.Connection.Egress do
     Socket.send(socket, bin)
   end
 
-  def send_ping(socket) do
-    bin = Ping.new() |> Encodable.to_bin()
-    Socket.send(socket, bin)
-  end
-
   def send_ping(socket, data) do
     bin = Ping.new(data) |> Encodable.to_bin()
     Socket.send(socket, bin)
