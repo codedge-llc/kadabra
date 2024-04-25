@@ -178,8 +178,8 @@ defmodule Kadabra.Connection.Processor do
     {:ok, state}
   end
 
-  def process(%Ping{ack: true}, %{config: config} = state) do
-    Kernel.send(config.client, {:pong, self()})
+  def process(%Ping{ack: true, data: data}, %{config: config} = state) do
+    Kernel.send(config.client, {:pong, self(), data})
     {:ok, state}
   end
 

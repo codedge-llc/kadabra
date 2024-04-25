@@ -11,7 +11,8 @@ defmodule Kadabra.Stream do
             flow: nil,
             uri: nil,
             headers: [],
-            on_response: nil
+            on_response: nil,
+            start_time: nil
 
   require Logger
 
@@ -35,7 +36,8 @@ defmodule Kadabra.Stream do
           uri: URI.t(),
           flow: Kadabra.Stream.FlowControl.t(),
           headers: [...],
-          body: binary
+          body: binary,
+          start_time: integer()
         }
 
   @closed :closed
@@ -60,11 +62,13 @@ defmodule Kadabra.Stream do
       encoder: config.encoder,
       decoder: config.decoder,
       connection: self(),
-      flow: Stream.FlowControl.new(flow_opts)
+      flow: Stream.FlowControl.new(flow_opts),
+      start_time: System.monotonic_time()
     }
   end
 
   def start_link(%Stream{} = stream) do
+    :telemetry.execute([:kadabra, :stream, :start], %{}, %{stream_id: stream.id, uri: stream.uri, client: stream.client, connection: stream.connection})
     :gen_statem.start_link(__MODULE__, stream, [])
   end
 
@@ -309,7 +313,19 @@ defmodule Kadabra.Stream do
 
   def callback_mode, do: [:handle_event_function, :state_enter]
 
-  def terminate(_reason, _state, _stream), do: :void
+  def terminate(reason, _state, stream) do
+    duration = System.monotonic_time() - stream.start_time
+    :telemetry.execute([:kadabra, :stream, :stop],
+      %{duration: duration},
+      %{
+        stream_id: stream.id,
+        uri: stream.uri,
+        client: stream.client,
+        connection: stream.connection,
+        reason: reason
+      })
+    :void
+  end
 
   def code_change(_vsn, state, data, _extra), do: {:ok, state, data}
 end
