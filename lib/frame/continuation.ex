@@ -3,7 +3,7 @@ defmodule Kadabra.Frame.Continuation do
 
   defstruct [:header_block_fragment, :stream_id, end_headers: false]
 
-  use Bitwise
+  import Bitwise
 
   @type t :: %__MODULE__{
           end_headers: boolean,

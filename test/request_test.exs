@@ -3,7 +3,7 @@ defmodule Kadabra.RequestTest do
   doctest Kadabra.Request
 
   test "processes on_response on END_STREAM" do
-    uri = 'https://http2.golang.org'
+    uri = ~c"https://http2.golang.org"
     pid = self()
     on_resp = fn _resp -> send(pid, :done) end
 
