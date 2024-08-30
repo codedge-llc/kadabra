@@ -80,3 +80,9 @@ end
   status: 200
 }
 ```
+
+## License
+
+Copyright (c) 2015-2024 Codedge LLC (https://www.codedge.io/)
+
+This library is MIT licensed. See the [LICENSE](https://github.com/codedge-llc/kadabra/blob/master/LICENSE) for details.
