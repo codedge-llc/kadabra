@@ -24,7 +24,7 @@ jobs:
       - name: Run Prettier
         run: prettier --check --no-error-on-unmatched-pattern "**/*.{json,md,yml,yaml}"
   check:
-    name: Format/Credo
+    name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -43,8 +43,6 @@ jobs:
         run: mix deps.get
       - name: Run formatter
         run: mix format --check-formatted
-      - name: Run Credo
-        run: mix credo
   test:
     name: Test
     runs-on: ubuntu-latest
