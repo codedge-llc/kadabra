@@ -49,7 +49,7 @@ defmodule Kadabra.Mixfile do
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:excoveralls, "~> 0.7", only: :test, runtime: false},
-      {:hpack, "~> 0.2.3", hex: :hpack_erl}
+      {:hpack, "~> 0.3.0", hex: :hpack_erl}
     ]
   end
 
