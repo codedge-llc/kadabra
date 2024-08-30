@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.1
+
+**Fixed**
+
+- Removed Elixir compile warnings.
+
 ## v0.6.0
 
 **Security**

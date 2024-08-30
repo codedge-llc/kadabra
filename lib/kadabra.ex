@@ -19,7 +19,7 @@ defmodule Kadabra do
       end
 
       %Kadabra.Stream.Response{
-        body: "<html>\\n<body>\\n<h1>Go + HTTP/2</h1>\\n\\n<p>Welcome to..."
+        body: "GET OK"
         headers: [
           {":status", "200"},
           {"content-type", "text/html; charset=utf-8"},
