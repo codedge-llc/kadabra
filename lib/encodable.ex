@@ -13,8 +13,7 @@ defprotocol Kadabra.Encodable do
       <<0, 0, 8, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>
 
       iex> %Kadabra.Connection.Settings{enable_push: false} |> to_bin()
-      <<0, 5, 0, 0, 64, 0, 0, 4, 0, 0, 255, 255, 0, 2, 0, 0, 0, 0, 0, 1, 
-      0, 0, 16, 0>>
+      <<0, 1, 0, 0, 16, 0, 0, 2, 0, 0, 0, 0, 0, 4, 0, 0, 255, 255, 0, 5, 0, 0, 64, 0>>
 
       iex> %Kadabra.Frame.Continuation{end_headers: true,
       ...> stream_id: 1, header_block_fragment: <<255, 255, 255>>} |> to_bin()
@@ -135,6 +134,7 @@ defimpl Kadabra.Encodable, for: Kadabra.Connection.Settings do
     settings
     |> Map.from_struct()
     |> to_encoded_list()
+    |> Enum.sort()
     |> Enum.join()
   end
 
