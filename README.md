@@ -1,13 +1,13 @@
-[![Build Status](https://travis-ci.org/codedge-llc/kadabra.svg?branch=master)](https://travis-ci.org/codedge-llc/kadabra)
-[![Coverage Status](https://coveralls.io/repos/github/codedge-llc/kadabra/badge.svg?branch=master)](https://coveralls.io/github/codedge-llc/kadabra?branch=master)
-[![Hex.pm](http://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra)
-[![Hex.pm](http://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
-
 # Kadabra
 
-HTTP/2 client for Elixir
+> HTTP/2 client for Elixir. Written to manage HTTP/2 connections for [pigeon](https://github.com/codedge-llc/pigeon).
 
-Written to manage HTTP/2 connections for [pigeon](https://github.com/codedge-llc/pigeon). Very much a work in progress.
+[![CI](https://github.com/codedge-llc/kadabra/actions/workflows/ci.yml/badge.svg)](https://github.com/codedge-llc/kadabra/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra)
+[![Total Downloads](https://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
+[![License](https://img.shields.io/hexpm/l/kadabra.svg)](https://github.com/codedge-llc/kadabra/blob/master/LICENSE)
+[![Last Updated](https://img.shields.io/github/last-commit/codedge-llc/kadabra.svg)](https://github.com/codedge-llc/kadabra/commits/master)
+[![Documentation](https://img.shields.io/badge/documentation-gray)](https://hexdocs.pm/kadabra/)
 
 ## Installation
 
