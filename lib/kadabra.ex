@@ -147,13 +147,18 @@ defmodule Kadabra do
       iex> {:ok, pid} = Kadabra.open(~c"https://http2.codedge.dev")
       iex> Kadabra.ping(pid)
       iex> receive do
-      ...>   {:pong, _pid} -> "got pong!"
+      ...>   {:pong, _pid, _resp} -> "got pong!"
       ...> end
       "got pong!"
+      iex> Kadabra.ping(pid, <<1::64>>) # Send 8-byte data
+      iex> receive do
+      ...>   {:pong, _pid, <<1::64>>} -> "got our data back!"
+      ...> end
+      "got our data back!"
   """
-  @spec ping(pid) :: no_return
-  def ping(pid) do
-    Kadabra.ConnectionPool.ping(pid)
+  @spec ping(pid, <<_::64>> | none) :: no_return
+  def ping(pid, data \\ nil) when is_nil(data) or byte_size(data) == 8 do
+    Kadabra.ConnectionPool.ping(pid, data)
   end
 
   @doc ~S"""
