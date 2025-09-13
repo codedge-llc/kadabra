@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+**Fixed**
+
+- SSL socket usage in OTP 28. ([#56](https://github.com/codedge-llc/kadabra/pull/56))
+
 ## v0.6.1
 
 **Fixed**
