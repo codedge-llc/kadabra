@@ -2,6 +2,7 @@ defmodule Kadabra.Socket do
   @moduledoc false
 
   defstruct socket: nil, buffer: "", active_user: nil
+  defguardp is_ssl_socket(s) when is_tuple(s) and elem(s, 0) == :sslsocket
 
   alias Kadabra.FrameParser
 
@@ -130,7 +131,7 @@ defmodule Kadabra.Socket do
 
   # Internal socket helpers
 
-  defp socket_send({:sslsocket, _, _} = pid, bin) do
+  defp socket_send(pid, bin) when is_ssl_socket(pid) do
     # IO.puts("Sending #{byte_size(bin)} bytes")
     :ssl.send(pid, bin)
   end
@@ -139,7 +140,7 @@ defmodule Kadabra.Socket do
     :gen_tcp.send(pid, bin)
   end
 
-  defp setopts({:sslsocket, _, _} = pid, opts) do
+  defp setopts(pid, opts) when is_ssl_socket(pid) do
     :ssl.setopts(pid, opts)
   end
 
