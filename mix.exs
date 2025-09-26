@@ -1,6 +1,7 @@
 defmodule Kadabra.Mixfile do
   use Mix.Project
 
+  @source_url "https://github.com/codedge-llc/scribe"
   @version "0.6.1"
 
   def project do
@@ -9,7 +10,6 @@ defmodule Kadabra.Mixfile do
       build_embedded: Mix.env() == :prod,
       consolidate_protocols: Mix.env() != :test,
       deps: deps(),
-      description: description(),
       dialyzer: dialyzer(),
       docs: docs(),
       elixir: "~> 1.6",
@@ -36,12 +36,6 @@ defmodule Kadabra.Mixfile do
     ]
   end
 
-  defp description do
-    """
-    HTTP2 client for Elixir
-    """
-  end
-
   defp deps do
     [
       {:certifi, "~> 2.5"},
@@ -55,27 +49,37 @@ defmodule Kadabra.Mixfile do
 
   defp docs do
     [
-      main: "Kadabra",
       extras: [
-        "CHANGELOG.md"
-      ]
+        "CHANGELOG.md",
+        LICENSE: [title: "License"]
+      ],
+      formatters: ["html"],
+      main: "Kadabra",
+      skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
+      source_ref: "v#{@version}",
+      source_url: @source_url
     ]
   end
 
   defp dialyzer do
     [
-      ignore_warnings: "config/dialyzer.ignore-warnings",
-      plt_add_deps: true,
-      plt_add_apps: [:ssl],
+      # ignore_warnings: "config/dialyzer.ignore-warnings",
+      # plt_add_deps: true,
+      # plt_add_apps: [:ssl],
       plt_file: {:no_warn, "priv/plts/dialyzer.plt"}
     ]
   end
 
   defp package do
     [
-      files: ["lib", "mix.exs", "README*", "LICENSE*"],
+      description: "HTTP/2 client for Elixir.",
+      files: ["lib", "mix.exs", "README*", "LICENSE*", "CHANGELOG*"],
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/codedge-llc/kadabra"},
+      links: %{
+        "Changelog" => "https://hexdocs.pm/kadabra/changelog.html",
+        "GitHub" => "https://github.com/codedge-llc/kadabra",
+        "Sponsor" => "https://github.com/sponsors/codedge-llc"
+      },
       maintainers: ["Henry Popp"]
     ]
   end
