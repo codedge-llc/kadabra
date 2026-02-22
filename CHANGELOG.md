@@ -5,7 +5,7 @@
 **Fixed**
 
 - SSL socket usage in OTP 28. ([#56](https://github.com/codedge-llc/kadabra/pull/56))
-- Removed Elixir compile warnings.
+- Removed Elixir compile warnings. ([#58](https://github.com/codedge-llc/kadabra/pull/58))
 
 ## v0.6.1
 
