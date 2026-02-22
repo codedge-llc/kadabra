@@ -1,7 +1,7 @@
 defmodule Kadabra.Mixfile do
   use Mix.Project
 
-  @version "0.6.1"
+  @version "0.6.2"
 
   def project do
     [
@@ -16,16 +16,21 @@ defmodule Kadabra.Mixfile do
       elixirc_options: [warnings_as_errors: true],
       name: "Kadabra",
       package: package(),
-      preferred_cli_env: [
-        coveralls: :test,
-        "coveralls.detail": :test,
-        "coveralls.post": :test,
-        "coveralls.html": :test
-      ],
       source_url: "https://github.com/codedge-llc/kadabra",
       start_permanent: Mix.env() == :prod,
       test_coverage: [tool: ExCoveralls],
       version: @version
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ]
     ]
   end
 

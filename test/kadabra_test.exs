@@ -120,9 +120,6 @@ defmodule KadabraTest do
           assert response.id == 1
           assert response.status == 200
           assert byte_size(response.body) == 9_026_709
-
-        other ->
-          flunk("Unexpected response: #{inspect(other)}")
       after
         45_000 ->
           flunk("No stream response received.")

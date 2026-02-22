@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## v0.6.2
 
 **Fixed**
 
 - SSL socket usage in OTP 28. ([#56](https://github.com/codedge-llc/kadabra/pull/56))
+- Removed Elixir compile warnings.
 
 ## v0.6.1
 
