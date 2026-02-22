@@ -2,6 +2,7 @@ defmodule Kadabra.Mixfile do
   use Mix.Project
 
   @version "0.6.2"
+  @source_url "https://github.com/codedge-llc/kadabra"
 
   def project do
     [
@@ -16,7 +17,7 @@ defmodule Kadabra.Mixfile do
       elixirc_options: [warnings_as_errors: true],
       name: "Kadabra",
       package: package(),
-      source_url: "https://github.com/codedge-llc/kadabra",
+      source_url: @source_url,
       start_permanent: Mix.env() == :prod,
       version: @version
     ]
@@ -47,10 +48,15 @@ defmodule Kadabra.Mixfile do
 
   defp docs do
     [
-      main: "Kadabra",
       extras: [
-        "CHANGELOG.md"
-      ]
+        "CHANGELOG.md",
+        LICENSE: [title: "License"]
+      ],
+      formatters: ["html"],
+      main: "Kadabra",
+      skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
+      source_ref: "v#{@version}",
+      source_url: @source_url
     ]
   end
 
@@ -65,7 +71,7 @@ defmodule Kadabra.Mixfile do
     [
       files: ["lib", "mix.exs", "README*", "LICENSE*"],
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/codedge-llc/kadabra"},
+      links: %{"GitHub" => @source_url},
       maintainers: ["Henry Popp"]
     ]
   end
