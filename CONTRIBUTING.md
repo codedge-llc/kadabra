@@ -2,7 +2,7 @@
 
 ### Testing
 
-Unit tests can be run with `mix test` or `mix coveralls.html`.
+Unit tests can be run with `mix test`.
 
 ### Formatting
 

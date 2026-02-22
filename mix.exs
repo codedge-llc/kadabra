@@ -18,19 +18,7 @@ defmodule Kadabra.Mixfile do
       package: package(),
       source_url: "https://github.com/codedge-llc/kadabra",
       start_permanent: Mix.env() == :prod,
-      test_coverage: [tool: ExCoveralls],
       version: @version
-    ]
-  end
-
-  def cli do
-    [
-      preferred_envs: [
-        coveralls: :test,
-        "coveralls.detail": :test,
-        "coveralls.post": :test,
-        "coveralls.html": :test
-      ]
     ]
   end
 
@@ -53,7 +41,6 @@ defmodule Kadabra.Mixfile do
       {:credo, "~> 1.0", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
-      {:excoveralls, "~> 0.7", only: :test, runtime: false},
       {:hpack, "~> 0.3.0", hex: :hpack_erl}
     ]
   end
@@ -69,8 +56,6 @@ defmodule Kadabra.Mixfile do
 
   defp dialyzer do
     [
-      ignore_warnings: "config/dialyzer.ignore-warnings",
-      plt_add_deps: true,
       plt_add_apps: [:ssl],
       plt_file: {:no_warn, "priv/plts/dialyzer.plt"}
     ]
