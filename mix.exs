@@ -2,6 +2,7 @@ defmodule Kadabra.Mixfile do
   use Mix.Project
 
   @version "0.6.2"
+  @source_url "https://github.com/codedge-llc/kadabra"
 
   def project do
     [
@@ -16,21 +17,9 @@ defmodule Kadabra.Mixfile do
       elixirc_options: [warnings_as_errors: true],
       name: "Kadabra",
       package: package(),
-      source_url: "https://github.com/codedge-llc/kadabra",
+      source_url: @source_url,
       start_permanent: Mix.env() == :prod,
-      test_coverage: [tool: ExCoveralls],
       version: @version
-    ]
-  end
-
-  def cli do
-    [
-      preferred_envs: [
-        coveralls: :test,
-        "coveralls.detail": :test,
-        "coveralls.post": :test,
-        "coveralls.html": :test
-      ]
     ]
   end
 
@@ -53,24 +42,26 @@ defmodule Kadabra.Mixfile do
       {:credo, "~> 1.0", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
-      {:excoveralls, "~> 0.7", only: :test, runtime: false},
       {:hpack, "~> 0.3.0", hex: :hpack_erl}
     ]
   end
 
   defp docs do
     [
-      main: "Kadabra",
       extras: [
-        "CHANGELOG.md"
-      ]
+        "CHANGELOG.md",
+        LICENSE: [title: "License"]
+      ],
+      formatters: ["html"],
+      main: "Kadabra",
+      skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
+      source_ref: "v#{@version}",
+      source_url: @source_url
     ]
   end
 
   defp dialyzer do
     [
-      ignore_warnings: "config/dialyzer.ignore-warnings",
-      plt_add_deps: true,
       plt_add_apps: [:ssl],
       plt_file: {:no_warn, "priv/plts/dialyzer.plt"}
     ]
@@ -80,7 +71,7 @@ defmodule Kadabra.Mixfile do
     [
       files: ["lib", "mix.exs", "README*", "LICENSE*"],
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/codedge-llc/kadabra"},
+      links: %{"GitHub" => @source_url},
       maintainers: ["Henry Popp"]
     ]
   end
