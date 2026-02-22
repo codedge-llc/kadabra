@@ -43,7 +43,12 @@ defmodule Kadabra.Frame.Ping do
       stream_id: 0}
   """
   @spec new(Frame.t()) :: t
-  def new(%Frame{type: 0x6, payload: <<data::64>>, flags: flags, stream_id: sid}) do
+  def new(%Frame{
+        type: 0x6,
+        payload: <<data::64>>,
+        flags: flags,
+        stream_id: sid
+      }) do
     %__MODULE__{
       ack: ack?(flags),
       data: <<data::64>>,
