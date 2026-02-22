@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - Verify CA certificates with `:certifi` (~> 2.5) by default. This is considered a breaking change
-for anyone using Kadabra for anything other than [Pigeon](https://github.com/codedge-llc/pigeon).
+  for anyone using Kadabra for anything other than [Pigeon](https://github.com/codedge-llc/pigeon).
 
 ## [0.5.0] - 2021-01-10
 
@@ -42,30 +42,30 @@ for anyone using Kadabra for anything other than [Pigeon](https://github.com/cod
 ## [0.4.4] - 2018-10-13
 
 - Fixed ArithmeticError when calculating how many streams to request
-on infinite stream sets.
+  on infinite stream sets.
 
 ## [0.4.3] - 2018-07-28
 
 - Fixed supervisor crash report during normal connection shutdown.
 - Removed `GenStage` dependency.
 - GOAWAY error logger messages now disabled by default.
-Re-enable with `config :kadabra, debug_log?: true`.
+  Re-enable with `config :kadabra, debug_log?: true`.
 
 ## [0.4.2] - 2018-05-25
 
 - Fixed `{:closed, pid}` task race condition during connection cleanup.
 - Everything is supervised under `Kadabra.Application` again, instead of
-handling supervision yourself.
+  handling supervision yourself.
 
 ## [0.4.1] - 2018-05-10
 
 - Send exactly number of allowed bytes on initial connection WINDOW_UPDATE.
 - Default settings use maximum values for MAX_FRAME_SIZE and INITIAL_WINDOW_SIZE.
 - Incoming PING and WINDOW_UPDATE frames are now validated, closing the
-connection if an error is encountered.
+  connection if an error is encountered.
 - Fixed: can no longer accidentally send 0-size WINDOW_UPDATE frames.
 - Fixed: don't send WINDOW_UPDATE frames larger than remote server's available
-connection flow window.
+  connection flow window.
 
 ## [0.4.0] - 2018-04-04
 
@@ -74,7 +74,7 @@ connection flow window.
 - Added `Kadabra.head/2` and `Kadabra.delete/2`.
 - `Kadabra.open/3` replaced with `Kadabra.open/2`.
   - Scheme, host and port are now automatically parsed from the URI string.
-  See the README for examples.
+    See the README for examples.
   - Socket options passed as `:tcp`/`:ssl`, respectively.
 - Removed `:reconnect` functionality.
 
@@ -95,7 +95,7 @@ connection flow window.
 
 - Fixed: Memory leak on connection crashes.
 - New supervision structure. `Kadabra.open/2` now returns a supervisor pid,
-but the API for making requests remains unchanged.
+  but the API for making requests remains unchanged.
 
 ## [0.3.4] - 2017-10-31
 
@@ -120,7 +120,7 @@ but the API for making requests remains unchanged.
 - Fixed: multiple connections now supported per host.
 - Request responses now return with new `%Stream.Response{}` struct.
 - Push promises can be intercepted with `{:push_promise, %Stream.Response{}}`
-messages.
+  messages.
 
 ## [0.2.2] - 2017-08-03
 
@@ -130,5 +130,4 @@ messages.
 ## [0.2.1] - 2017-08-01
 
 - Fixed: calling `Kadabra.open/3` with `reconnect: false` to disable
-automatic reconnect on socket close.
-
+  automatic reconnect on socket close.
