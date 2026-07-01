@@ -360,11 +360,15 @@ defmodule Kadabra.Stream do
 
   def code_change(_vsn, state, data, _extra), do: {:ok, state, data}
 
+  defp try_get_peername(nil), do: nil
+
   defp try_get_peername(socket) do
     try do
       Socket.peername(socket)
     catch
       :exit, {:timeout, _} -> nil
+      :exit, {:noproc, _} -> nil
+      :exit, {:normal, _} -> nil
     end
   end
 end
