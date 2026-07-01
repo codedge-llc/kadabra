@@ -92,6 +92,8 @@ defmodule Kadabra do
 
   @type uri :: charlist | String.t()
 
+  @type instance_name :: atom()
+
   @doc ~S"""
   Opens a new connection.
 
@@ -109,17 +111,22 @@ defmodule Kadabra do
   def open(uri, opts \\ [])
 
   def open(uri, opts) when is_binary(uri) do
+    open(:kadabra, uri, opts)
+  end
+
+  def open(uri, opts) when is_list(uri) do
+    uri |> to_string() |> open(opts)
+  end
+
+  @spec open(instance_name, uri, conn_opts) :: {:ok, pid} | {:error, term}
+  def open(instance_name, uri, opts) when is_binary(uri) do
     pool_opts = [
       uri: URI.parse(uri),
       pid: self(),
       opts: opts
     ]
 
-    Supervisor.start_child(:kadabra, {Kadabra.ConnectionPool, pool_opts})
-  end
-
-  def open(uri, opts) when is_list(uri) do
-    uri |> to_string() |> open(opts)
+    Kadabra.ConnectionSupervisor.start_child(instance_name, pool_opts)
   end
 
   @doc ~S"""
