@@ -1,11 +1,13 @@
-[![Build Status](https://travis-ci.org/codedge-llc/kadabra.svg?branch=master)](https://travis-ci.org/codedge-llc/kadabra)
-[![Coverage Status](https://coveralls.io/repos/github/codedge-llc/kadabra/badge.svg?branch=master)](https://coveralls.io/github/codedge-llc/kadabra?branch=master)
-[![Hex.pm](http://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra)
-[![Hex.pm](http://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
-
 # Kadabra
 
-HTTP/2 client for Elixir
+> HTTP/2 client for Elixir
+
+[![CI](https://github.com/codedge-llc/kadabra/actions/workflows/ci.yml/badge.svg)](https://github.com/codedge-llc/kadabra/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/hexpm/v/kadabra.svg)](https://hex.pm/packages/kadabra)
+[![Total Downloads](https://img.shields.io/hexpm/dt/kadabra.svg)](https://hex.pm/packages/kadabra)
+[![License](https://img.shields.io/hexpm/l/kadabra.svg)](https://github.com/codedge-llc/kadabra/blob/master/LICENSE)
+[![Last Updated](https://img.shields.io/github/last-commit/codedge-llc/kadabra.svg)](https://github.com/codedge-llc/kadabra/commits/master)
+[![Documentation](https://img.shields.io/badge/documentation-gray)](https://hexdocs.pm/kadabra/)
 
 Written to manage HTTP/2 connections for [pigeon](https://github.com/codedge-llc/pigeon). Very much a work in progress.
 
@@ -18,7 +20,7 @@ Add kadabra to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:kadabra, "~> 0.6.0"}
+    {:kadabra, "~> 0.6.3"}
   ]
 end
 ```
@@ -26,7 +28,7 @@ end
 ## Usage
 
 ```elixir
-{:ok, pid} = Kadabra.open("https://http2.golang.org")
+{:ok, pid} = Kadabra.open("https://http2.codedge.dev")
 Kadabra.get(pid, "/")
 receive do
   {:end_stream, %Kadabra.Stream.Response{} = stream} ->
@@ -36,8 +38,13 @@ after 5_000 ->
 end
 
 %Kadabra.Stream.Response{
-  body: "<html>\n<body>\n<h1>Go + HTTP/2</h1>\n\n<p>Welcome to <a href=\"https://golang.org/\">the Go language</a>'s <a\nhref=\"https://http2.github.io/\">HTTP/2</a> demo & interop server.</p>\n\n<p>Congratulations, <b>you're using HTTP/2 right now</b>.</p>\n\n<p>This server exists for others in the HTTP/2 community to test their HTTP/2 client implementations and point out flaws in our server.</p>\n\n<p>\nThe code is at <a href=\"https://golang.org/x/net/http2\">golang.org/x/net/http2</a> and\nis used transparently by the Go standard library from Go 1.6 and later.\n</p>\n\n<p>Contact info: <i>bradfitz@golang.org</i>, or <a\nhref=\"https://golang.org/s/http2bug\">file a bug</a>.</p>\n\n<h2>Handlers for testing</h2>\n<ul>\n  <li>GET <a href=\"/reqinfo\">/reqinfo</a> to dump the request + headers received</li>\n  <li>GET <a href=\"/clockstream\">/clockstream</a> streams the current time every second</li>\n  <li>GET <a href=\"/gophertiles\">/gophertiles</a> to see a page with a bunch of images</li>\n  <li>GET <a href=\"/file/gopher.png\">/file/gopher.png</a> for a small file (does If-Modified-Since, Content-Range, etc)</li>\n  <li>GET <a href=\"/file/go.src.tar.gz\">/file/go.src.tar.gz</a> for a larger file (~10 MB)</li>\n  <li>GET <a href=\"/redirect\">/redirect</a>to redirect back to / (this page)</li>\n  <li>GET <a href=\"/goroutines\">/goroutines</a> to see all active goroutines in this server</li>\n  <li>GET <a href=\"/.well-known/h2interop/state\">/.well-known/h2interop/state</a> for the HTTP/2 server state</li>\n  <li>PUT something to <a href=\"/crc32\">/crc32</a> to get a count of number of bytes and its CRC-32</li>\n  <li>PUT something to <a href=\"/ECHO\">/ECHO</a> and it will be streamed back to you capitalized</li>\n</ul>\n\n</body></html>",
-  headers: [{":status", "200"}, {"content-type", "text/html; charset=utf-8"}, {"content-length", "1708"}, {"date", "Sun, 16 Oct 2016 21:20:47 GMT"}],
+  body: "<html>\\n<body>\\n<h1>Go + HTTP/2</h1>\\n\\n<p>Welcome to..."
+  headers: [
+    {":status", "200"},
+    {"content-type", "text/html; charset=utf-8"},
+    {"content-length", "1708"},
+    {"date", "Sun, 16 Oct 2016 21:20:47 GMT"}
+  ],
   id: 1,
   status: 200
 }
@@ -46,7 +53,7 @@ end
 ## Making Requests Manually
 
 ```elixir
-{:ok, pid} = Kadabra.open("https://http2.golang.org")
+{:ok, pid} = Kadabra.open("https://http2.codedge.dev")
 
 path = "/ECHO" # Route echoes PUT body in uppercase
 body = "sample echo request"
@@ -66,8 +73,34 @@ end
 
 %Kadabra.Stream.Response{
   body: "SAMPLE ECHO REQUEST",
-  headers: [{":status", "200"}, {"content-type", "text/plain; charset=utf-8"}, {"date", "Sun, 16 Oct 2016 21:28:15 GMT"}],
+  headers: [
+    {":status", "200"},
+    {"content-type", "text/plain; charset=utf-8"},
+    {"date", "Sun, 16 Oct 2016 21:28:15 GMT"}
+  ],
   id: 1,
   status: 200
 }
 ```
+
+## Contributing
+
+### Testing
+
+Unit tests can be run with `mix test`.
+
+### Formatting
+
+This project uses Elixir's `mix format` and [Prettier](https://prettier.io) for formatting.
+Add hooks in your editor of choice to run it after a save. Be sure it respects this project's
+`.formatter.exs`.
+
+### Commits
+
+Git commit subjects use the [Karma style](http://karma-runner.github.io/5.0/dev/git-commit-msg.html).
+
+## License
+
+Copyright (c) 2016-2026 Codedge LLC (https://www.codedge.io/)
+
+This library is MIT licensed. See the [LICENSE](https://github.com/codedge-llc/kadabra/blob/master/LICENSE) for details.

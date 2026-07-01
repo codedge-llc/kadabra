@@ -9,7 +9,7 @@ defmodule Kadabra do
 
   ## Usage
 
-      {:ok, pid} = Kadabra.open("https://http2.golang.org")
+      {:ok, pid} = Kadabra.open("https://http2.codedge.dev")
       Kadabra.get(pid, "/")
       receive do
         {:end_stream, %Kadabra.Stream.Response{} = stream} ->
@@ -19,7 +19,7 @@ defmodule Kadabra do
       end
 
       %Kadabra.Stream.Response{
-        body: "<html>\\n<body>\\n<h1>Go + HTTP/2</h1>\\n\\n<p>Welcome to..."
+        body: "GET OK"
         headers: [
           {":status", "200"},
           {"content-type", "text/html; charset=utf-8"},
@@ -32,7 +32,7 @@ defmodule Kadabra do
 
   ## Making Requests Manually
 
-      {:ok, pid} = Kadabra.open("https://http2.golang.org")
+      {:ok, pid} = Kadabra.open("https://http2.codedge.dev")
 
       path = "/ECHO" # Route echoes PUT body in uppercase
       body = "sample echo request"
@@ -97,11 +97,11 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open("http://http2.golang.org")
+      iex> {:ok, pid} = Kadabra.open("http://http2.codedge.dev")
       iex> is_pid(pid)
       true
 
-      iex> {:ok, pid} = Kadabra.open("https://http2.golang.org")
+      iex> {:ok, pid} = Kadabra.open("https://http2.codedge.dev")
       iex> is_pid(pid)
       true
   """
@@ -127,7 +127,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open("https://http2.golang.org")
+      iex> {:ok, pid} = Kadabra.open("https://http2.codedge.dev")
       iex> Kadabra.close(pid)
       iex> receive do
       ...>   {:closed, _pid} -> "connection closed!"
@@ -144,7 +144,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
+      iex> {:ok, pid} = Kadabra.open(~c"https://http2.codedge.dev")
       iex> Kadabra.ping(pid)
       iex> receive do
       ...>   {:pong, _pid, _resp} -> "got pong!"
@@ -166,7 +166,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
+      iex> {:ok, pid} = Kadabra.open(~c"https://http2.codedge.dev")
       iex> path = "/ECHO" # Route echoes PUT body in uppercase
       iex> body = "sample echo request"
       iex> headers = [
@@ -200,14 +200,14 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
-      iex> Kadabra.head(pid, "/reqinfo")
+      iex> {:ok, pid} = Kadabra.open(~c"https://http2.codedge.dev")
+      iex> Kadabra.get(pid, "/")
       :ok
       iex> response = receive do
       ...>   {:end_stream, response} -> response
       ...> end
       iex> {response.id, response.status, response.body}
-      {1, 200, ""}
+      {1, 200, "GET OK"}
   """
   @spec get(pid, String.t(), Keyword.t()) :: no_return
   def get(pid, path, opts \\ []) do
@@ -219,7 +219,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
+      iex> {:ok, pid} = Kadabra.open(~c"https://http2.codedge.dev")
       iex> Kadabra.head(pid, "/")
       :ok
       iex> response = receive do
@@ -238,7 +238,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
+      iex> {:ok, pid} = Kadabra.open(~c"https://http2.codedge.dev")
       iex> Kadabra.post(pid, "/", body: "test=123")
       :ok
       iex> response = receive do
@@ -257,16 +257,14 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
-      iex> Kadabra.put(pid, "/crc32", body: "test")
+      iex> {:ok, pid} = Kadabra.open(~c"https://http2.codedge.dev")
+      iex> Kadabra.put(pid, "/", body: "test")
       :ok
       iex> stream = receive do
       ...>   {:end_stream, stream} -> stream
       ...> end
       iex> stream.status
       200
-      iex> stream.body
-      "bytes=4, CRC32=d87f7e0c"
   """
   @spec put(pid, String.t(), Keyword.t()) :: no_return
   def put(pid, path, opts \\ []) do
@@ -278,7 +276,7 @@ defmodule Kadabra do
 
   ## Examples
 
-      iex> {:ok, pid} = Kadabra.open('https://http2.golang.org')
+      iex> {:ok, pid} = Kadabra.open(~c"https://http2.codedge.dev")
       iex> Kadabra.delete(pid, "/")
       :ok
       iex> stream = receive do
