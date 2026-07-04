@@ -86,6 +86,8 @@ defmodule Kadabra.Socket do
         {:verify, :verify_peer},
         {:depth, 99},
         {:cacerts, :certifi.cacerts()},
+        {:customize_hostname_check,
+         [{:match_fun, :public_key.pkix_verify_hostname_match_fun(:https)}]},
         {:alpn_advertised_protocols, [<<"h2">>]},
         :binary
       ]
