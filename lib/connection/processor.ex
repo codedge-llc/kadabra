@@ -35,6 +35,7 @@ defmodule Kadabra.Connection.Processor do
           | Goaway.t()
           | WindowUpdate.t()
           | Continuation.t()
+          | {:error, <<_::32>>}
 
   @spec process(frame, Connection.t()) ::
           {:ok, Connection.t()}
@@ -85,6 +86,15 @@ defmodule Kadabra.Connection.Processor do
     Stream.call_recv(pid, frame)
 
     {:ok, state}
+  end
+
+  # Frame.Settings.new/1 returns an error code when the peer sends an
+  # out-of-range SETTINGS value, which must be a connection error.
+  # See RFC 7540 Section 6.5.2.
+  def process({:error, <<code::32>>}, state) do
+    error = Error.parse(code)
+    reason = "Recv SETTINGS with invalid value"
+    {:connection_error, error, reason, state}
   end
 
   # nil settings means use default

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- Out-of-range SETTINGS values from the server are now treated as a connection
+  error (GOAWAY with `PROTOCOL_ERROR` or `FLOW_CONTROL_ERROR`) instead of being
+  silently dropped, per RFC 7540 Section 6.5.2. Also fixes the dialyzer
+  warnings in `Kadabra.Frame.Settings`.
+
 ## [0.6.3] - 2026-07-01
 
 ### Fixed

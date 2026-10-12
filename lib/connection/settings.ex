@@ -20,7 +20,7 @@ defmodule Kadabra.Connection.Settings do
           max_concurrent_streams: non_neg_integer | :infinite,
           initial_window_size: non_neg_integer,
           max_frame_size: non_neg_integer,
-          max_header_list_size: non_neg_integer
+          max_header_list_size: non_neg_integer | nil
         }
 
   @table_header_size 0x1
